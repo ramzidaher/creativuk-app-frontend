@@ -1,0 +1,21 @@
+# Netlify redirects for client-side routing
+/*    /index.html   200
+
+# Specific routes for better SEO and direct access
+/calculator/*    /index.html   200
+/pricing/*      /index.html   200
+/contract-generation/*    /index.html   200
+/solar-workflow/*    /index.html   200
+/template-selection/*    /index.html   200
+/customer-details/*    /index.html   200
+/flux-calculator/*    /index.html   200
+/dynamic-inputs/*    /index.html   200
+/solar-arrays/*    /index.html   200
+/contract-signing/*    /index.html   200
+/installation-booking/*    /index.html   200
+/presentation/*    /index.html   200
+/survey/*    /index.html   200
+/payment/*    /index.html   200
+/admin    /index.html   200
+/statistics    /index.html   200
+/debug/*    /index.html   200

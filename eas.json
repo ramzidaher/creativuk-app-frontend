@@ -1,0 +1,7 @@
+﻿{
+  "build": {
+    "apk":        { "android": { "buildType": "apk" } },
+    "production": { "android": { "buildType": "app-bundle" } }
+  },
+  "cli": { "version": ">= 11.0.0", "appVersionSource": "remote" }
+}

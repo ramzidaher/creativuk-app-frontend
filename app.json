@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Creativ Solar",
+    "slug": "creativ-solar",
+    "version": "1.0.0",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "platforms": ["ios", "android", "web"],
+    "android": {
+      "package": "com.creativ.solar",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "name": "Creativ Solar",
+      "shortName": "Creativ Solar",
+      "description": "Solar energy solutions and calculator",
+      "startUrl": "/",
+      "display": "standalone",
+      "themeColor": "#B4F35B",
+      "backgroundColor": "#ffffff"
+    },
+    "export": {
+      "outputDir": "./dist"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "7998fd98-bb79-4197-a40a-892be71dc1ef"
+      }
+    },
+    "plugins": []
+  }
+}
