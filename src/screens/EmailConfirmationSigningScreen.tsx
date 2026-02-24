@@ -273,6 +273,23 @@ export default function EmailConfirmationSigningScreen() {
   };
 
   // Helper function to update status from API response
+  const getBookingConfirmationStepNumber = async (): Promise<number> => {
+    try {
+      const { workflowApi } = await import('../utils/api');
+      const progressResponse = await workflowApi.getOpportunityProgress(opportunityId);
+      if (progressResponse?.success && progressResponse.data?.steps) {
+        const step =
+          progressResponse.data.steps.find((s: any) => s.stepType === 'BOOKING_CONFIRMATION') ||
+          progressResponse.data.steps.find((s: any) => s.stepType === 'EMAIL_CONFIRMATION');
+        if (step?.stepNumber) return step.stepNumber;
+      }
+    } catch (error) {
+      console.warn('⚠️ Could not fetch workflow progress for email confirmation step number:', error);
+    }
+    // Fallback (can vary depending on inserted steps like Disclaimer/Express Consent)
+    return 11;
+  };
+
   const updateStatusFromResponse = (statusData: any) => {
     console.log('📊 Updating status from response:', JSON.stringify(statusData, null, 2));
     
@@ -522,10 +539,11 @@ export default function EmailConfirmationSigningScreen() {
               <TouchableOpacity
                 style={[styles.nextButton, { backgroundColor: theme.successButton }]}
                 onPress={async () => {
-                  // Mark email confirmation signing step as completed (step 10)
+                  // Mark booking confirmation signing step as completed
                   try {
                     const { workflowApi } = await import('../utils/api');
-                    await workflowApi.completeStep(opportunityId, 10, {
+                    const bookingConfirmationStepNumber = await getBookingConfirmationStepNumber();
+                    await workflowApi.completeStep(opportunityId, bookingConfirmationStepNumber, {
                       signedAt: new Date().toISOString(),
                       submissionId: submissionId,
                       status: 'completed'

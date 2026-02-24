@@ -478,6 +478,40 @@ export default function OpportunitiesScreen() {
     }
   };
 
+  const isAdmin = user?.role === 'ADMIN';
+
+  const getOpportunityOwnerLabel = (opp: Opportunity): { primary: string; secondary?: string } | null => {
+    // Only show on admin view
+    if (!isAdmin) return null;
+
+    const ownerName =
+      opp.owner?.name ||
+      opp.owner?.username ||
+      opp.assignedToName ||
+      opp.assignedTo ||
+      null;
+
+    if (!ownerName) return { primary: 'Unassigned' };
+
+    const role = opp.owner?.role || undefined;
+    return {
+      primary: ownerName,
+      secondary: role,
+    };
+  };
+
+  const getOpportunityOwnerGroupKey = (opp: Opportunity): string => {
+    // Prefer stable identifiers when available
+    const key =
+      opp.owner?.id ||
+      opp.owner?.ghlUserId ||
+      opp.assignedTo ||
+      opp.owner?.email ||
+      opp.assignedToName ||
+      'unassigned';
+    return String(key);
+  };
+
   const renderOpportunityCard = (opp: Opportunity, index: number) => (
     <Animated.View
       key={opp.id}
@@ -491,7 +525,7 @@ export default function OpportunitiesScreen() {
     >
       <TouchableOpacity
         style={[styles.cardContent, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}
-        onPress={() => navigation.navigate('OpportunityDetails', { opportunity: opp })}
+        onPress={() => navigation.navigate('OpportunityDetails', { opportunityId: opp.id })}
         activeOpacity={0.7}
       >
         <View style={styles.cardHeader}>
@@ -506,6 +540,25 @@ export default function OpportunitiesScreen() {
                   {opp.stageName || 'New'}
                 </Text>
               </View>
+
+              {/* OWNER INFO (ADMIN ONLY) */}
+              {!isAdmin
+                ? null
+                : (() => {
+                    const owner = getOpportunityOwnerLabel(opp);
+                    if (!owner) return null;
+                    return (
+                      <View style={[styles.ownerRow, { backgroundColor: theme.primaryButton + '10', borderColor: theme.cardBorder }]}>
+                        <Feather name="user" size={14} color={theme.primaryButton} />
+                        <Text style={[styles.ownerText, { color: theme.secondaryText }]} numberOfLines={1}>
+                          Owner: <Text style={[styles.ownerTextStrong, { color: theme.primaryText }]}>{owner.primary}</Text>
+                          {owner.secondary ? (
+                            <Text style={[styles.ownerTextMuted, { color: theme.secondaryText }]}> ({owner.secondary})</Text>
+                          ) : null}
+                        </Text>
+                      </View>
+                    );
+                  })()}
             </View>
           </View>
           
@@ -565,7 +618,67 @@ export default function OpportunitiesScreen() {
   const renderOpportunitiesList = () => (
     <View style={styles.opportunitiesList}>
       {filteredOpportunities.length > 0 ? (
-        filteredOpportunities.map((opp, index) => renderOpportunityCard(opp, index))
+        isAdmin ? (
+          // Admin view: group appointments by owner so multiple appointments per owner are shown together
+          (() => {
+            const groups = new Map<
+              string,
+              { owner: { primary: string; secondary?: string } | null; items: Opportunity[] }
+            >();
+
+            filteredOpportunities.forEach((opp) => {
+              const key = getOpportunityOwnerGroupKey(opp);
+              const existing = groups.get(key);
+              if (existing) {
+                existing.items.push(opp);
+              } else {
+                groups.set(key, { owner: getOpportunityOwnerLabel(opp), items: [opp] });
+              }
+            });
+
+            const sortedGroups = Array.from(groups.entries()).sort((a, b) => {
+              const aName = a[1].owner?.primary || 'Unassigned';
+              const bName = b[1].owner?.primary || 'Unassigned';
+              return aName.localeCompare(bName);
+            });
+
+            return (
+              <View style={styles.groupedContainer}>
+                {sortedGroups.map(([key, group]) => (
+                  <View key={key} style={styles.ownerGroup}>
+                    <View
+                      style={[
+                        styles.ownerGroupHeader,
+                        { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder },
+                      ]}
+                    >
+                      <View style={styles.ownerGroupHeaderLeft}>
+                        <Feather name="user" size={16} color={theme.primaryButton} />
+                        <Text style={[styles.ownerGroupTitle, { color: theme.primaryText }]} numberOfLines={1}>
+                          {group.owner?.primary || 'Unassigned'}
+                        </Text>
+                        {group.owner?.secondary ? (
+                          <Text style={[styles.ownerGroupSubtitle, { color: theme.secondaryText }]} numberOfLines={1}>
+                            ({group.owner.secondary})
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View style={[styles.ownerGroupCountPill, { backgroundColor: theme.primaryButton + '20' }]}>
+                        <Text style={[styles.ownerGroupCountText, { color: theme.primaryText }]}>
+                          {group.items.length}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {group.items.map((opp, index) => renderOpportunityCard(opp, index))}
+                  </View>
+                ))}
+              </View>
+            );
+          })()
+        ) : (
+          filteredOpportunities.map((opp, index) => renderOpportunityCard(opp, index))
+        )
       ) : (
         <View style={[styles.emptyState, { backgroundColor: theme.cardBackground }]}>
           <View style={[styles.emptyIcon, { backgroundColor: theme.primaryButton + '15' }]}>
@@ -959,6 +1072,51 @@ const styles = StyleSheet.create({
   opportunitiesList: {
     width: '100%',
   },
+  groupedContainer: {
+    width: '100%',
+  },
+  ownerGroup: {
+    marginBottom: 18,
+  },
+  ownerGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  ownerGroupHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 8,
+    marginRight: 12,
+  },
+  ownerGroupTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    flexShrink: 1,
+  },
+  ownerGroupSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    opacity: 0.85,
+  },
+  ownerGroupCountPill: {
+    minWidth: 32,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ownerGroupCountText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
   opportunityCard: {
     marginBottom: 20,
     width: '100%',
@@ -996,6 +1154,28 @@ const styles = StyleSheet.create({
   stageContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  ownerRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  ownerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
+  ownerTextStrong: {
+    fontWeight: '800',
+  },
+  ownerTextMuted: {
+    fontWeight: '600',
+    opacity: 0.85,
   },
   stageDot: {
     width: 8,

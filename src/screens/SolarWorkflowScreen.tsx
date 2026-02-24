@@ -18,7 +18,8 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { systemSettingsApi, workflowApi } from '../utils/api';
+import { api, opportunitiesApi, opportunityOutcomesApi, systemSettingsApi, workflowApi } from '../utils/api';
+import { OpportunityOutcomeType } from '../types';
 import BottomNavigation from '../components/BottomNavigation';
 
 const { width, height } = Dimensions.get('window');
@@ -161,7 +162,7 @@ export default function SolarWorkflowScreen() {
     // Ensure modal is never shown for steps that have direct navigation
     useEffect(() => {
       const currentStepInfo = workflowSteps.find(step => step.stepNumber === currentStep);
-      const directNavigationSteps = ['SITE_SURVEY', 'OPEN_SOLAR', 'CALCULATOR', 'SOLAR_PROJECTION', 'FOLLOW_UP', 'PROPOSAL_GENERATION', 'DISCLAIMER_SIGNING', 'CONTRACT_SIGNING', 'PAYMENT', 'INSTALLATION_SCHEDULING', 'INSTALLATION_BOOKING', 'WELCOME_EMAIL'];
+      const directNavigationSteps = ['SITE_SURVEY', 'OPEN_SOLAR', 'CALCULATOR', 'SOLAR_PROJECTION', 'FOLLOW_UP', 'PROPOSAL_GENERATION', 'DISCLAIMER_SIGNING', 'CONTRACT_SIGNING', 'EXPRESS_CONSENT', 'EMAIL_CONFIRMATION', 'PAYMENT', 'INSTALLATION_SCHEDULING', 'INSTALLATION_BOOKING', 'WELCOME_EMAIL'];
       
       if (currentStepInfo && directNavigationSteps.includes(currentStepInfo.stepType)) {
         setShowStepModal(false);
@@ -336,9 +337,16 @@ export default function SolarWorkflowScreen() {
             case 'CONTRACT_SIGNING':
               return {
                 ...step,
-                title: 'Contract and Email Confirmation',
-                description: 'Sign the installation contract and booking confirmation',
+                title: 'Contract Signing',
+                description: 'Sign the installation contract',
                 stepType: 'CONTRACT_SIGNING'
+              };
+            case 'EXPRESS_CONSENT':
+              return {
+                ...step,
+                title: 'Express Consent Signing',
+                description: 'Sign the express consent form for work to commence',
+                stepType: 'EXPRESS_CONSENT'
               };
             case 'PAYMENT':
               return {
@@ -364,9 +372,16 @@ export default function SolarWorkflowScreen() {
             case 'EMAIL_CONFIRMATION':
               return {
                 ...step,
-                title: 'Email Confirmation',
-                description: 'Sign the booking confirmation letter at sign.com',
+                title: 'Booking Confirmation Signing',
+                description: 'Sign the booking confirmation letter',
                 stepType: 'EMAIL_CONFIRMATION'
+              };
+            case 'BOOKING_CONFIRMATION':
+              return {
+                ...step,
+                title: 'Booking Confirmation Signing',
+                description: 'Sign the booking confirmation letter',
+                stepType: 'BOOKING_CONFIRMATION'
               };
             default:
               console.log('🔍 SolarWorkflowScreen: Unknown step type:', step.stepType);
@@ -399,11 +414,24 @@ export default function SolarWorkflowScreen() {
             console.log('🔍 SolarWorkflowScreen: Disclaimer step already exists in workflow');
           }
         }
+
+        // Add express consent step if it's missing (some backends may not yet return it in /steps)
+        const expressConsentStepExists = transformedSteps.some((step: any) => step.stepType === 'EXPRESS_CONSENT');
+        if (!expressConsentStepExists) {
+          console.log('🔍 SolarWorkflowScreen: Adding express consent step - not found in backend steps');
+          transformedSteps.push({
+            stepNumber: 9, // Placeholder - will be renumbered later
+            stepType: 'EXPRESS_CONSENT',
+            title: 'Express Consent Signing',
+            description: 'Sign the express consent form for work to commence',
+            required: true,
+            estimatedDuration: 10
+          });
+        }
         
         // Sort steps to ensure proper order (now includes disclaimer step if needed)
         const sortedSteps = transformedSteps.sort((a: any, b: any) => {
           // Define the desired order - matches backend workflow configuration
-          // Note: EMAIL_CONFIRMATION is removed as it's now combined with CONTRACT_SIGNING
           const stepOrder = {
             'SITE_SURVEY': 1,
             'OPEN_SOLAR': 2,
@@ -413,10 +441,13 @@ export default function SolarWorkflowScreen() {
             'INSTALLATION_SCHEDULING': 6, // Hometree
             'PROPOSAL_GENERATION': 7,
             'DISCLAIMER_SIGNING': 8, // Disclaimer step before contract signing
-            'CONTRACT_SIGNING': 9, // Contract signing (now includes email confirmation)
-            'PAYMENT': 10, // Payment comes after contract signing
-            'INSTALLATION_BOOKING': 11,
-            'WELCOME_EMAIL': 12
+            'CONTRACT_SIGNING': 9,
+            'EXPRESS_CONSENT': 10,
+            'BOOKING_CONFIRMATION': 11,
+            'EMAIL_CONFIRMATION': 11,
+            'PAYMENT': 12,
+            'INSTALLATION_BOOKING': 13,
+            'WELCOME_EMAIL': 14
           };
           
           const orderA = stepOrder[a.stepType as keyof typeof stepOrder] || 999;
@@ -425,13 +456,12 @@ export default function SolarWorkflowScreen() {
           return orderA - orderB;
         });
         
-        // Filter out disclaimer step if not needed, and always filter out EMAIL_CONFIRMATION
-        let finalSteps = sortedSteps.filter((step: any) => step.stepType !== 'EMAIL_CONFIRMATION');
+        // Filter out disclaimer step if not needed
+        let finalSteps = sortedSteps;
         if (!shouldShowDisclaimer) {
           finalSteps = finalSteps.filter((step: any) => step.stepType !== 'DISCLAIMER_SIGNING');
           console.log('🔍 SolarWorkflowScreen: Filtered out disclaimer step - user has energy bill');
         }
-        console.log('🔍 SolarWorkflowScreen: Filtered out EMAIL_CONFIRMATION step - now combined with CONTRACT_SIGNING');
         
         // Reassign step numbers based on the new order
         const renumberedSteps = finalSteps.map((step: any, index: number) => ({
@@ -813,8 +843,10 @@ export default function SolarWorkflowScreen() {
               await loadData();
               
               const stepName = stepType === 'DISCLAIMER_SIGNING' ? 'Energy Bill Disclaimer' :
-                              stepType === 'CONTRACT_SIGNING' ? 'Contract and Email Confirmation' :
-                              stepType === 'EMAIL_CONFIRMATION' ? 'Email Confirmation' : 'Document';
+                              stepType === 'CONTRACT_SIGNING' ? 'Contract Signing' :
+                              stepType === 'EXPRESS_CONSENT' ? 'Express Consent Signing' :
+                              (stepType === 'BOOKING_CONFIRMATION' || stepType === 'EMAIL_CONFIRMATION') ? 'Booking Confirmation Signing' :
+                              'Document';
               
               Alert.alert('✅ Document Signing', `${stepName} step marked as completed. You can visit sign.com anytime to sign documents.`);
             } catch (error) {
@@ -899,7 +931,6 @@ export default function SolarWorkflowScreen() {
       };
       
       // Call the OneDrive organization API
-      const { api } = await import('../utils/api');
       const result = await api.post('/onedrive/organize-by-outcome', {
         opportunityId,
         customerName,
@@ -909,6 +940,23 @@ export default function SolarWorkflowScreen() {
       });
       
       if (result.success) {
+        // Sync status and outcome with backend (PUT /opportunities/:id/status, POST /opportunity-outcomes)
+        const outcomeType = outcome === 'won' ? OpportunityOutcomeType.WON : OpportunityOutcomeType.LOST;
+        const [statusResult, recordResult] = await Promise.allSettled([
+          opportunitiesApi.updateStatus(opportunityId, outcome),
+          opportunityOutcomesApi.recordOutcome({
+            ghlOpportunityId: opportunityId,
+            userId: user?.id ?? '',
+            outcome: outcomeType,
+          }),
+        ]);
+        if (statusResult.status === 'rejected' || (statusResult.status === 'fulfilled' && !statusResult.value.success)) {
+          console.warn('Opportunity status update failed:', statusResult.status === 'fulfilled' ? statusResult.value.error : statusResult.reason);
+        }
+        if (recordResult.status === 'rejected' || (recordResult.status === 'fulfilled' && !recordResult.value.success)) {
+          console.warn('Record outcome failed:', recordResult.status === 'fulfilled' ? recordResult.value.error : recordResult.reason);
+        }
+
         // Mark the final step as completed (WELCOME_EMAIL step)
         const finishStep = await workflowApi.getWorkflowSteps();
         
@@ -1111,10 +1159,16 @@ export default function SolarWorkflowScreen() {
       navigation.navigate('ContractSigning', { opportunityId });
       return;
     }
+
+    if (stepInfo?.stepType === 'EXPRESS_CONSENT') {
+      console.log('🔍 Navigating to express consent signing screen');
+      navigation.navigate('ExpressConsentSigning', { opportunityId });
+      return;
+    }
     
-    if (stepInfo?.stepType === 'EMAIL_CONFIRMATION') {
-      console.log('🔍 Navigating to email confirmation signing screen');
-      navigation.navigate('EmailConfirmationSigning', { opportunityId });
+    if (stepInfo?.stepType === 'BOOKING_CONFIRMATION' || stepInfo?.stepType === 'EMAIL_CONFIRMATION') {
+      console.log('🔍 Navigating to booking confirmation signing screen');
+      navigation.navigate('BookingConfirmationSigning', { opportunityId });
       return;
     }
     
@@ -1670,7 +1724,7 @@ export default function SolarWorkflowScreen() {
       {/* Step Action Modal - Never show for steps that have direct navigation */}
       {(() => {
         const currentStepInfo = workflowSteps.find(step => step.stepNumber === currentStep);
-        const directNavigationSteps = ['SITE_SURVEY', 'OPEN_SOLAR', 'CALCULATOR', 'SOLAR_PROJECTION', 'FOLLOW_UP', 'PROPOSAL_GENERATION', 'DISCLAIMER_SIGNING', 'CONTRACT_SIGNING', 'PAYMENT', 'INSTALLATION_SCHEDULING', 'INSTALLATION_BOOKING', 'WELCOME_EMAIL'];
+        const directNavigationSteps = ['SITE_SURVEY', 'OPEN_SOLAR', 'CALCULATOR', 'SOLAR_PROJECTION', 'FOLLOW_UP', 'PROPOSAL_GENERATION', 'DISCLAIMER_SIGNING', 'CONTRACT_SIGNING', 'EXPRESS_CONSENT', 'EMAIL_CONFIRMATION', 'PAYMENT', 'INSTALLATION_SCHEDULING', 'INSTALLATION_BOOKING', 'WELCOME_EMAIL'];
         return !currentStepInfo || !directNavigationSteps.includes(currentStepInfo.stepType);
       })() && (
         <Modal
@@ -1688,7 +1742,7 @@ export default function SolarWorkflowScreen() {
               <TouchableOpacity
                 onPress={() => {
                   const currentStepInfo = workflowSteps.find(step => step.stepNumber === currentStep);
-                  const directNavigationSteps = ['SITE_SURVEY', 'OPEN_SOLAR', 'CALCULATOR', 'SOLAR_PROJECTION', 'FOLLOW_UP', 'PROPOSAL_GENERATION', 'DISCLAIMER_SIGNING', 'CONTRACT_SIGNING', 'PAYMENT', 'INSTALLATION_SCHEDULING', 'INSTALLATION_BOOKING', 'WELCOME_EMAIL'];
+                  const directNavigationSteps = ['SITE_SURVEY', 'OPEN_SOLAR', 'CALCULATOR', 'SOLAR_PROJECTION', 'FOLLOW_UP', 'PROPOSAL_GENERATION', 'DISCLAIMER_SIGNING', 'CONTRACT_SIGNING', 'EXPRESS_CONSENT', 'EMAIL_CONFIRMATION', 'PAYMENT', 'INSTALLATION_SCHEDULING', 'INSTALLATION_BOOKING', 'WELCOME_EMAIL'];
                   
                   if (!currentStepInfo || !directNavigationSteps.includes(currentStepInfo.stepType)) {
                     setShowStepModal(false);
@@ -1715,7 +1769,7 @@ export default function SolarWorkflowScreen() {
                 {/* Other steps - show configure option */}
                 {(() => {
                   const currentStepInfo = workflowSteps.find(step => step.stepNumber === currentStep);
-                  const directNavigationSteps = ['SITE_SURVEY', 'OPEN_SOLAR', 'CALCULATOR', 'SOLAR_PROJECTION', 'FOLLOW_UP', 'PROPOSAL_GENERATION', 'DISCLAIMER_SIGNING', 'CONTRACT_SIGNING', 'PAYMENT', 'INSTALLATION_SCHEDULING', 'INSTALLATION_BOOKING', 'WELCOME_EMAIL'];
+                  const directNavigationSteps = ['SITE_SURVEY', 'OPEN_SOLAR', 'CALCULATOR', 'SOLAR_PROJECTION', 'FOLLOW_UP', 'PROPOSAL_GENERATION', 'DISCLAIMER_SIGNING', 'CONTRACT_SIGNING', 'EXPRESS_CONSENT', 'EMAIL_CONFIRMATION', 'PAYMENT', 'INSTALLATION_SCHEDULING', 'INSTALLATION_BOOKING', 'WELCOME_EMAIL'];
                   return !currentStepInfo || !directNavigationSteps.includes(currentStepInfo.stepType);
                 })() && (
                   <TouchableOpacity
@@ -1735,7 +1789,7 @@ export default function SolarWorkflowScreen() {
                   style={[styles.actionButton, styles.secondaryButton, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}
                   onPress={() => {
                     const currentStepInfo = workflowSteps.find(step => step.stepNumber === currentStep);
-                    const directNavigationSteps = ['SITE_SURVEY', 'OPEN_SOLAR', 'CALCULATOR', 'SOLAR_PROJECTION', 'FOLLOW_UP', 'PROPOSAL_GENERATION', 'DISCLAIMER_SIGNING', 'CONTRACT_SIGNING', 'PAYMENT', 'INSTALLATION_SCHEDULING', 'INSTALLATION_BOOKING', 'WELCOME_EMAIL'];
+                  const directNavigationSteps = ['SITE_SURVEY', 'OPEN_SOLAR', 'CALCULATOR', 'SOLAR_PROJECTION', 'FOLLOW_UP', 'PROPOSAL_GENERATION', 'DISCLAIMER_SIGNING', 'CONTRACT_SIGNING', 'EXPRESS_CONSENT', 'EMAIL_CONFIRMATION', 'PAYMENT', 'INSTALLATION_SCHEDULING', 'INSTALLATION_BOOKING', 'WELCOME_EMAIL'];
                     
                     if (!currentStepInfo || !directNavigationSteps.includes(currentStepInfo.stepType)) {
                       setShowStepModal(false);

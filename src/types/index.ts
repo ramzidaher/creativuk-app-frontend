@@ -16,6 +16,20 @@ export interface Opportunity {
   contactEmail?: string;
   contactPhone?: string;
   assignedTo?: string;
+  assignedToName?: string;
+  /**
+   * Owner/user information (added by backend on appointment/opportunity endpoints).
+   * For admin views this indicates who the opportunity is assigned to (GHL owner),
+   * resolved to an app user when possible.
+   */
+  owner?: {
+    id?: string | null;
+    name?: string | null;
+    username?: string | null;
+    email?: string | null;
+    role?: string | null;
+    ghlUserId?: string | null;
+  } | null;
   // Location information
   address?: string;
   contactAddress?: string;
@@ -173,11 +187,16 @@ export enum StepType {
   OPEN_SOLAR = 'OPEN_SOLAR',
   CALCULATOR = 'CALCULATOR',
   PROPOSAL_GENERATION = 'PROPOSAL_GENERATION',
+  DISCLAIMER_SIGNING = 'DISCLAIMER_SIGNING',
   CONTRACT_SIGNING = 'CONTRACT_SIGNING',
+  EXPRESS_CONSENT = 'EXPRESS_CONSENT',
   EMAIL_CONFIRMATION = 'EMAIL_CONFIRMATION',
   INSTALLATION_SCHEDULING = 'INSTALLATION_SCHEDULING',
   FOLLOW_UP = 'FOLLOW_UP',
   PAYMENT = 'PAYMENT',
+  INSTALLATION_BOOKING = 'INSTALLATION_BOOKING',
+  WELCOME_EMAIL = 'WELCOME_EMAIL',
+  SOLAR_PROJECTION = 'SOLAR_PROJECTION',
 }
 
 export enum StepStatus {
@@ -378,6 +397,12 @@ export interface OpportunityOutcome {
   ghlOpportunityId: string;
   userId: string;
   outcome: OpportunityOutcomeType;
+  /**
+   * Admin-controlled cancelled flag (if supported by backend).
+   * Optional to stay compatible with older payloads.
+   */
+  cancelled?: boolean;
+  isCancelled?: boolean;
   value?: number;
   duration?: number;
   stageAtOutcome?: string;
@@ -393,6 +418,11 @@ export interface WinLossStats {
   lost: number;
   abandoned: number;
   inProgress: number;
+  /**
+   * Cancelled opportunities count (admin reporting).
+   * Optional to stay compatible with older payloads.
+   */
+  cancelled?: number;
   totalValue: number;
   wonValue: number;
   conversionRate: number;

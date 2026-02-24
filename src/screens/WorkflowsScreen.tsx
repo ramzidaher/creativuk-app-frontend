@@ -247,6 +247,14 @@ export default function WorkflowsScreen() {
     fetchActiveWorkflows();
   }, []);
 
+  // Refresh workflows whenever user returns to this screen
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchActiveWorkflows();
+    });
+    return unsubscribe;
+  }, [navigation]);
+
   // Ensure ScrollView starts at top on web
   useEffect(() => {
     if (Platform.OS === 'web' && scrollViewRef.current) {
@@ -290,12 +298,31 @@ export default function WorkflowsScreen() {
     switch (stepType) {
       case 'SITE_SURVEY':
         return 'Site Survey';
+      case 'OPEN_SOLAR':
+        return 'OpenSolar';
+      case 'CALCULATOR':
+        return 'Calculator';
+      case 'SOLAR_PROJECTION':
+        return 'Solar Projection';
       case 'PROPOSAL_GENERATION':
-        return 'Proposal Generation';
+        return 'Contract Generation';
+      case 'DISCLAIMER_SIGNING':
+        return 'Energy Bill Disclaimer';
       case 'CONTRACT_SIGNING':
         return 'Contract Signing';
+      case 'EXPRESS_CONSENT':
+        return 'Express Consent Signing';
+      case 'BOOKING_CONFIRMATION':
+      case 'EMAIL_CONFIRMATION': // backward-compatible name used in some backends
+        return 'Booking Confirmation Signing';
+      case 'PAYMENT':
+        return 'Payment';
       case 'INSTALLATION_SCHEDULING':
         return 'Installation Scheduling';
+      case 'INSTALLATION_BOOKING':
+        return 'Installation Booking';
+      case 'WELCOME_EMAIL':
+        return 'Welcome Email';
       case 'FOLLOW_UP':
         return 'Follow Up';
       case 'INITIAL_CONTACT':
@@ -331,12 +358,31 @@ export default function WorkflowsScreen() {
     switch (stepType) {
       case 'SITE_SURVEY':
         return 'Conduct the on-site survey and assessment';
+      case 'OPEN_SOLAR':
+        return 'Access OpenSolar platform for design';
+      case 'CALCULATOR':
+        return 'Choose between Off Peak and Flux options';
+      case 'SOLAR_PROJECTION':
+        return 'Review solar projection data and financial analysis';
       case 'PROPOSAL_GENERATION':
-        return 'Generate and present the solar proposal';
+        return 'Generate contract and proposal documents';
+      case 'DISCLAIMER_SIGNING':
+        return 'Sign disclaimer form (if customer has no energy bill)';
       case 'CONTRACT_SIGNING':
         return 'Sign the installation contract';
       case 'INSTALLATION_SCHEDULING':
         return 'Schedule the installation date';
+      case 'EXPRESS_CONSENT':
+        return 'Sign the express consent form for work to commence';
+      case 'BOOKING_CONFIRMATION':
+      case 'EMAIL_CONFIRMATION': // backward-compatible name used in some backends
+        return 'Sign the booking confirmation letter';
+      case 'PAYMENT':
+        return 'Process payment for the installation';
+      case 'INSTALLATION_BOOKING':
+        return 'Book the installation appointment';
+      case 'WELCOME_EMAIL':
+        return 'Send welcome email to customer';
       case 'FOLLOW_UP':
         return 'Post-installation follow up and support';
       case 'INITIAL_CONTACT':

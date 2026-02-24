@@ -50,11 +50,15 @@ const WinLossStatsCard: React.FC<WinLossStatsCardProps> = ({
       
       // Get current user's stats
       response = await opportunityOutcomesApi.getUserStats(
-        startDate?.toISOString(),
-        endDate?.toISOString()
+        startDate?.toISOString().slice(0, 10),
+        endDate?.toISOString().slice(0, 10)
       );
+      if (!response.success) {
+        setError(response.error || 'Failed to load statistics');
+        setStats(null);
+        return;
+      }
       setStats(response.data || null);
-      console.log('Win/Loss stats fetched for current user:', response.data);
     } catch (err) {
       console.error('Error fetching win/loss stats:', err);
       setError(err instanceof Error ? err.message : 'Failed to load statistics');

@@ -339,7 +339,18 @@ export const api = {
           throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
         }
 
-        const data = await response.json();
+        // Read body as text first to handle empty or non-JSON responses (e.g. 200 with no body)
+        const text = await response.text();
+        let data: T;
+        if (!text || text.trim() === '') {
+          data = null as T;
+        } else {
+          try {
+            data = JSON.parse(text) as T;
+          } catch {
+            data = null as T;
+          }
+        }
         console.log(`API: Success response data:`, data);
         return { data, success: true };
       } catch (error: any) {
@@ -541,7 +552,18 @@ export const api = {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
+      // Read body as text first to handle empty or non-JSON responses (e.g. 204 or 200 with no body)
+      const text = await response.text();
+      let data: T;
+      if (!text || text.trim() === '') {
+        data = null as T;
+      } else {
+        try {
+          data = JSON.parse(text) as T;
+        } catch {
+          data = null as T;
+        }
+      }
       return { data, success: true };
     } catch (error) {
       console.error('API Error:', error);
@@ -760,6 +782,18 @@ export const opportunitiesApi = {
     console.log('API: Fetching unfiltered opportunities by stage progression:', stageName);
     const response = await api.get<any>(`/opportunities/stage-progression/${encodeURIComponent(stageName)}/unfiltered`);
     return response;
+  },
+
+  /**
+   * Update opportunity status (won, lost, abandoned, open).
+   * Backend: PUT /opportunities/:id/status
+   */
+  async updateStatus(
+    opportunityId: string,
+    status: 'open' | 'won' | 'lost' | 'abandoned',
+    stageId?: string
+  ): Promise<ApiResponse<any>> {
+    return api.put(`/opportunities/${opportunityId}/status`, { status, ...(stageId ? { stageId } : {}) });
   },
 
   // Clear cache methods
@@ -1667,6 +1701,41 @@ export const opportunityOutcomesApi = {
     }
   },
 
+  /**
+   * Admin-only: Toggle cancelled status for an opportunity.
+   * Endpoint: PUT /opportunity-outcomes/admin/toggle-cancelled/:opportunityId
+   */
+  async toggleCancelledAdmin(opportunityId: string): Promise<ApiResponse<any>> {
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(
+        buildApiUrl(`/opportunity-outcomes/admin/toggle-cancelled/${opportunityId}`),
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to toggle cancelled status: ${errorText}`);
+      }
+
+      const result = await response.json();
+      return { data: result, success: true };
+    } catch (error) {
+      console.error('Toggle Cancelled (Admin) API Error:', error);
+      return {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        success: false,
+      };
+    }
+  },
+
   async getUserStats(startDate?: string, endDate?: string): Promise<ApiResponse<any>> {
     try {
       const token = await getAccessToken();
@@ -1719,10 +1788,52 @@ export const opportunityOutcomesApi = {
       console.log('🔍 getUserStats - Success response:', result);
       return { data: result, success: true };
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      if (message === 'Failed to fetch') {
+        console.warn('Get User Stats: network error (API unreachable, CORS, or wrong API URL).');
+        return {
+          error: 'Stats unavailable. Check that the API is running and reachable.',
+          success: false,
+        };
+      }
       console.error('Get User Stats API Error:', error);
-      return { 
-        error: error instanceof Error ? error.message : 'Unknown error', 
-        success: false 
+      return { error: message, success: false };
+    }
+  },
+
+  /**
+   * Admin-only: Get all reps stats for a date range.
+   * Endpoint: GET /opportunity-outcomes/admin/all-reps-stats?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+   */
+  async getAllRepsStats(startDate?: string, endDate?: string): Promise<ApiResponse<any>> {
+    try {
+      const token = await getAccessToken();
+      let url = buildApiUrl('/opportunity-outcomes/admin/all-reps-stats');
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      if (params.toString()) url += `?${params.toString()}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'ngrok-skip-browser-warning': 'true',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to get all reps stats: ${errorText}`);
+      }
+
+      const result = await response.json();
+      return { data: result, success: true };
+    } catch (error) {
+      console.error('Get All Reps Stats API Error:', error);
+      return {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        success: false,
       };
     }
   },

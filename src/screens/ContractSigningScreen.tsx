@@ -906,6 +906,23 @@ export default function ContractSigningScreen() {
   };
 
   // Helper function to update status from API response
+  const getContractSigningStepNumber = async (): Promise<number> => {
+    try {
+      const { workflowApi } = await import('../utils/api');
+      const progressResponse = await workflowApi.getOpportunityProgress(opportunityId);
+      if (progressResponse?.success && progressResponse.data?.steps) {
+        const step = progressResponse.data.steps.find((s: any) => s.stepType === 'CONTRACT_SIGNING');
+        if (step?.stepNumber) {
+          return step.stepNumber;
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Could not fetch workflow progress for contract signing step number:', error);
+    }
+    // Default fallback: contract signing is typically step 9
+    return 9;
+  };
+
   const updateStatusFromResponse = (statusData: any) => {
     console.log('📊 Updating status from response:', JSON.stringify(statusData, null, 2));
     
@@ -976,12 +993,13 @@ export default function ContractSigningScreen() {
         (async () => {
           try {
             const { workflowApi } = await import('../utils/api');
-            await workflowApi.completeStep(opportunityId, 8, {
+            const contractStepNumber = await getContractSigningStepNumber();
+            await workflowApi.completeStep(opportunityId, contractStepNumber, {
               submissionId: submissionId,
               signedAt: new Date().toISOString(),
               status: 'completed'
             });
-            console.log('✅ Workflow step 8 marked as completed');
+            console.log(`✅ Workflow step ${contractStepNumber} marked as completed`);
           } catch (error) {
             console.warn('Failed to update workflow step:', error);
           }
@@ -1057,7 +1075,8 @@ export default function ContractSigningScreen() {
       if (result.success) {
         // Mark step 9 (Contract Signing) as completed with signature
       const { workflowApi } = await import('../utils/api');
-        await workflowApi.completeStep(opportunityId, 9, {
+        const contractStepNumber = await getContractSigningStepNumber();
+        await workflowApi.completeStep(opportunityId, contractStepNumber, {
         signature: signatureData,
         signedAt: new Date().toISOString(),
         generatedAt: new Date().toISOString(),
@@ -1471,21 +1490,22 @@ export default function ContractSigningScreen() {
                   // Mark contract signing step as completed
                   try {
                     const { workflowApi } = await import('../utils/api');
-                    await workflowApi.completeStep(opportunityId, 9, {
+                    const contractStepNumber = await getContractSigningStepNumber();
+                    await workflowApi.completeStep(opportunityId, contractStepNumber, {
                       signedAt: new Date().toISOString(),
                       submissionId: submissionId,
                       status: 'completed'
                     });
-                    // Navigate directly to Payment (email confirmation is now combined with contract signing)
-                    navigation.navigate('Payment', { opportunityId });
+                    // Navigate to Express Consent (new step after contract signing)
+                    navigation.navigate('ExpressConsentSigning', { opportunityId });
                   } catch (error) {
                     console.error('Error completing contract signing step:', error);
                     // Still navigate even if step completion fails
-                    navigation.navigate('Payment', { opportunityId });
+                    navigation.navigate('ExpressConsentSigning', { opportunityId });
                   }
                 }}
               >
-                <Text style={styles.nextButtonText}>Next: Payment</Text>
+                <Text style={styles.nextButtonText}>Next: Express Consent</Text>
                 <Ionicons name="arrow-forward" size={20} color="white" />
               </TouchableOpacity>
             )}

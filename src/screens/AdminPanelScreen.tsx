@@ -119,6 +119,9 @@ const AdminPanelScreen: React.FC = () => {
   
   // Form states
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [createUserData, setCreateUserData] = useState({
     username: '',
     email: '',
@@ -295,6 +298,18 @@ const AdminPanelScreen: React.FC = () => {
   const handleResetPassword = async () => {
     if (!editingUser || !newPassword) return;
 
+    // Validate passwords match
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match. Please try again.');
+      return;
+    }
+
+    // Validate password length
+    if (newPassword.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters long.');
+      return;
+    }
+
     try {
       console.log(`Attempting to reset password for user ${editingUser.id}`);
       const response = await api.post(`/auth/admin/users/${editingUser.id}/reset-password`, {
@@ -308,6 +323,9 @@ const AdminPanelScreen: React.FC = () => {
         setShowPasswordModal(false);
         setEditingUser(null);
         setNewPassword('');
+        setConfirmPassword('');
+        setShowNewPassword(false);
+        setShowConfirmPassword(false);
       } else {
         console.error('Failed to reset password:', response);
         Alert.alert('Error', `Failed to reset password: ${(response as any).error || (response as any).message || 'Unknown error'}`);
@@ -992,23 +1010,32 @@ const AdminPanelScreen: React.FC = () => {
                 <TouchableOpacity
                   style={[styles.actionButton, styles.passwordButton]}
                   onPress={() => {
-                    Alert.alert(
-                      'Reset Password',
-                      `Are you sure you want to reset the password for ${user.name || user.username}?`,
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Reset',
-                          style: 'default',
-                          onPress: () => {
-                            console.log('Setting editingUser and showing password modal for:', user.id);
-                            setEditingUser(user);
-                            setShowPasswordModal(true);
-                            console.log('Password modal should now be visible');
+                    if (Platform.OS === 'web') {
+                      // On web, Alert.alert may not work properly, so go directly to modal
+                      console.log('Setting editingUser and showing password modal for:', user.id);
+                      setEditingUser(user);
+                      setShowPasswordModal(true);
+                      console.log('Password modal should now be visible');
+                    } else {
+                      // On mobile, use Alert for confirmation
+                      Alert.alert(
+                        'Reset Password',
+                        `Are you sure you want to reset the password for ${user.name || user.username}?`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Reset',
+                            style: 'default',
+                            onPress: () => {
+                              console.log('Setting editingUser and showing password modal for:', user.id);
+                              setEditingUser(user);
+                              setShowPasswordModal(true);
+                              console.log('Password modal should now be visible');
+                            }
                           }
-                        }
-                      ]
-                    );
+                        ]
+                      );
+                    }
                   }}
                 >
                   <Text style={styles.actionButtonText}>Reset Password</Text>
@@ -1027,14 +1054,7 @@ const AdminPanelScreen: React.FC = () => {
                   </TouchableOpacity>
                 )}
 
-                {user.status === 'ACTIVE' ? (
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.deactivateButton]}
-                    onPress={() => handleStatusChange(user.id, 'deactivate')}
-                  >
-                    <Text style={styles.actionButtonText}>Deactivate</Text>
-                  </TouchableOpacity>
-                ) : (
+                {user.status !== 'ACTIVE' && (
                   <TouchableOpacity
                     style={[styles.actionButton, styles.activateButton]}
                     onPress={() => handleStatusChange(user.id, 'activate')}
@@ -1042,13 +1062,6 @@ const AdminPanelScreen: React.FC = () => {
                     <Text style={styles.actionButtonText}>Activate</Text>
                   </TouchableOpacity>
                 )}
-
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.suspendButton]}
-                  onPress={() => handleStatusChange(user.id, 'suspend')}
-                >
-                  <Text style={styles.actionButtonText}>Suspend</Text>
-                </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[styles.actionButton, styles.deleteButton]}
@@ -1383,130 +1396,196 @@ const AdminPanelScreen: React.FC = () => {
       ) : null}
 
       {/* Edit User Modal */}
-      {showEditModal && editingUser && (
+      <Modal
+        visible={showEditModal && !!editingUser}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowEditModal(false)}
+      >
         <View style={styles.modal}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit User</Text>
+          <View style={[styles.modalContent, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.modalTitle, { color: theme.primaryText }]}>Edit User</Text>
             
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Name"
-              defaultValue={editingUser.name}
-              onChangeText={(text) => setEditingUser({ ...editingUser, name: text })}
-            />
-            
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Email"
-              defaultValue={editingUser.email}
-              onChangeText={(text) => setEditingUser({ ...editingUser, email: text })}
-            />
-            
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Username"
-              defaultValue={editingUser.username}
-              onChangeText={(text) => setEditingUser({ ...editingUser, username: text })}
-            />
-            
-            <View style={styles.roleSelector}>
-              <Text style={styles.roleLabel}>Role:</Text>
-              <View style={styles.roleButtons}>
-                <TouchableOpacity
-                  style={[
-                    styles.roleButton,
-                    editingUser.role === UserRole.SURVEYOR && styles.roleButtonActive
-                  ]}
-                  onPress={() => setEditingUser({ ...editingUser, role: UserRole.SURVEYOR })}
-                >
-                  <Text style={[
-                    styles.roleButtonText,
-                    editingUser.role === UserRole.SURVEYOR && styles.roleButtonTextActive
-                  ]}>Surveyor</Text>
-                </TouchableOpacity>
+            {editingUser && (
+              <>
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder, color: theme.primaryText }]}
+                  placeholder="Name"
+                  placeholderTextColor={theme.tertiaryText}
+                  defaultValue={editingUser.name}
+                  onChangeText={(text) => setEditingUser({ ...editingUser, name: text })}
+                />
                 
-                <TouchableOpacity
-                  style={[
-                    styles.roleButton,
-                    editingUser.role === UserRole.ADMIN && styles.roleButtonActive
-                  ]}
-                  onPress={() => setEditingUser({ ...editingUser, role: UserRole.ADMIN })}
-                >
-                  <Text style={[
-                    styles.roleButtonText,
-                    editingUser.role === UserRole.ADMIN && styles.roleButtonTextActive
-                  ]}>Admin</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Surveyor Areas (comma-separated, e.g., London, Manchester)"
-              defaultValue={editingUser.surveyorAreas?.join(', ') || ''}
-              onChangeText={(text) => {
-                const areas = text.split(',').map(a => a.trim()).filter(a => a.length > 0);
-                setEditingUser({ ...editingUser, surveyorAreas: areas });
-              }}
-              autoCapitalize="words"
-            />
-            
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Surveyor Location (e.g., London, UK)"
-              defaultValue={editingUser.surveyorLocation || ''}
-              onChangeText={(text) => setEditingUser({ ...editingUser, surveyorLocation: text })}
-              autoCapitalize="words"
-            />
-            
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Max Travel Time (minutes)"
-              defaultValue={editingUser.maxTravelTime ? editingUser.maxTravelTime.toString() : ''}
-              onChangeText={(text) => {
-                const num = text.trim() === '' ? undefined : parseInt(text, 10);
-                setEditingUser({ ...editingUser, maxTravelTime: isNaN(num as number) ? undefined : num });
-              }}
-              keyboardType="numeric"
-            />
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowEditModal(false)}
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={() => handleEditUser(editingUser)}
-              >
-                <Text style={styles.modalButtonText}>Save</Text>
-              </TouchableOpacity>
-            </View>
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder, color: theme.primaryText }]}
+                  placeholder="Email"
+                  placeholderTextColor={theme.tertiaryText}
+                  defaultValue={editingUser.email}
+                  onChangeText={(text) => setEditingUser({ ...editingUser, email: text })}
+                />
+                
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder, color: theme.primaryText }]}
+                  placeholder="Username"
+                  placeholderTextColor={theme.tertiaryText}
+                  defaultValue={editingUser.username}
+                  onChangeText={(text) => setEditingUser({ ...editingUser, username: text })}
+                />
+                
+                <View style={styles.roleSelector}>
+                  <Text style={styles.roleLabel}>Role:</Text>
+                  <View style={styles.roleButtons}>
+                    <TouchableOpacity
+                      style={[
+                        styles.roleButton,
+                        editingUser.role === UserRole.SURVEYOR && styles.roleButtonActive
+                      ]}
+                      onPress={() => setEditingUser({ ...editingUser, role: UserRole.SURVEYOR })}
+                    >
+                      <Text style={[
+                        styles.roleButtonText,
+                        editingUser.role === UserRole.SURVEYOR && styles.roleButtonTextActive
+                      ]}>Surveyor</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.roleButton,
+                        editingUser.role === UserRole.ADMIN && styles.roleButtonActive
+                      ]}
+                      onPress={() => setEditingUser({ ...editingUser, role: UserRole.ADMIN })}
+                    >
+                      <Text style={[
+                        styles.roleButtonText,
+                        editingUser.role === UserRole.ADMIN && styles.roleButtonTextActive
+                      ]}>Admin</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder, color: theme.primaryText }]}
+                  placeholder="Surveyor Areas (comma-separated, e.g., London, Manchester)"
+                  placeholderTextColor={theme.tertiaryText}
+                  defaultValue={editingUser.surveyorAreas?.join(', ') || ''}
+                  onChangeText={(text) => {
+                    const areas = text.split(',').map(a => a.trim()).filter(a => a.length > 0);
+                    setEditingUser({ ...editingUser, surveyorAreas: areas });
+                  }}
+                  autoCapitalize="words"
+                />
+                
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder, color: theme.primaryText }]}
+                  placeholder="Surveyor Location (e.g., London, UK)"
+                  placeholderTextColor={theme.tertiaryText}
+                  defaultValue={editingUser.surveyorLocation || ''}
+                  onChangeText={(text) => setEditingUser({ ...editingUser, surveyorLocation: text })}
+                  autoCapitalize="words"
+                />
+                
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder, color: theme.primaryText }]}
+                  placeholder="Max Travel Time (minutes)"
+                  placeholderTextColor={theme.tertiaryText}
+                  defaultValue={editingUser.maxTravelTime ? editingUser.maxTravelTime.toString() : ''}
+                  onChangeText={(text) => {
+                    const num = text.trim() === '' ? undefined : parseInt(text, 10);
+                    setEditingUser({ ...editingUser, maxTravelTime: isNaN(num as number) ? undefined : num });
+                  }}
+                  keyboardType="numeric"
+                />
+                
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.cancelButton]}
+                    onPress={() => setShowEditModal(false)}
+                  >
+                    <Text style={styles.modalButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.saveButton]}
+                    onPress={() => handleEditUser(editingUser)}
+                  >
+                    <Text style={styles.modalButtonText}>Save</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         </View>
-      )}
+      </Modal>
 
       {/* Reset Password Modal */}
-      {showPasswordModal && editingUser && (
+      <Modal
+        visible={showPasswordModal && !!editingUser}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowPasswordModal(false);
+          setNewPassword('');
+          setConfirmPassword('');
+          setShowNewPassword(false);
+          setShowConfirmPassword(false);
+          setEditingUser(null);
+        }}
+      >
         <View style={[styles.modal, { zIndex: 9999 }]}>
           <View style={[styles.modalContent, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
             <Text style={[styles.modalTitle, { color: theme.primaryText }]}>Reset Password</Text>
             
             <Text style={[styles.modalText, { color: theme.secondaryText }]}>
-              Enter a new password for {editingUser.name || editingUser.username}
+              Enter a new password for {editingUser?.name || editingUser?.username}
             </Text>
             
-            <TextInput
-              style={[styles.modalInput, { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder, color: theme.primaryText }]}
-              placeholder="New Password"
-              placeholderTextColor={theme.tertiaryText}
-              value={newPassword}
-              onChangeText={setNewPassword}
-              secureTextEntry
-            />
+            <View style={styles.passwordInputContainer}>
+              <TextInput
+                style={[styles.modalInput, styles.passwordInput, { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder, color: theme.primaryText }]}
+                placeholder="New Password"
+                placeholderTextColor={theme.tertiaryText}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry={!showNewPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowNewPassword(!showNewPassword)}
+              >
+                <Feather 
+                  name={showNewPassword ? "eye-off" : "eye"} 
+                  size={20} 
+                  color={theme.secondaryText} 
+                />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.passwordInputContainer}>
+              <TextInput
+                style={[styles.modalInput, styles.passwordInput, { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder, color: theme.primaryText }]}
+                placeholder="Confirm Password"
+                placeholderTextColor={theme.tertiaryText}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                <Feather 
+                  name={showConfirmPassword ? "eye-off" : "eye"} 
+                  size={20} 
+                  color={theme.secondaryText} 
+                />
+              </TouchableOpacity>
+            </View>
+
+            {newPassword && confirmPassword && newPassword !== confirmPassword && (
+              <Text style={[styles.errorText, { color: '#F44336' }]}>
+                Passwords do not match
+              </Text>
+            )}
             
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -1514,6 +1593,9 @@ const AdminPanelScreen: React.FC = () => {
                 onPress={() => {
                   setShowPasswordModal(false);
                   setNewPassword('');
+                  setConfirmPassword('');
+                  setShowNewPassword(false);
+                  setShowConfirmPassword(false);
                   setEditingUser(null);
                 }}
               >
@@ -1523,14 +1605,14 @@ const AdminPanelScreen: React.FC = () => {
               <TouchableOpacity
                 style={[styles.modalButton, styles.saveButton, { backgroundColor: theme.primaryButton }]}
                 onPress={handleResetPassword}
-                disabled={!newPassword || newPassword.length < 6}
+                disabled={!newPassword || !confirmPassword || newPassword.length < 6 || newPassword !== confirmPassword}
               >
                 <Text style={[styles.modalButtonText, { color: 'white' }]}>Reset</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
-      )}
+      </Modal>
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirmModal && userToDelete && (
@@ -2240,6 +2322,26 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#ddd',
+  },
+  passwordInputContainer: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  passwordInput: {
+    paddingRight: 45,
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    padding: 4,
+    zIndex: 1,
+  },
+  errorText: {
+    fontSize: 12,
+    marginTop: -8,
+    marginBottom: 12,
+    textAlign: 'center',
   },
   modalButtons: {
     flexDirection: 'row',

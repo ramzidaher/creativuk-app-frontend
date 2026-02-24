@@ -156,6 +156,7 @@ const DashboardScreen = () => {
       if (response.success && response.data) {
         setSalesPerformanceData(response.data);
       }
+      // On failure (e.g. Failed to fetch), response.success is false; we just leave existing data unchanged
     } catch (error) {
       console.error('Error fetching sales performance data:', error);
     }

@@ -22,6 +22,7 @@ import {
   StatusBar
 } from 'expo-status-bar';
 import {
+  ActivityIndicator,
   Platform,
   ScrollView,
   StyleSheet,
@@ -64,6 +65,8 @@ import DebugAuthScreen from './src/screens/DebugAuthScreen';
 import DebugScreen from './src/screens/DebugScreen';
 import DirectDocuSealScreen from './src/screens/DirectDocuSealScreen';
 import DisclaimerSigningScreen from './src/screens/DisclaimerSigningScreen';
+import ExpressConsentSigningScreen from './src/screens/ExpressConsentSigningScreen';
+import BookingConfirmationSigningScreen from './src/screens/BookingConfirmationSigningScreen';
 import DocuSealSigningScreen from './src/screens/DocuSealSigningScreen';
 import DynamicInputsScreen from './src/screens/DynamicInputsScreen';
 import EmailConfirmationSigningScreen from './src/screens/EmailConfirmationSigningScreen';
@@ -206,6 +209,8 @@ export type RootStackParamList = {
   ContractGeneration: { opportunityId: string };
   ContractSigning: { opportunityId: string };
   DisclaimerSigning: { opportunityId: string };
+  ExpressConsentSigning: { opportunityId: string };
+  BookingConfirmationSigning: { opportunityId: string };
   EmailConfirmationSigning: { opportunityId: string };
   DocuSealSigning: { 
     submissionId: string; 
@@ -339,6 +344,8 @@ const linking: LinkingOptions<RootStackParamList> = {
       ContractGeneration: 'contract-generation/:opportunityId',
       ContractSigning: 'contract-signing/:opportunityId',
       DisclaimerSigning: 'disclaimer-signing/:opportunityId',
+      ExpressConsentSigning: 'express-consent/:opportunityId',
+      BookingConfirmationSigning: 'booking-confirmation/:opportunityId',
       EmailConfirmationSigning: 'email-confirmation/:opportunityId',
       DocuSealSigning: 'docuseal-signing/:opportunityId',
       SignCom: 'signcom/:opportunityId',
@@ -670,7 +677,11 @@ function AppNavigator() {
 
   // Show loading UI while authentication is being checked without mounting a navigator
   if (isLoading) {
-    return <LoadingScreen />;
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
   }
 
   return (
@@ -827,6 +838,20 @@ function AppNavigator() {
           <Stack.Screen 
             name="DisclaimerSigning" 
             component={DisclaimerSigningScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen 
+            name="ExpressConsentSigning" 
+            component={ExpressConsentSigningScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen 
+            name="BookingConfirmationSigning" 
+            component={BookingConfirmationSigningScreen}
             options={{
               headerShown: false,
             }}

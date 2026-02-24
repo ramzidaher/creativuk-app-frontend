@@ -25,13 +25,27 @@ import { api, workflowApi } from '../utils/api';
 const { width, height } = Dimensions.get('window');
 
 interface RouteParams {
-  opportunity: Opportunity;
+  opportunityId?: string;
+  opportunity?: Opportunity;
+}
+
+/** Returns true if the value is a valid opportunity object (not URL-serialized "[object Object]" or missing). */
+function isValidOpportunity(obj: unknown): obj is Opportunity {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    !Array.isArray(obj) &&
+    'id' in (obj as Record<string, unknown>) &&
+    typeof (obj as Opportunity).id === 'string' &&
+    (obj as Opportunity).id.length > 0
+  );
 }
 
 export default function OpportunityDetailsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
-  const { opportunity: passedOpportunity } = route.params as RouteParams;
+  const params = route.params as RouteParams;
+  const { opportunityId, opportunity: paramOpportunity } = params;
   const { isAuthenticated } = useAuth();
   const { theme, isDark, toggleTheme } = useTheme();
   
@@ -87,8 +101,20 @@ export default function OpportunityDetailsScreen() {
   const loadOpportunityDetails = async () => {
     setLoading(true);
     try {
-      // Use the passed opportunity data
-      console.log('🔧 Loading opportunity details for:', passedOpportunity);
+      // Resolve opportunity: use param if valid, otherwise fetch by opportunityId (clean URLs use only ID)
+      let passedOpportunity: Opportunity;
+      if (isValidOpportunity(paramOpportunity)) {
+        passedOpportunity = paramOpportunity;
+      } else if (opportunityId) {
+        const res = await api.get<Opportunity>(`/opportunities/${opportunityId}`);
+        passedOpportunity = res.data;
+      } else {
+        Alert.alert('Error', 'Missing opportunity. Please open this page from the opportunities list.');
+        setLoading(false);
+        return;
+      }
+
+      console.log('🔧 Loading opportunity details for:', passedOpportunity?.id ?? opportunityId);
       
       // Log location-related fields specifically
       console.log('📍 Location data check:');

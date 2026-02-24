@@ -1,5 +1,11 @@
 # Creativ Solar App - Production Testing & Deployment Guide
 
+## Docs
+
+- `docs/DEPLOYMENT-IIS-AZURE.md`: Azure Windows Server + IIS deployment (SPA + `/api` proxy)
+- `docs/WEB-CONFIG.md`: explanation of `public/web.config`
+- `docs/API-URLS.md`: how `API_BASE_URL` is selected (dev vs production)
+
 ## 🚀 Quick Start
 
 ### Development

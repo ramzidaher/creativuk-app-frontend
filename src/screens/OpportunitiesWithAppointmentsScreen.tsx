@@ -277,7 +277,7 @@ export default function OpportunitiesWithAppointmentsScreen() {
     <TouchableOpacity
       key={opp.id}
       style={styles.opportunityCard}
-      onPress={() => navigation.navigate('OpportunityDetails', { opportunity: opp })}
+      onPress={() => navigation.navigate('OpportunityDetails', { opportunityId: opp.id })}
     >
       <View style={styles.cardHeader}>
         <View style={styles.opportunityInfo}>
