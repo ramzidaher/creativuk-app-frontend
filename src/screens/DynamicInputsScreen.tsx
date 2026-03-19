@@ -48,6 +48,10 @@ interface InputField {
   enabled: boolean;
   cellReference: string;
   dropdownOptions?: string[];
+  /** When true with dropdownOptions, user can pick from list or type a custom value */
+  allowOverride?: boolean;
+  /** Shown below the field (e.g. "Use current rates") */
+  helperText?: string;
 }
 
 interface RouteParams {
@@ -1025,7 +1029,7 @@ export default function DynamicInputsScreen() {
       'current_tariff': 'CURRENT ELECTRICITY TARIFF',
       'new_tariff': 'NEW ELECTRICITY TARIFF',
       'consumption': 'ELECTRICITY CONSUMPTION',
-      'export_tariff': 'EXPORT TARIFF',
+      'export_tariff': 'IMPORT/EXPORT TARIFF',
       'existing_system': 'EXISTING SYSTEM',
       'solar': 'SOLAR',
       'battery': 'BATTERY',
@@ -1229,6 +1233,61 @@ export default function DynamicInputsScreen() {
               <Ionicons name="calendar-outline" size={20} color={theme.primaryText} style={{ marginLeft: 8 }} />
             )}
           </TouchableOpacity>
+        </View>
+      );
+    }
+
+    // Number field with dropdown (primary) + override (secondary): select from list first, or enter custom value below
+    if (
+      field.type === 'number' &&
+      field.dropdownOptions &&
+      field.dropdownOptions.length > 0 &&
+      field.allowOverride
+    ) {
+      const options = field.dropdownOptions;
+      const isValueInOptions = value && options.includes(value);
+      return (
+        <View key={field.id} style={[styles.inputCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+          <Text style={[styles.inputLabel, { color: theme.primaryText }]}>
+            {field.label}
+            {field.required && <Text style={styles.required}> *</Text>}
+          </Text>
+          {/* Primary: dropdown */}
+          <TouchableOpacity
+            style={[
+              styles.dropdownContainer,
+              { backgroundColor: theme.secondaryBackground, borderColor: theme.cardBorder },
+              !field.enabled && styles.disabledDropdownContainer
+            ]}
+            onPress={() => {
+              if (!field.enabled) return;
+              setOpenDropdown(field.id);
+              setShowDropdownModal(true);
+            }}
+          >
+            <Text style={[styles.dropdownText, { color: theme.primaryText }, !value && styles.placeholder]}>
+              {value ? (isValueInOptions ? value : `Custom: ${value}`) : 'Select from list...'}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color={theme.tertiaryText} />
+          </TouchableOpacity>
+          {/* Secondary: override */}
+          <Text style={{ color: theme.secondaryText, fontSize: 12, marginTop: 8, marginBottom: 4 }}>Or enter custom value</Text>
+          <TextInput
+            style={[
+              styles.textInput,
+              { backgroundColor: theme.secondaryBackground, borderColor: theme.cardBorder, color: theme.primaryText, minHeight: 44, paddingVertical: 10 },
+              !field.enabled && styles.disabledInput
+            ]}
+            value={value}
+            onChangeText={(text) => handleInputChange(field.id, text)}
+            placeholder="Override (optional)"
+            placeholderTextColor={theme.tertiaryText}
+            keyboardType="numeric"
+            editable={field.enabled}
+          />
+          {field.helperText ? (
+            <Text style={{ color: theme.secondaryText, marginTop: 4, fontSize: 13 }}>{field.helperText}</Text>
+          ) : null}
         </View>
       );
     }
@@ -1641,7 +1700,17 @@ export default function DynamicInputsScreen() {
                         <View key={section}>
                           <View style={[styles.sectionHeaderGroup, { backgroundColor: theme.secondaryBackground, borderColor: theme.cardBorder }]}>
                             <Text style={[styles.sectionTitle, { color: theme.primaryText, fontWeight: 'bold', fontSize: width < 768 ? 14 : 16, marginBottom: 0, textAlign: 'left' }]}>{sectionName}</Text>
-                      </View>
+                          </View>
+                          {section === 'consumption' && (
+                            <Text style={[styles.sectionNote, { color: theme.secondaryText }]}>
+                              Annual consumption also from current bill.
+                            </Text>
+                          )}
+                          {section === 'new_tariff' && (
+                            <Text style={[styles.sectionNote, { color: theme.secondaryText }]}>
+                              Rates are from the new provider.
+                            </Text>
+                          )}
                           {fields.map(renderInputField)}
                         </View>
                       ))}
@@ -1665,6 +1734,16 @@ export default function DynamicInputsScreen() {
                           <View style={[styles.sectionHeader, styles.sectionHeaderGroup, { backgroundColor: theme.secondaryBackground, borderColor: theme.cardBorder }]}>
                             <Text style={[styles.sectionTitle, { color: theme.tertiaryText, fontWeight: 'bold' }]}>{sectionName}</Text>
                           </View>
+                          {section === 'consumption' && (
+                            <Text style={[styles.sectionNote, { color: theme.tertiaryText }]}>
+                              Annual consumption also from current bill.
+                            </Text>
+                          )}
+                          {section === 'new_tariff' && (
+                            <Text style={[styles.sectionNote, { color: theme.tertiaryText }]}>
+                              Rates are from the new provider.
+                            </Text>
+                          )}
                           {fields.map(renderInputField)}
                         </View>
                       ))}
@@ -2171,6 +2250,12 @@ const styles = StyleSheet.create({
   },
   disabledDropdownContainer: {
     opacity: 0.6,
+  },
+  sectionNote: {
+    fontSize: 13,
+    marginBottom: 12,
+    marginHorizontal: 4,
+    fontStyle: 'italic',
   },
   dropdownWrapper: {
     position: 'relative',

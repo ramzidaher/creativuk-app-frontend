@@ -23,7 +23,7 @@ The production IIS config for this app lives at `public/web.config` and is copie
 
 In `public/web.config`, the `Proxy API` rule currently rewrites to:
 
-- `https://creativuk-app.paldev.tech/api/{R:1}`
+- `https://app.creativuk.co.uk/api/{R:1}`
 
 If your backend runs **on the same Azure Windows VM**, update the `action` URL to localhost (see examples in `docs/DEPLOYMENT-IIS-AZURE.md`).
 

@@ -977,7 +977,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         // Load images from URLs and convert to display format - optimized
         const loadImagesFromUrls = (pageData: any) => {
           const imageFields = ['energyBill', 'epcCertificate', 'frontDoor', 'frontProperty', 'targetRoofs', 'propertySides', 
-                              'roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'otherBuildings', 'electricMeter', 
+                              'roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'electricMeter', 
                               'garage', 'fuseBoard', 'batteryInverterLocation', 'evLocation', 'evCharger', 
                               'shadingIssues', 'scaffolding', 'customerSignature', 'renewableExecutiveSignature'];
           
@@ -1178,7 +1178,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       console.log('👤 Current user:', currentUser);
       
       // The details API returns the opportunity data directly
-      const detailsData = response.data as {
+      let detailsData = response.data as {
         contactAddress?: string | null;
         contactPostcode?: string | null;
         address?: string | null;
@@ -1190,14 +1190,61 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         notes?: string | null;
         customFields?: any[] | null;
         appointmentDetails?: any | null;
+        customerName?: string | null;
+        customerAddress?: string | null;
+        scheduledAt?: string | null;
       };
+      
+      // Manual (new) opportunities: /details often returns nulls; use base opportunity endpoint
+      const hasNoContact =
+        !detailsData?.contactFirstName &&
+        !detailsData?.contactLastName &&
+        !detailsData?.contactAddress &&
+        !detailsData?.address &&
+        !detailsData?.contactPostcode;
+      if (hasNoContact && opportunityId) {
+        try {
+          const baseRes = await api.get<any>(`/opportunities/${opportunityId}`);
+          const opp = baseRes.success ? baseRes.data : null;
+          if (opp) {
+            const customerName = opp.customerName || opp.contactName || '';
+            const parts = (customerName || '').trim().split(/\s+/);
+            const customerFirstName = parts[0] || '';
+            const customerLastName = parts.slice(1).join(' ') || '';
+            const address =
+              opp.customerAddress || opp.contactAddress || opp.address || '';
+            const scheduledAt = opp.scheduledAt;
+            detailsData = {
+              ...detailsData,
+              contactFirstName: customerFirstName || detailsData.contactFirstName,
+              contactLastName: customerLastName || detailsData.contactLastName,
+              contactAddress: address || detailsData.contactAddress,
+              address: address || detailsData.address,
+              contactPostcode: opp.contactPostcode || detailsData.contactPostcode,
+              appointmentDetails: scheduledAt
+                ? { date: scheduledAt }
+                : detailsData.appointmentDetails,
+            };
+            console.log('📋 Merged manual opportunity data into details:', {
+              customerFirstName,
+              customerLastName,
+              address: address ? `${address.slice(0, 50)}...` : '',
+              scheduledAt: scheduledAt || null,
+            });
+          }
+        } catch (e) {
+          console.warn('⚠️ Fallback GET /opportunities/:id for manual opportunity failed:', e);
+        }
+      }
       
       console.log('📋 Details API data:', detailsData);
         
       // Extract customer information for header display
-        const customerFirstName = detailsData.contactFirstName || '';
-        const customerLastName = detailsData.contactLastName || '';
-      const customerName = `${customerFirstName} ${customerLastName}`.trim() || 'Loading...';
+      const fallbackFullName = (detailsData as any)?.customerName || (detailsData as any)?.contactName || '';
+      const fallbackParts = String(fallbackFullName || '').trim().split(/\s+/).filter(Boolean);
+      const customerFirstName = detailsData.contactFirstName || fallbackParts[0] || '';
+      const customerLastName = detailsData.contactLastName || fallbackParts.slice(1).join(' ') || '';
+      const customerName = `${customerFirstName} ${customerLastName}`.trim() || String(fallbackFullName || '').trim() || 'Loading...';
       const customerPostcode = detailsData.contactPostcode || 'Loading...';
       
       if (customerName !== 'Loading...' || customerPostcode !== 'Loading...') {
@@ -1703,18 +1750,58 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       const detailsResponse = await api.get(`/opportunities/${id}/details`);
       console.log('📍 Details API response:', detailsResponse.data);
 
-      if (detailsResponse.data) {
-        const detailsData = detailsResponse.data as {
-          contactAddress?: string | null;
-          contactPostcode?: string | null;
-          address?: string | null;
-          contactFirstName?: string | null;
-          contactLastName?: string | null;
-          contactCity?: string | null;
-          contactState?: string | null;
-          contactAddressLine2?: string | null;
-        };
+      let detailsData = detailsResponse.data as {
+        contactAddress?: string | null;
+        contactPostcode?: string | null;
+        address?: string | null;
+        contactFirstName?: string | null;
+        contactLastName?: string | null;
+        contactCity?: string | null;
+        contactState?: string | null;
+        contactAddressLine2?: string | null;
+      } | null;
 
+      // Manual opportunities: /details often returns nulls; fallback to base opportunity
+      const hasNoContact =
+        !detailsData?.contactFirstName &&
+        !detailsData?.contactLastName &&
+        !detailsData?.contactAddress &&
+        !detailsData?.address;
+      if (hasNoContact) {
+        try {
+          const baseRes = await api.get<any>(`/opportunities/${id}`);
+          const opp = baseRes.success ? baseRes.data : null;
+          if (opp) {
+            const customerName = opp.customerName || opp.contactName || '';
+            const parts = (customerName || '').trim().split(/\s+/);
+            detailsData = {
+              contactFirstName: parts[0] || '',
+              contactLastName: parts.slice(1).join(' ') || '',
+              contactAddress: opp.customerAddress || opp.contactAddress || opp.address || '',
+              address: opp.customerAddress || opp.contactAddress || opp.address || '',
+              contactPostcode: opp.contactPostcode || '',
+              contactCity: null,
+              contactState: null,
+              contactAddressLine2: null,
+            };
+            console.log('📍 Enriched from manual opportunity base:', detailsData);
+          }
+        } catch (e) {
+          console.warn('⚠️ Fallback GET /opportunities/:id for enrich failed:', e);
+        }
+      }
+
+      if (detailsData) {
+        // If detailsData has a full name but missing first/last, derive them.
+        const fullName = (detailsData as any)?.customerName || (detailsData as any)?.contactName || '';
+        if ((!detailsData.contactFirstName || !detailsData.contactLastName) && fullName) {
+          const parts = String(fullName).trim().split(/\s+/).filter(Boolean);
+          detailsData = {
+            ...detailsData,
+            contactFirstName: detailsData.contactFirstName || parts[0] || '',
+            contactLastName: detailsData.contactLastName || parts.slice(1).join(' ') || '',
+          };
+        }
         const resolvedAddress = detailsData.contactAddress || detailsData.address || '';
         const resolvedPostcode = detailsData.contactPostcode || '';
         const resolvedFirstName = detailsData.contactFirstName || '';
@@ -2028,6 +2115,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           'roofAngle',
           'otherRoofPictures',
           'roofTileCloseup',
+          'internalCeilingPictures',
           'otherBuildings',
           'electricMeter',
           'garage',
@@ -2144,6 +2232,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         'roofAngle',
         'otherRoofPictures',
         'roofTileCloseup',
+        'internalCeilingPictures',
         'otherBuildings',
         'electricMeter',
         'garage',
@@ -2584,7 +2673,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         targetPage = 'page5';
       } else if (['frontDoor', 'frontProperty', 'targetRoofs', 'propertySides'].includes(fieldName)) {
         targetPage = 'page6';
-      } else if (['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'otherBuildings', 'electricMeter', 'garage', 'fuseBoard', 'batteryInverterLocation'].includes(fieldName)) {
+      } else if (['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'electricMeter', 'garage', 'fuseBoard', 'batteryInverterLocation'].includes(fieldName)) {
         targetPage = 'page7';
       } else if (['evLocation', 'evCharger', 'shadingIssues', 'scaffolding', 'customerSignature', 'renewableExecutiveSignature'].includes(fieldName)) {
         targetPage = 'page8';
@@ -2634,7 +2723,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       targetPage = 'page5'; // epcCertificate is on page 5
     } else if (['frontDoor', 'frontProperty', 'targetRoofs', 'propertySides'].includes(fieldName)) {
       targetPage = 'page6';
-    } else if (['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'otherBuildings', 'electricMeter', 'garage', 'fuseBoard', 'batteryInverterLocation'].includes(fieldName)) {
+    } else if (['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'electricMeter', 'garage', 'fuseBoard', 'batteryInverterLocation'].includes(fieldName)) {
       targetPage = 'page7';
     } else if (['evLocation', 'evCharger', 'shadingIssues', 'scaffolding', 'customerSignature', 'renewableExecutiveSignature'].includes(fieldName)) {
       targetPage = 'page8';
@@ -5064,6 +5153,21 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       </View>
 
       <View style={[styles.section, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+        <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Internal Ceiling Pictures</Text>
+        <View style={styles.twoColumnGrid}>
+          <View style={styles.column}>
+            <ModernFileUpload
+              label="Internal Ceiling Pictures"
+              onPress={() => handleFileUpload('internalCeilingPictures')}
+              files={uploadedFiles.internalCeilingPictures || []}
+              onRemove={(index: number) => removeFile('internalCeilingPictures', index)}
+              required={false}
+            />
+          </View>
+        </View>
+      </View>
+
+      <View style={[styles.section, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
         <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Fuseboard and Electric Metre</Text>
         
         <View style={styles.twoColumnGrid}>
@@ -5477,7 +5581,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       4: ['installationAvailability', 'roofTileType', 'solarBatteryStorage', 'evChargerRequired', 'optimisersRequired', 'scaffoldingRequired'],
       5: ['energyBill', 'epcCertificate'], // Page 5 has image fields
       6: ['frontDoor', 'frontProperty', 'targetRoofs', 'propertySides'], // Page 6 has image fields
-      7: ['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'otherBuildings', 'fuseBoard', 'electricMeter', 'garage', 'batteryInverterLocation'], // Page 7 has image fields
+      7: ['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'fuseBoard', 'electricMeter', 'garage', 'batteryInverterLocation'], // Page 7 has image fields
       8: ['shadingIssues', 'scaffolding', 'customerSignature', 'renewableExecutiveSignature'] // Page 8 has image fields (EV images conditional)
     };
     
@@ -5496,7 +5600,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       const value = (pageData as any)[field];
       
       // For image fields, check if files are uploaded
-      if (['energyBill', 'epcCertificate', 'frontDoor', 'frontProperty', 'targetRoofs', 'propertySides', 'roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'otherBuildings', 'fuseBoard', 'electricMeter', 'garage', 'batteryInverterLocation', 'evLocation', 'evCharger', 'shadingIssues', 'scaffolding', 'customerSignature', 'renewableExecutiveSignature'].includes(field)) {
+      if (['energyBill', 'epcCertificate', 'frontDoor', 'frontProperty', 'targetRoofs', 'propertySides', 'roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'fuseBoard', 'electricMeter', 'garage', 'batteryInverterLocation', 'evLocation', 'evCharger', 'shadingIssues', 'scaffolding', 'customerSignature', 'renewableExecutiveSignature'].includes(field)) {
         const uploadedFilesForField = uploadedFiles[field] || [];
         if (uploadedFilesForField.length > 0) {
           filledFields++;
@@ -5543,7 +5647,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       4: ['energyBill'], // Page 4 image fields
       5: ['epcCertificate'], // Page 5 image fields
       6: ['frontDoor', 'frontProperty', 'targetRoofs', 'propertySides'], // Page 6 image fields
-      7: ['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'otherBuildings', 'fuseBoard', 'electricMeter', 'garage', 'batteryInverterLocation'], // Page 7 image fields
+      7: ['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'fuseBoard', 'electricMeter', 'garage', 'batteryInverterLocation'], // Page 7 image fields
       8: ['shadingIssues', 'scaffolding', 'customerSignature', 'renewableExecutiveSignature'] // Page 8 image fields (EV images conditional)
     };
     
@@ -5632,7 +5736,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
             pageData: pageData,
             imageFieldsForPage,
             uploadedFiles: Object.keys(uploadedFiles).filter(key => 
-              ['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'otherBuildings', 'fuseBoard', 'electricMeter', 'garage', 'batteryInverterLocation'].includes(key)
+              ['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'fuseBoard', 'electricMeter', 'garage', 'batteryInverterLocation'].includes(key)
             ).reduce((acc, key) => ({ ...acc, [key]: uploadedFiles[key]?.length || 0 }), {})
           });
         }
@@ -5645,7 +5749,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
             pageData: pageData,
             imageFieldsForPage,
             uploadedFiles: Object.keys(uploadedFiles).filter(key => 
-              ['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'otherBuildings', 'fuseBoard', 'electricMeter', 'garage', 'batteryInverterLocation'].includes(key)
+              ['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'fuseBoard', 'electricMeter', 'garage', 'batteryInverterLocation'].includes(key)
             ).reduce((acc, key) => ({ ...acc, [key]: uploadedFiles[key]?.length || 0 }), {})
           });
         }

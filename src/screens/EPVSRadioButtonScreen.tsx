@@ -42,7 +42,7 @@ const radioButtonGroups: RadioButtonGroup[] = [
         shapeName: 'SingleRate'
       },
       {
-        label: 'Dual Rate / Economy 7',
+        label: 'Dual Rate / Off-Peak',
         endpoint: '/epvs-automation/energy-use/dual-rate',
         shapeName: 'DualRate'
       }

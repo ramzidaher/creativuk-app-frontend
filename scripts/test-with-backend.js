@@ -11,7 +11,7 @@ const testConfigPath = path.join(__dirname, '..', 'src', 'utils', 'test-config.j
 const testConfig = `
 // Temporary config for testing with production backend
 export const TEST_CONFIG = {
-  API_BASE_URL: 'https://creativuk-app.paldev.tech/api/',
+  API_BASE_URL: 'https://app.creativuk.co.uk/api/',
   OVERRIDE_DEFAULT: true
 };
 `;
@@ -47,7 +47,7 @@ console.log('   http://localhost:3000/calculator/123');
 console.log('   http://localhost:3000/pricing/123');
 console.log('   http://localhost:3000/admin');
 console.log('   http://localhost:3000/solar-workflow/123');
-console.log('\n✅ Backend API: https://creativuk-app.paldev.tech/api/');
+console.log('\n✅ Backend API: https://app.creativuk.co.uk/api/');
 console.log('💡 If routing works locally, it will work in production with IIS config.\n');
 
 // Start a simple HTTP server

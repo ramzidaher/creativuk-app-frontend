@@ -60,9 +60,9 @@ console.log('\n📋 Next steps for production deployment:');
 console.log('1. Copy the dist/ folder contents to your IIS web directory');
 console.log('2. Copy public/web.config to the root of your web directory');
 console.log('3. Ensure IIS URL Rewrite module is installed');
-console.log('4. Test the deployment with your backend at https://creativuk-app.paldev.tech/api/');
+console.log('4. Test the deployment with your backend at https://app.creativuk.co.uk/api/');
 
 console.log('\n🔧 Environment behavior:');
-console.log('- Local testing: Uses https://creativuk-app.paldev.tech/api/');
+console.log('- Local testing: Uses https://app.creativuk.co.uk/api/');
 console.log('- Production: Uses relative /api/ URLs (proxied by IIS)');
 console.log('- Routing: All screens have proper URLs (e.g., /calculator/123)');

@@ -5,7 +5,7 @@ export const DEVELOPMENT_CONFIG = {
   // Backend URL options for local development
   BACKEND_URLS: {
     // Production backend (default for testing)
-    PRODUCTION: 'https://creativuk-app.paldev.tech/api/',
+    PRODUCTION: 'https://app.creativuk.co.uk/api/',
     
     // Local backend (if you have one running locally)
     LOCAL: 'http://localhost:3000/api/',

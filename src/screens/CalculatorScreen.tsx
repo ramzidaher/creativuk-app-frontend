@@ -42,7 +42,7 @@ const radioButtonGroups: RadioButtonGroup[] = [
         shapeName: 'SingleRate'
       },
       {
-        label: 'Dual Rate / Economy 7',
+        label: 'Dual Rate / Off-Peak',
         endpoint: '/excel-automation/energy-use/dual-rate',
         shapeName: 'DualRate'
       }
@@ -102,8 +102,8 @@ const radioButtonGroups: RadioButtonGroup[] = [
     ]
   },
   {
-    title: '⚡ Export Tariff',
-    description: 'Do you have an export tariff?',
+    title: '⚡ Import/Export Tariff',
+    description: 'Do you have an import/export tariff?',
     options: [
       {
         label: 'Yes',
@@ -370,7 +370,10 @@ export default function CalculatorScreen() {
         const cleanedSelectedOptions: Record<string, string> = {};
         
         Object.entries(progress.radioButtonSelections).forEach(([key, value]) => {
-          if (validGroupTitles.includes(key)) {
+          const mappedKey = key === '⚡ Export Tariff' ? '⚡ Import/Export Tariff' : key;
+          if (validGroupTitles.includes(mappedKey)) {
+            cleanedSelectedOptions[mappedKey] = value;
+          } else if (validGroupTitles.includes(key)) {
             cleanedSelectedOptions[key] = value;
           } else {
             console.log(`🗑️ Removing invalid selection: ${key} = ${value}`);
@@ -628,16 +631,21 @@ export default function CalculatorScreen() {
                   <View style={[styles.radioButtonInner, { backgroundColor: theme.primaryButton }]} />
                 )}
               </View>
-              <Text style={[
-                styles.radioButtonLabel,
-                { color: theme.primaryText },
-                isOptionSelected(group.title, option.shapeName) && [
-                  styles.radioButtonLabelSelected,
-                  { color: theme.primaryButton }
-                ]
-              ]}>
-                {option.label}
-              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[
+                  styles.radioButtonLabel,
+                  { color: theme.primaryText },
+                  isOptionSelected(group.title, option.shapeName) && [
+                    styles.radioButtonLabelSelected,
+                    { color: theme.primaryButton }
+                  ]
+                ]}>
+                  {option.label}
+                </Text>
+                {option.shapeName === 'BatterySC' && (
+                  <Text style={[styles.radioButtonNote, { color: theme.secondaryText }]}>Used for single rate customers</Text>
+                )}
+              </View>
             </View>
           </TouchableOpacity>
         ))}
@@ -816,6 +824,16 @@ export default function CalculatorScreen() {
           <View style={styles.groupsContainer}>
             {radioButtonGroups.map(renderRadioButtonGroup)}
           </View>
+
+          {/* Self consumption only for single rate: show warning when Dual Rate + Self-Consumption selected */}
+          {selectedOptions['⚡ Energy Use'] === 'DualRate' && selectedOptions['🔋 Battery Type'] === 'BatterySC' && (
+            <View style={[styles.warningBanner, { backgroundColor: (theme.dangerButton || '#ef4444') + '18', borderColor: (theme.dangerButton || '#ef4444') + '50' }]}>
+              <Feather name="alert-triangle" size={20} color={theme.dangerButton || '#ef4444'} style={{ marginRight: 10 }} />
+              <Text style={[styles.warningBannerText, { color: theme.primaryText }]}>
+                Self consumption is only used for single rate customers. Consider selecting Overnight Charging for dual rate / off-peak.
+              </Text>
+            </View>
+          )}
 
           {/* Summary Section */}
           <View style={[
@@ -1240,6 +1258,11 @@ const styles = StyleSheet.create({
     flex: 1,
     letterSpacing: -0.2,
   },
+  radioButtonNote: {
+    fontSize: 12,
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
   radioButtonLabelSelected: {
     fontWeight: '700',
   },
@@ -1413,6 +1436,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748b',
     textAlign: 'center',
+    lineHeight: 20,
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  warningBannerText: {
+    flex: 1,
+    fontSize: 14,
     lineHeight: 20,
   },
 });

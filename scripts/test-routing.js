@@ -32,7 +32,7 @@ console.log('   http://localhost:3000/admin');
 console.log('   http://localhost:3000/solar-workflow/123');
 console.log('\n💡 If routing works locally, it will work in production with IIS config.');
 console.log('\n🔧 IMPORTANT: Open browser console and run:');
-console.log('   CreativSolarConfig.setOverrideUrl("https://creativuk-app.paldev.tech/api/")');
+console.log('   CreativSolarConfig.setOverrideUrl("https://app.creativuk.co.uk/api/")');
 console.log('   Then refresh the page to test with production backend.\n');
 
 // Start a simple HTTP server

@@ -4,12 +4,20 @@
  * Fields are shown/hidden based on selectedTemplateOptions and radio button selections
  */
 
+import { rangeOptions } from './dynamicInputFields';
+
 export interface EPVSInputFieldDefinition {
   id: string;
   label: string;
   type: 'text' | 'number' | 'dropdown' | 'date';
   required: boolean;
   cellReference: string; // Excel cell reference for backend
+  /** Static dropdown options; when set with allowOverride, renders as dropdown (primary) + editable override */
+  dropdownOptions?: string[];
+  /** If true and dropdownOptions set, user can type a custom value as override */
+  allowOverride?: boolean;
+  /** Shown below the field */
+  helperText?: string;
   enabledBy?: {
     solar?: boolean;
     battery?: boolean;
@@ -34,21 +42,17 @@ export interface EPVSInputFieldDefinition {
  * Fields are shown/hidden based on template selections and radio button selections
  */
 export const EPVS_DYNAMIC_INPUT_FIELDS: EPVSInputFieldDefinition[] = [
-  // FLUX: CURRENT ELECTRICITY TARIFF FIELDS - Based on Energy Use radio button
-  // Radio: What type of tariff is the customer on?
-  // Single Rate / Standard OR Dual Rate / Economy 7
+  // FLUX: CURRENT ELECTRICITY TARIFF FIELDS - Based on Energy Use radio button (dropdown primary, override secondary)
   {
     id: 'current_single_peak_rate',
     label: 'Single / Peak Rate (pence per kWh)',
     type: 'number',
     required: false,
     cellReference: 'H20',
-    // Enabled when SingleRate OR DualRate selected (always shown for Single Rate, shown for Dual Rate too)
+    dropdownOptions: rangeOptions(10, 35), // 10p to 35p
+    allowOverride: true,
     enabledByRadioButton: [
-      {
-        groupTitle: '⚡ Energy Use',
-        enabledFor: ['SingleRate', 'DualRate'] // Enabled for both Single and Dual Rate
-      }
+      { groupTitle: '⚡ Energy Use', enabledFor: ['SingleRate', 'DualRate'] }
     ]
   },
   {
@@ -57,18 +61,13 @@ export const EPVS_DYNAMIC_INPUT_FIELDS: EPVSInputFieldDefinition[] = [
     type: 'number',
     required: false,
     cellReference: 'H21',
-    // Only enabled when DualRate selected
+    dropdownOptions: rangeOptions(5, 20), // 5p to 20p
+    allowOverride: true,
     enabledByRadioButton: [
-      {
-        groupTitle: '⚡ Energy Use',
-        enabledFor: ['DualRate'] // Only enabled when Dual Rate is selected
-      }
+      { groupTitle: '⚡ Energy Use', enabledFor: ['DualRate'] }
     ],
     disabledByRadioButton: [
-      {
-        groupTitle: '⚡ Energy Use',
-        disabledFor: ['SingleRate'] // Disabled when Single Rate is selected
-      }
+      { groupTitle: '⚡ Energy Use', disabledFor: ['SingleRate'] }
     ]
   },
   {
@@ -77,18 +76,13 @@ export const EPVS_DYNAMIC_INPUT_FIELDS: EPVSInputFieldDefinition[] = [
     type: 'number',
     required: false,
     cellReference: 'H22',
-    // Only enabled when DualRate selected
+    dropdownOptions: rangeOptions(1, 10), // 1 to 10 hr
+    allowOverride: true,
     enabledByRadioButton: [
-      {
-        groupTitle: '⚡ Energy Use',
-        enabledFor: ['DualRate'] // Only enabled when Dual Rate is selected
-      }
+      { groupTitle: '⚡ Energy Use', enabledFor: ['DualRate'] }
     ],
     disabledByRadioButton: [
-      {
-        groupTitle: '⚡ Energy Use',
-        disabledFor: ['SingleRate'] // Disabled when Single Rate is selected
-      }
+      { groupTitle: '⚡ Energy Use', disabledFor: ['SingleRate'] }
     ]
   },
 
@@ -731,16 +725,23 @@ export function toEPVSInputField(
   enabled: boolean;
   cellReference: string;
   dropdownOptions?: string[];
+  allowOverride?: boolean;
+  helperText?: string;
 } {
+  const options = fieldDef.type === 'dropdown' && dropdownOptions.length > 0
+    ? dropdownOptions
+    : (fieldDef.dropdownOptions ?? []);
   return {
     id: fieldDef.id,
     label: fieldDef.label,
     type: fieldDef.type,
-    value: value,
+    value,
     required: fieldDef.required,
-    enabled: true, // Will be controlled by radio button logic in component
+    enabled: true,
     cellReference: fieldDef.cellReference,
-    dropdownOptions: dropdownOptions,
+    ...(options.length > 0 ? { dropdownOptions: options } : {}),
+    ...(fieldDef.allowOverride === true ? { allowOverride: true } : {}),
+    ...(fieldDef.helperText ? { helperText: fieldDef.helperText } : {}),
   };
 }
 

@@ -364,11 +364,12 @@ export const api = {
         if (isCorsError) {
           console.error(`API CORS Error (attempt ${attempt}/${retries}):`, errorMessage);
           // Return immediately for CORS errors - retrying won't help
-          return {
+          const corsResponse: ApiResponse<T> = {
             error: 'CORS Error: The backend server does not allow requests from this origin. Please check backend CORS configuration.',
             success: false,
-            isCorsError: true
           };
+          (corsResponse as any).isCorsError = true;
+          return corsResponse;
         }
         
         console.error(`API Error (attempt ${attempt}/${retries}):`, error);
@@ -623,6 +624,34 @@ export const api = {
   },
 };
 
+/** DTO for POST /opportunities/manual (admin only) */
+export interface CreateManualOpportunityDto {
+  name: string;
+  customerName: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  customerAddress?: string;
+  assignedUserId: string;
+  /** ISO 8601 date/time (e.g. scheduled survey/visit). Optional; omit or null if not set. */
+  scheduledAt?: string | null;
+}
+
+/** Response shape from POST /opportunities/manual */
+export interface ManualOpportunityResponse {
+  id: string;
+  ghlOpportunityId: string;
+  name: string;
+  userId: string;
+  customerName: string;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  customerAddress?: string | null;
+  source: 'MANUAL';
+  scheduledAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const opportunitiesApi = {
   async getAiVsManual(): Promise<ApiResponse<OpportunitiesResponse>> {
     // Force refresh for now to get the latest opportunities data
@@ -796,6 +825,70 @@ export const opportunitiesApi = {
     return api.put(`/opportunities/${opportunityId}/status`, { status, ...(stageId ? { stageId } : {}) });
   },
 
+  /**
+   * List manual opportunities only (authenticated).
+   * Surveyors: only where they are assigned; Admins: all.
+   * Backend: GET /opportunities/manual
+   */
+  async getManualOpportunities(): Promise<ApiResponse<{ opportunities: any[]; total: number }>> {
+    return api.get<{ opportunities: any[]; total: number }>('/opportunities/manual');
+  },
+
+  /**
+   * Create a manual opportunity (admin only).
+   * Backend: POST /opportunities/manual
+   */
+  async createManualOpportunity(dto: CreateManualOpportunityDto): Promise<ApiResponse<ManualOpportunityResponse>> {
+    // Backend field naming has varied over time; send address in common aliases.
+    const payload: any = { ...dto };
+    if (dto.customerAddress && !payload.address) payload.address = dto.customerAddress;
+    if (dto.customerAddress && !payload.contactAddress) payload.contactAddress = dto.customerAddress;
+    if (dto.customerEmail !== undefined && dto.customerEmail !== null) {
+      payload.contactEmail = dto.customerEmail;
+      payload.email = dto.customerEmail;
+    }
+    if (dto.assignedUserId && !payload.userId) payload.userId = dto.assignedUserId;
+    if (dto.assignedUserId && !payload.ownerId) payload.ownerId = dto.assignedUserId;
+    return api.post<ManualOpportunityResponse>('/opportunities/manual', payload);
+  },
+
+  /**
+   * Update a manual opportunity (admin only).
+   * Backend: PUT /opportunities/manual/:id
+   */
+  async updateManualOpportunity(
+    opportunityId: string,
+    dto: CreateManualOpportunityDto
+  ): Promise<ApiResponse<ManualOpportunityResponse>> {
+    // Backend field naming has varied over time; send address in common aliases.
+    const payload: any = { ...dto };
+    if (dto.customerAddress && !payload.address) payload.address = dto.customerAddress;
+    if (dto.customerAddress && !payload.contactAddress) payload.contactAddress = dto.customerAddress;
+    if (dto.customerEmail !== undefined && dto.customerEmail !== null) {
+      payload.contactEmail = dto.customerEmail;
+      payload.email = dto.customerEmail;
+    }
+    if (dto.assignedUserId && !payload.userId) payload.userId = dto.assignedUserId;
+    if (dto.assignedUserId && !payload.ownerId) payload.ownerId = dto.assignedUserId;
+    try {
+      return await api.put<ManualOpportunityResponse>(`/opportunities/manual/${opportunityId}`, payload);
+    } catch (e: any) {
+      const msg = e?.message || '';
+      if (msg.includes('404') || msg.includes('Not Found')) {
+        return api.put<ManualOpportunityResponse>(`/opportunities/${opportunityId}`, payload);
+      }
+      throw e;
+    }
+  },
+
+  /**
+   * Delete a manual opportunity (admin only).
+   * Backend: DELETE /opportunities/manual/:id
+   */
+  async deleteManualOpportunity(opportunityId: string): Promise<ApiResponse<void>> {
+    return api.delete<void>(`/opportunities/manual/${opportunityId}`);
+  },
+
   // Clear cache methods
   clearCache(): void {
     cache.remove(CACHE_KEYS.OPPORTUNITIES);
@@ -873,8 +966,11 @@ export const surveyApi = {
     return api.post<any>(`/surveys/${ghlOpportunityId}`, {});
   },
 
-  async getSurvey(ghlOpportunityId: string): Promise<ApiResponse<any>> {
-    return api.get<any>(`/surveys/${ghlOpportunityId}`);
+  async getSurvey(ghlOpportunityId: string, options?: { skipCache?: boolean }): Promise<ApiResponse<any>> {
+    const endpoint = options?.skipCache
+      ? `/surveys/${ghlOpportunityId}?_t=${Date.now()}`
+      : `/surveys/${ghlOpportunityId}`;
+    return api.get<any>(endpoint);
   },
 
   async getUserSurveys(): Promise<ApiResponse<any>> {
@@ -2530,10 +2626,11 @@ export const adminOpportunityDetailsApi = {
       console.log('📋 Response status:', response.status);
 
       let usedFallback = false;
+      let usedBasicFallback = false;
 
-      // If 404, fallback to existing endpoint
-      if (response.status === 404) {
-        console.log('⚠️ Admin endpoint not available, falling back to existing endpoint...');
+      // If 404 (not deployed) or 5xx (manual UUIDs can 500), fall back to existing endpoints.
+      if (response.status === 404 || response.status >= 500) {
+        console.log('⚠️ Admin endpoint failed, falling back to existing endpoint...');
         usedFallback = true;
         url = buildApiUrl(`/opportunities/${opportunityId}/details`);
         console.log('📋 Fallback API URL:', url);
@@ -2548,6 +2645,23 @@ export const adminOpportunityDetailsApi = {
         });
         
         console.log('📋 Fallback response status:', response.status);
+
+        // If /details fails (some deployments), fall back to base opportunity endpoint.
+        if (!response.ok && response.status !== 401) {
+          console.log('⚠️ Details endpoint failed, falling back to base opportunity endpoint...');
+          usedBasicFallback = true;
+          url = buildApiUrl(`/opportunities/${opportunityId}`);
+          console.log('📋 Base fallback API URL:', url);
+          response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
+            },
+          });
+          console.log('📋 Base fallback response status:', response.status);
+        }
       }
 
       if (!response.ok) {
@@ -2562,17 +2676,41 @@ export const adminOpportunityDetailsApi = {
       const data = await response.json();
       console.log('📋 Opportunity details data:', data);
       
+      // Basic fallback: wrap a single opportunity into the expected shape.
+      if (usedBasicFallback) {
+        const address =
+          data?.contactAddress ||
+          data?.address ||
+          data?.customerAddress ||
+          data?.opportunity?.contactAddress ||
+          data?.opportunity?.address ||
+          data?.opportunity?.customerAddress;
+        return {
+          success: true,
+          data: {
+            opportunity: {
+              id: data.id,
+              ghlOpportunityId: opportunityId,
+              contactAddress: address,
+              contactPostcode: data.contactPostcode,
+              ...data,
+            },
+          },
+        };
+      }
+
       // Only transform if we used the fallback endpoint
       if (usedFallback) {
         // This is the fallback endpoint response, transform it to match expected structure
         console.log('⚠️ Using fallback endpoint response structure');
+        const address = data.contactAddress || data.address || data.customerAddress;
         return { 
           success: true, 
           data: {
             opportunity: {
               id: data.id,
               ghlOpportunityId: opportunityId,
-              contactAddress: data.contactAddress || data.address,
+              contactAddress: address,
               contactPostcode: data.contactPostcode,
               ...data
             },

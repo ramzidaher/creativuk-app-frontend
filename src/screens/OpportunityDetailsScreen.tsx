@@ -116,13 +116,24 @@ export default function OpportunityDetailsScreen() {
 
       console.log('🔧 Loading opportunity details for:', passedOpportunity?.id ?? opportunityId);
       
+      // Manual opportunities often have customerAddress directly; normalize so we show location without waiting for /details
+      const oppAny = passedOpportunity as Record<string, unknown>;
+      const manualAddress = oppAny.customerAddress as string | undefined;
+      if (manualAddress && !passedOpportunity.contactAddress && !passedOpportunity.address) {
+        passedOpportunity = {
+          ...passedOpportunity,
+          contactAddress: passedOpportunity.contactAddress || manualAddress,
+          address: passedOpportunity.address || manualAddress,
+        };
+      }
+      
       // Log location-related fields specifically
       console.log('📍 Location data check:');
       console.log('   - contactAddress:', passedOpportunity.contactAddress);
       console.log('   - contactPostcode:', passedOpportunity.contactPostcode);
       console.log('   - address:', passedOpportunity.address);
       
-      // If no address data or notes, fetch from API
+      // If no address data or notes, fetch from API (GHL flow; manual may already have it above)
       if (!passedOpportunity.contactAddress && !passedOpportunity.address) {
         console.log('🔍 No address data found, fetching from API...');
         console.log('🔍 Making API call to:', `/opportunities/${passedOpportunity.id}/details`);
@@ -428,10 +439,8 @@ export default function OpportunityDetailsScreen() {
                 <Text style={[styles.detailLabel, { color: theme.secondaryText }]}>Location:</Text>
                 <Text style={[styles.detailValue, { color: theme.primaryText }]}>
                   {(() => {
-                    const location = opportunity.contactAddress || opportunity.address || 'Location not available';
-                    console.log('📍 Displaying location:', location);
-                    console.log('📍 contactAddress:', opportunity.contactAddress);
-                    console.log('📍 address:', opportunity.address);
+                    const oppAny = opportunity as Record<string, unknown>;
+                    const location = opportunity.contactAddress || opportunity.address || (oppAny.customerAddress as string) || 'Location not available';
                     return location;
                   })()}
                 </Text>

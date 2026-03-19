@@ -50,7 +50,7 @@ npm run build:production
 The rewrite rule in `public/web.config` currently proxies `/api/*` to a backend URL:
 
 - **Remote backend** (current repo default):
-  - `/api/{anything}` → `https://creativuk-app.paldev.tech/api/{anything}`
+  - `/api/{anything}` → `https://app.creativuk.co.uk/api/{anything}`
 
 - **Same-server backend** (common on Azure VMs):
   - Run your backend on the VM (e.g. Node/Express) bound to `127.0.0.1:3000`

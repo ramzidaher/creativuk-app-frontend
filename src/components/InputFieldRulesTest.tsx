@@ -23,7 +23,7 @@ export default function InputFieldRulesTest({ visible, onClose }: InputFieldRule
     { group: 'Energy Use', options: ['SingleRate', 'DualRate'] },
     { group: 'Battery Type', options: ['BatterySC', 'BatteryOC', 'BatteryNone'] },
     { group: 'Existing Solar', options: ['ExistingSolarYes', 'ExistingSolarNo'] },
-    { group: 'Export Tariff', options: ['ExportYes', 'ExportNo'] },
+    { group: 'Import/Export Tariff', options: ['ExportYes', 'ExportNo'] },
   ];
 
   const handleRadioButtonPress = (group: string, option: string) => {

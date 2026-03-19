@@ -11,6 +11,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
@@ -58,42 +59,41 @@ export default function WorkflowsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeWorkflows, setActiveWorkflows] = useState<WorkflowItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const scrollViewRef = useRef<ScrollView>(null);
+  const fetchIdRef = useRef(0);
+
+  const filteredWorkflows = activeWorkflows.filter((workflow) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.trim().toLowerCase();
+    const name = (workflow.customerName || '').toLowerCase();
+    const address = (workflow.contactAddress || workflow.address || '').toLowerCase();
+    const postcode = (workflow.contactPostcode || '').toLowerCase();
+    const stage = (workflow.stepTitle || workflow.stageName || '').toLowerCase();
+    const status = (workflow.status || '').toLowerCase();
+    return (
+      name.includes(q) ||
+      address.includes(q) ||
+      postcode.includes(q) ||
+      stage.includes(q) ||
+      status.includes(q)
+    );
+  });
 
 
   const fetchActiveWorkflows = async () => {
+    const thisFetchId = ++fetchIdRef.current;
     try {
       setLoading(true);
-      
-      console.log('🚀 Fetching workflows with opportunity details from backend...');
       
       // Add a small delay to ensure loading state is visible
       await new Promise(resolve => setTimeout(resolve, 100));
       
       const workflowsResponse = await workflowApi.getUserWorkflows();
-      
-      console.log('🚀 Full workflows response:', workflowsResponse);
+      if (thisFetchId !== fetchIdRef.current) return;
       
       if (workflowsResponse.success && workflowsResponse.data) {
-        console.log('🚀 Raw workflow data:', workflowsResponse.data);
-        console.log('🚀 Number of workflows received:', workflowsResponse.data.length);
-        console.log('🚀 Current user role:', user?.role);
-        
-        // Debug: Log the first workflow structure for admin users
-        if (user?.role === 'ADMIN' && workflowsResponse.data.length > 0) {
-          console.log('🔍 ADMIN - First workflow structure:', JSON.stringify(workflowsResponse.data[0], null, 2));
-          console.log('🔍 ADMIN - opportunityDetails:', workflowsResponse.data[0].opportunityDetails);
-          console.log('🔍 ADMIN - customerName:', workflowsResponse.data[0].opportunityDetails?.customerName);
-        }
-        
-        // Process workflows
-        console.log('🚀 Starting workflow processing...');
-        const startTime = Date.now();
-        
         const workflows = workflowsResponse.data.map((workflow: any, index: number) => {
-          if (index % 10 === 0) { // Log every 10th workflow to reduce console spam
-            console.log(`🚀 Processing workflow ${index + 1}/${workflowsResponse.data.length}:`, workflow.ghlOpportunityId);
-          }
           
           const currentStepData = workflow.steps?.find((step: any) => step.stepNumber === workflow.currentStep);
           const stepTitle = currentStepData ? getStepTitle(currentStepData.stepType) : 'Unknown Step';
@@ -101,39 +101,19 @@ export default function WorkflowsScreen() {
           
           // Use the opportunity details directly from the backend
           let opportunityDetails = workflow.opportunityDetails || {};
-          
-          // Debug: Log what we're getting from the backend
-          if (user?.role === 'ADMIN' && index === 0) {
-            console.log('🔍 ADMIN - Processing first workflow:');
-            console.log('🔍 ADMIN - workflow.opportunityDetails:', opportunityDetails);
-            console.log('🔍 ADMIN - workflow.opportunityDetails.customerName:', opportunityDetails.customerName);
-            console.log('🔍 ADMIN - Full workflow object keys:', Object.keys(workflow));
-          }
-          
           let customerName = opportunityDetails.customerName || '';
           
           // If customerName is empty or still a fallback, check other possible locations
           if (!customerName || customerName.trim() === '' || (customerName.startsWith('Customer ') && customerName.length <= 15)) {
-            // Try alternative locations where customer name might be
             if (workflow.contact?.name) {
               customerName = workflow.contact.name;
-              console.log(`🔄 Using workflow.contact.name: "${customerName}"`);
             } else if (workflow.contact?.firstName && workflow.contact?.lastName) {
               customerName = `${workflow.contact.firstName} ${workflow.contact.lastName}`;
-              console.log(`🔄 Using workflow.contact.firstName+lastName: "${customerName}"`);
             } else if (workflow.name) {
               customerName = workflow.name;
-              console.log(`🔄 Using workflow.name: "${customerName}"`);
             } else {
-              // Fallback to generated name
               customerName = `Customer ${workflow.ghlOpportunityId.slice(-6)}`;
             }
-          }
-          
-          console.log(`🚀 Final customer name for ${workflow.ghlOpportunityId}: "${customerName}"`);
-          
-          if (customerName.startsWith('Customer ') && customerName.length <= 15) {
-            console.warn(`⚠️ Still using fallback customer name for ${workflow.ghlOpportunityId}. GoHighLevel integration may need to be configured.`);
           }
     
           return {
@@ -159,17 +139,8 @@ export default function WorkflowsScreen() {
           };
         });
         
-        const processingTime = Date.now() - startTime;
-        console.log(`🚀 Workflow processing completed in ${processingTime}ms`);
-        console.log('🚀 Final workflows array:', workflows);
-        console.log('🚀 Customer names being displayed:', workflows.map((w: WorkflowItem) => ({ id: w.ghlOpportunityId, name: w.customerName })));
-        console.log('🚀 User info for admin view:', workflows.map((w: WorkflowItem) => ({ id: w.ghlOpportunityId, userInfo: w.userInfo })));
-        console.log('🚀 Current user role:', user?.role);
-        console.log('🚀 Current user name:', user?.name);
-        
         // Fetch outcome status for admin users
         if (user?.role === 'ADMIN' && workflows.length > 0) {
-          console.log('🔍 Admin user detected, fetching outcome status for workflows...');
           try {
             const outcomeStatuses = await Promise.all(
               workflows.map(async (workflow: WorkflowItem) => {
@@ -185,8 +156,7 @@ export default function WorkflowsScreen() {
                     ...workflow,
                     outcomeStatus: null,
                   };
-                } catch (error) {
-                  console.warn(`🔍 Failed to fetch outcome for ${workflow.ghlOpportunityId}:`, error);
+                } catch {
                   return {
                     ...workflow,
                     outcomeStatus: null,
@@ -197,43 +167,37 @@ export default function WorkflowsScreen() {
             
             // Use setTimeout to ensure UI updates happen on next tick
             setTimeout(() => {
+              if (thisFetchId !== fetchIdRef.current) return;
               setActiveWorkflows(outcomeStatuses);
-              console.log('🚀 Workflows state updated with outcome statuses');
             }, 0);
-          } catch (error) {
-            console.error('🔍 Error fetching outcome statuses:', error);
+          } catch {
             // Still set workflows even if outcome fetch fails
             setTimeout(() => {
+              if (thisFetchId !== fetchIdRef.current) return;
               setActiveWorkflows(workflows);
-              console.log('🚀 Workflows state updated (without outcome statuses)');
             }, 0);
           }
         } else {
-          // Use setTimeout to ensure UI updates happen on next tick
           setTimeout(() => {
+            if (thisFetchId !== fetchIdRef.current) return;
             setActiveWorkflows(workflows);
-            console.log('🚀 Workflows state updated');
           }, 0);
         }
       } else {
-        console.error('🚀 Error fetching workflows - response structure:', workflowsResponse);
-        console.error('🚀 Success flag:', workflowsResponse.success);
-        console.error('🚀 Data field:', workflowsResponse.data);
-        console.error('🚀 Error field:', workflowsResponse.error);
-        
+        if (thisFetchId !== fetchIdRef.current) return;
         // Handle case where API returns success but no data
         if (workflowsResponse.success && (!workflowsResponse.data || workflowsResponse.data.length === 0)) {
-          console.log('🚀 No workflows found - setting empty array');
           setActiveWorkflows([]);
         } else {
           Alert.alert('Error', workflowsResponse.error || 'Failed to load progress');
         }
       }
     } catch (error) {
-      console.error('Error fetching workflows:', error);
-      Alert.alert('Error', 'Failed to load progress');
+      if (thisFetchId === fetchIdRef.current) {
+        Alert.alert('Error', 'Failed to load progress');
+      }
     } finally {
-      setLoading(false);
+      if (thisFetchId === fetchIdRef.current) setLoading(false);
     }
   };
 
@@ -243,11 +207,7 @@ export default function WorkflowsScreen() {
     setRefreshing(false);
   };
 
-  useEffect(() => {
-    fetchActiveWorkflows();
-  }, []);
-
-  // Refresh workflows whenever user returns to this screen
+  // Single source of fetch: on focus (includes initial mount when screen is first focused)
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       fetchActiveWorkflows();
@@ -680,6 +640,29 @@ export default function WorkflowsScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        {/* Search bar */}
+        <View style={[styles.searchBarContainer, { backgroundColor: isDark ? 'rgba(30, 41, 59, 0.6)' : 'rgba(248, 250, 252, 0.9)', borderColor: isDark ? 'rgba(148, 163, 184, 0.3)' : 'rgba(226, 232, 240, 0.8)' }]}>
+          <Feather name="search" size={20} color={theme.secondaryText} style={styles.searchIcon} />
+          <TextInput
+            style={[styles.searchInput, { color: theme.primaryText }]}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search by name, address, postcode, step..."
+            placeholderTextColor={theme.tertiaryText || theme.secondaryText}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchQuery('')}
+              style={styles.searchClear}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Feather name="x-circle" size={20} color={theme.secondaryText} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {loading ? (
@@ -737,7 +720,26 @@ export default function WorkflowsScreen() {
             </View>
           ) : (
             <View style={styles.workflowsContainer}>
-              {activeWorkflows.map((workflow, index) => renderWorkflowCard(workflow, index))}
+              {filteredWorkflows.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <View style={[styles.emptyIconContainer, { backgroundColor: theme.cardBackground }]}>
+                    <Feather name="search" size={64} color={theme.secondaryText} />
+                  </View>
+                  <Text style={[styles.emptyTitle, { color: theme.primaryText }]}>No matches</Text>
+                  <Text style={[styles.emptyDescription, { color: theme.secondaryText }]}>
+                    No progress matches "{searchQuery}". Try a different search.
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.startNewButton, { backgroundColor: theme.primaryButton }]}
+                    onPress={() => setSearchQuery('')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.startNewButtonText}>Clear search</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                filteredWorkflows.map((workflow, index) => renderWorkflowCard(workflow, index))
+              )}
             </View>
           )}
         </ScrollView>
@@ -787,6 +789,28 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     gap: 12,
+  },
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  searchIcon: {
+    marginRight: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 8,
+    ...(Platform.OS === 'web' && { outlineStyle: 'none' as any }),
+  },
+  searchClear: {
+    padding: 4,
+    marginLeft: 4,
   },
   greeting: {
     fontSize: 18,

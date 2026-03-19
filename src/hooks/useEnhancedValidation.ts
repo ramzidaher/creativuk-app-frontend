@@ -65,6 +65,7 @@ export const useEnhancedValidation = () => {
     { fieldName: 'targetRoofs', displayName: 'Target Roofs Images', pageNumber: 7, isRequired: true, fieldType: 'image' },
     { fieldName: 'roofAngle', displayName: 'Roof Angle Images', pageNumber: 7, isRequired: true, fieldType: 'image' },
     { fieldName: 'roofTileCloseup', displayName: 'Roof Tile Closeup Images', pageNumber: 7, isRequired: true, fieldType: 'image' },
+    { fieldName: 'internalCeilingPictures', displayName: 'Internal Ceiling Pictures', pageNumber: 7, isRequired: false, fieldType: 'image' },
     { fieldName: 'roofTileType', displayName: 'Roof Tile Type', pageNumber: 7, isRequired: true, fieldType: 'dropdown' },
     { fieldName: 'fuseBoard', displayName: 'Fuse Board Images', pageNumber: 7, isRequired: true, fieldType: 'image' },
     { fieldName: 'electricMeter', displayName: 'Electric Meter Images', pageNumber: 7, isRequired: true, fieldType: 'image' },

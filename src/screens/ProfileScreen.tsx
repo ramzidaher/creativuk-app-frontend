@@ -94,6 +94,15 @@ const ProfileScreen: React.FC = () => {
       },
     },
     {
+      id: 'opportunities',
+      title: 'Opportunity management',
+      subtitle: 'View and manage your opportunities',
+      icon: 'briefcase',
+      iconType: 'feather',
+      onPress: () => navigation.navigate('OpportunityManagement'),
+      isAdminOnly: true,
+    },
+    {
       id: 'statistics',
       title: 'Statistics & Analytics',
       subtitle: 'View your progress and performance',

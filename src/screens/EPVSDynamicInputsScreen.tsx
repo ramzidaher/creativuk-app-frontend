@@ -44,6 +44,8 @@ interface InputField {
   enabled: boolean;
   cellReference: string;
   dropdownOptions?: string[];
+  allowOverride?: boolean;
+  helperText?: string;
 }
 
 interface RouteParams {
@@ -1541,6 +1543,59 @@ export default function EPVSDynamicInputsScreen() {
               <Ionicons name="calendar-outline" size={20} color={theme.primaryText} style={{ marginLeft: 8 }} />
             )}
           </TouchableOpacity>
+        </View>
+      );
+    }
+
+    // Number field with dropdown (primary) + override (secondary) — same as Off-Peak tariff fields
+    if (
+      field.type === 'number' &&
+      field.dropdownOptions &&
+      field.dropdownOptions.length > 0 &&
+      field.allowOverride
+    ) {
+      const options = field.dropdownOptions;
+      const isValueInOptions = value && options.includes(value);
+      return (
+        <View key={field.id} style={[styles.inputCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+          <Text style={[styles.inputLabel, { color: theme.primaryText }]}>
+            {field.label}
+            {field.required && <Text style={styles.required}> *</Text>}
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.dropdownContainer,
+              { backgroundColor: theme.secondaryBackground, borderColor: theme.cardBorder },
+              !field.enabled && styles.disabledDropdownContainer
+            ]}
+            onPress={() => {
+              if (!field.enabled) return;
+              setOpenDropdown(field.id);
+              setShowDropdownModal(true);
+            }}
+          >
+            <Text style={[styles.dropdownText, { color: theme.primaryText }, !value && styles.placeholder]}>
+              {value ? (isValueInOptions ? value : `Custom: ${value}`) : 'Select from list...'}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color={theme.tertiaryText} />
+          </TouchableOpacity>
+          <Text style={{ color: theme.secondaryText, fontSize: 12, marginTop: 8, marginBottom: 4 }}>Or enter custom value</Text>
+          <TextInput
+            style={[
+              styles.textInput,
+              { backgroundColor: theme.secondaryBackground, borderColor: theme.cardBorder, color: theme.primaryText, minHeight: 44, paddingVertical: 10 },
+              !field.enabled && styles.disabledInput
+            ]}
+            value={value}
+            onChangeText={(text) => handleInputChange(field.id, text)}
+            placeholder="Override (optional)"
+            placeholderTextColor={theme.tertiaryText}
+            keyboardType="numeric"
+            editable={field.enabled}
+          />
+          {field.helperText ? (
+            <Text style={{ color: theme.secondaryText, marginTop: 4, fontSize: 13 }}>{field.helperText}</Text>
+          ) : null}
         </View>
       );
     }

@@ -132,7 +132,9 @@ export default function SolarWorkflowScreen() {
     }
   }, []);
 
-  // Refresh data when screen comes into focus (e.g., after survey completion)
+  // Refresh data when screen comes into focus (e.g., after survey completion or when returning from Survey).
+  // This ensures workflow steps are recalculated so the Energy Bill Disclaimer step appears if the user
+  // changed hasEnergyBill from Yes to No and saved/submitted.
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       console.log('🔍 SolarWorkflowScreen: Screen focused, refreshing data...');
@@ -199,9 +201,9 @@ export default function SolarWorkflowScreen() {
     try {
       console.log('🔍 SolarWorkflowScreen: Checking if disclaimer is needed for opportunity:', opportunityId);
       
-      // Check survey data to see if user has energy bill
+      // Check survey data to see if user has energy bill (skipCache so we always get latest after Yes→No change)
       const { surveyApi } = await import('../utils/api');
-      const surveyResponse = await surveyApi.getSurvey(opportunityId);
+      const surveyResponse = await surveyApi.getSurvey(opportunityId, { skipCache: true });
       
       if (surveyResponse.success && surveyResponse.data) {
         const surveyData = surveyResponse.data;

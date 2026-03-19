@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import BottomNavigation from '../components/BottomNavigation';
 import { useTheme } from '../context/ThemeContext';
+import { systemSettingsApi } from '../utils/api';
 // Digital signature components
 import MobileCanvasSignaturePad from '../components/MobileCanvasSignaturePad';
 import SimpleSignaturePad from '../components/SimpleSignaturePad';
@@ -52,7 +53,10 @@ export default function ContractSigningScreen() {
   
   // Calculator type selection state
   const [selectedCalculatorType, setSelectedCalculatorType] = useState<'flux' | 'off-peak' | null>(null);
-  
+  const [calculatorOffPeakEnabled, setCalculatorOffPeakEnabled] = useState(true);
+  const [calculatorFluxEnabled, setCalculatorFluxEnabled] = useState(true);
+  const [calculatorSettingsLoaded, setCalculatorSettingsLoaded] = useState(false);
+
   // Customer details state
   const [customerName, setCustomerName] = useState<string>('Contract Signer');
   const [customerEmail, setCustomerEmail] = useState<string>('');
@@ -89,6 +93,28 @@ export default function ContractSigningScreen() {
     loadExistingPDF();
     // Set initial step to selecting calculator type
     setStep('selecting');
+  }, []);
+
+  useEffect(() => {
+    const loadCalculatorSettings = async () => {
+      try {
+        const [offPeakRes, fluxRes] = await Promise.all([
+          systemSettingsApi.getSettingValue('calculator_off_peak_enabled'),
+          systemSettingsApi.getSettingValue('calculator_flux_enabled'),
+        ]);
+        if (offPeakRes.success && offPeakRes.data != null) {
+          try { setCalculatorOffPeakEnabled(JSON.parse(offPeakRes.data || 'true')); } catch { setCalculatorOffPeakEnabled(true); }
+        }
+        if (fluxRes.success && fluxRes.data != null) {
+          try { setCalculatorFluxEnabled(JSON.parse(fluxRes.data || 'true')); } catch { setCalculatorFluxEnabled(true); }
+        }
+      } catch {
+        // keep defaults
+      } finally {
+        setCalculatorSettingsLoaded(true);
+      }
+    };
+    loadCalculatorSettings();
   }, []);
 
   // Auto-poll status every 5 seconds when on status step
@@ -1959,34 +1985,43 @@ export default function ContractSigningScreen() {
         </View>
 
         {/* Calculator Type Selection */}
-        {!selectedCalculatorType && (
+        {!selectedCalculatorType && calculatorSettingsLoaded && (
           <View style={[styles.contractInfo, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
             <Text style={[styles.inputLabel, { color: theme.secondaryText, marginBottom: 16 }]}>
               SELECT CALCULATOR TYPE:
             </Text>
-            <View style={styles.calculatorTypeButtons}>
-              <TouchableOpacity
-                style={[styles.calculatorTypeButton, { 
-                  backgroundColor: theme.primaryButton,
-                  borderColor: theme.primaryButton
-                }]}
-                onPress={() => setSelectedCalculatorType('flux')}
-              >
-                <Ionicons name="flash-outline" size={24} color="white" />
-                <Text style={styles.calculatorTypeButtonText}>Flux</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.calculatorTypeButton, { 
-                  backgroundColor: theme.secondaryButton || theme.primaryButton,
-                  borderColor: theme.secondaryButton || theme.primaryButton
-                }]}
-                onPress={() => setSelectedCalculatorType('off-peak')}
-              >
-                <Ionicons name="time-outline" size={24} color="white" />
-                <Text style={styles.calculatorTypeButtonText}>Off Peak</Text>
-              </TouchableOpacity>
-            </View>
+            {!calculatorOffPeakEnabled && !calculatorFluxEnabled ? (
+              <Text style={[styles.inputLabel, { color: theme.secondaryText }]}>
+                No calculators are currently available. Please contact your administrator.
+              </Text>
+            ) : (
+              <View style={styles.calculatorTypeButtons}>
+                {calculatorFluxEnabled && (
+                  <TouchableOpacity
+                    style={[styles.calculatorTypeButton, {
+                      backgroundColor: theme.primaryButton,
+                      borderColor: theme.primaryButton
+                    }]}
+                    onPress={() => setSelectedCalculatorType('flux')}
+                  >
+                    <Ionicons name="flash-outline" size={24} color="white" />
+                    <Text style={styles.calculatorTypeButtonText}>Flux</Text>
+                  </TouchableOpacity>
+                )}
+                {calculatorOffPeakEnabled && (
+                  <TouchableOpacity
+                    style={[styles.calculatorTypeButton, {
+                      backgroundColor: theme.secondaryButton || theme.primaryButton,
+                      borderColor: theme.secondaryButton || theme.primaryButton
+                    }]}
+                    onPress={() => setSelectedCalculatorType('off-peak')}
+                  >
+                    <Ionicons name="time-outline" size={24} color="white" />
+                    <Text style={styles.calculatorTypeButtonText}>Off Peak</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
         )}
 

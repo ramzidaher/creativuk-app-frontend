@@ -74,7 +74,7 @@ console.log('🌐 Deploy the dist/ folder to your IIS server');
 console.log('📋 Don\'t forget to copy public/web.config to the root of your web directory');
 console.log('\n🔧 Production configuration:');
 console.log('   - API calls will use relative URLs: /api/');
-console.log('   - IIS will proxy /api/* to https://creativuk-app.paldev.tech/api/');
+console.log('   - IIS will proxy /api/* to https://app.creativuk.co.uk/api/');
 console.log('   - Client-side routing will work for all app screens');
 console.log('   - Static files will be served directly by IIS');
 console.log('   - SPA fallback will serve index.html for all other routes');

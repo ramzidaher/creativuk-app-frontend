@@ -5,11 +5,11 @@ export const getBaseUrl = () => {
   if (Platform.OS === 'web') {
     // In production, use the actual domain
     if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-      return 'https://creativuk-app.paldev.tech';
+      return 'https://app.creativuk.co.uk';
     }
     return 'http://localhost:8081';
   }
-  return 'https://creativuk-app.paldev.tech';
+  return 'https://app.creativuk.co.uk';
 };
 
 export const getApiUrl = (endpoint: string) => {

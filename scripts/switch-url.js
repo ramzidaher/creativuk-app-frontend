@@ -21,7 +21,7 @@ const configPath = path.join(__dirname, '..', 'src', 'config', 'development.js')
 
 // Available URL options
 const URL_OPTIONS = {
-  production: 'https://creativuk-app.paldev.tech/api/',
+  production: 'https://app.creativuk.co.uk/api/',
   local: 'http://localhost:3000/api/',
   relative: '/api/',
   custom: null // Will be set by user
@@ -64,7 +64,7 @@ function showUsage() {
   console.log('  node scripts/switch-url.js <option> [custom-url]');
   console.log('');
   console.log('Options:');
-  console.log('  production  - Use production backend (https://creativuk-app.paldev.tech/api/)');
+  console.log('  production  - Use production backend (https://app.creativuk.co.uk/api/)');
   console.log('  local       - Use local backend (http://localhost:3000/api/)');
   console.log('  relative    - Use relative path (/api/)');
   console.log('  custom      - Use custom URL (provide URL as second argument)');

@@ -2,9 +2,13 @@
 
 ## Docs
 
+- `docs/README.md`: documentation hub
+- `docs/SETUP.md`: local development setup
+- `docs/ARCHITECTURE.md`: app structure (routing/auth/api)
 - `docs/DEPLOYMENT-IIS-AZURE.md`: Azure Windows Server + IIS deployment (SPA + `/api` proxy)
 - `docs/WEB-CONFIG.md`: explanation of `public/web.config`
 - `docs/API-URLS.md`: how `API_BASE_URL` is selected (dev vs production)
+- `docs/TROUBLESHOOTING.md`: common issues & fixes
 
 ## 🚀 Quick Start
 
@@ -65,7 +69,7 @@ The app now includes a simple system to switch between different backend URLs fo
 
 | Option | URL | Description |
 |--------|-----|-------------|
-| `production` | `https://creativuk-app.paldev.tech/api/` | Production backend (default) |
+| `production` | `https://app.creativuk.co.uk/api/` | Production backend (default) |
 | `local` | `http://localhost:3000/api/` | Local backend (if running) |
 | `relative` | `/api/` | Relative path (for production testing) |
 | `custom` | User-defined | Custom backend URL |
@@ -166,7 +170,7 @@ When your app is deployed to IIS, it uses relative API URLs (`/api/`) that get p
 
 | Environment | API URL | Expected Result |
 |-------------|---------|-----------------|
-| **Development** | `https://creativuk-app.paldev.tech/api/` | ✅ Works (direct backend calls) |
+| **Development** | `https://app.creativuk.co.uk/api/` | ✅ Works (direct backend calls) |
 | **Local Production Test** | `/api/` | ❌ Fails (no local API server) |
 | **Production IIS** | `/api/` | ✅ Works (IIS proxies to backend) |
 
@@ -196,7 +200,7 @@ Your app now supports proper web URLs:
 ### Prerequisites
 
 - IIS with URL Rewrite Module installed
-- Your backend API running on `https://creativuk-app.paldev.tech/api/`
+- Your backend API running on `https://app.creativuk.co.uk/api/`
 
 ### Deployment Steps
 
@@ -218,7 +222,7 @@ Your app now supports proper web URLs:
 
 The `web.config` file handles:
 
-- **API Proxying:** `/api/*` → `https://creativuk-app.paldev.tech/api/*`
+- **API Proxying:** `/api/*` → `https://app.creativuk.co.uk/api/*`
 - **SPA Routing:** All non-API routes → `index.html`
 - **Static Files:** Direct serving of assets
 - **Security Headers:** HSTS and other security configurations
@@ -231,7 +235,7 @@ The app automatically detects its environment:
 
 ```javascript
 // Development (localhost + development build)
-API_BASE_URL = "https://creativuk-app.paldev.tech/api/"
+API_BASE_URL = "https://app.creativuk.co.uk/api/"
 
 // Local Production Testing (localhost + production build)
 API_BASE_URL = "/api/"
@@ -284,7 +288,7 @@ CreativSolarConfig.getAllUrls()
 #### 4. Development API Calls Failing
 **Symptom:** Development server can't reach backend
 **Solution:**
-- Check backend is running on `https://creativuk-app.paldev.tech/api/`
+- Check backend is running on `https://app.creativuk.co.uk/api/`
 - Verify network connectivity
 - Use manual override if needed
 

@@ -9,6 +9,12 @@ export interface Opportunity {
   id: string;
   name: string;
   type: 'ai' | 'manual';
+  /** Set to 'MANUAL' for manual (app-created) opportunities in list responses */
+  source?: string;
+  /** App user id the opportunity is assigned to (e.g. for manual opportunities) */
+  userId?: string;
+  /** ISO 8601 date/time for scheduled survey/visit (e.g. manual opportunities). */
+  scheduledAt?: string | null;
   stageName?: string;
   monetaryValue?: number;
   createdAt: string;
@@ -140,6 +146,7 @@ export interface SurveyPage7 {
   roofTileType?: string;
   roofType?: string;
   roofTileCloseupImage?: string;
+  internalCeilingPicturesImage?: string;
   otherBuildingsImage?: string;
   electricMeterImage?: string;
   garageImage?: string;
@@ -332,6 +339,7 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
   success: boolean;
+  isCorsError?: boolean;
 }
 
 export interface OpportunitiesResponse {

@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AdminGuard from '../components/AdminGuard';
 import { useTheme } from '../context/ThemeContext';
 import { adminAnalyticsApi, adminOpportunityDetailsApi } from '../utils/api';
+import { formatScheduledAtDisplay } from '../utils/dateUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -134,6 +135,7 @@ const AdminUserOpportunitiesScreen: React.FC = () => {
     const status = opportunity.status || 'Unknown';
     const currentStep = opportunity.currentStep || 0;
     const totalSteps = opportunity.totalSteps || 0;
+    const isManual = opportunity.source === 'MANUAL' || opportunity.stageName === '(Manual) Home Survey Booked';
     
     return (
       <TouchableOpacity
@@ -151,6 +153,11 @@ const AdminUserOpportunitiesScreen: React.FC = () => {
               Opportunity ID: {opportunityId}
             </Text>
           </View>
+          {isManual && (
+            <View style={[styles.statusBadge, { backgroundColor: theme.primaryButton + '20', marginRight: 8 }]}>
+              <Text style={[styles.statusText, { color: theme.primaryButton, fontSize: 10 }]}>Manual</Text>
+            </View>
+          )}
           <View style={[
             styles.statusBadge,
             { 
@@ -184,6 +191,11 @@ const AdminUserOpportunitiesScreen: React.FC = () => {
           {opportunity.lastActivityAt && (
             <Text style={[styles.dataItemSubtitle, { color: theme.secondaryText }]}>
               <Text style={{ fontWeight: '600' }}>Last Activity:</Text> {formatDate(opportunity.lastActivityAt)}
+            </Text>
+          )}
+          {opportunity.scheduledAt && (
+            <Text style={[styles.dataItemSubtitle, { color: theme.secondaryText }]}>
+              <Text style={{ fontWeight: '600' }}>Scheduled:</Text> {formatScheduledAtDisplay(opportunity.scheduledAt)}
             </Text>
           )}
         </View>

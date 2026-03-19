@@ -166,7 +166,7 @@ export const useEnhancedImageHandler = ({
       4: ['energyBill'],
       5: ['epcCertificate'],
       6: ['frontDoor', 'frontProperty', 'targetRoofs', 'propertySides'],
-      7: ['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'otherBuildings', 'electricMeter', 'garage', 'fuseBoard', 'batteryInverterLocation'],
+      7: ['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'electricMeter', 'garage', 'fuseBoard', 'batteryInverterLocation'],
       8: ['evLocation', 'evCharger', 'shadingIssues', 'scaffolding', 'customerSignature', 'renewableExecutiveSignature']
     };
 

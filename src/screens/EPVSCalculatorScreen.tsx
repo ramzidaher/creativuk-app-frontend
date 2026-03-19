@@ -37,7 +37,7 @@ const radioButtonGroups: RadioButtonGroup[] = [
         shapeName: 'SingleRate'
       },
       {
-        label: 'Dual Rate / Economy 7',
+        label: 'Dual Rate / Off-Peak',
         endpoint: '/epvs-automation/energy-use/dual-rate',
         shapeName: 'DualRate'
       }
@@ -97,8 +97,8 @@ const radioButtonGroups: RadioButtonGroup[] = [
     ]
   },
   {
-    title: '⚡ Export Tariff',
-    description: 'Do you have an export tariff?',
+    title: '⚡ Import/Export Tariff',
+    description: 'Do you have an import/export tariff?',
     options: [
       {
         label: 'Yes',
@@ -412,7 +412,10 @@ export default function FluxCalculatorScreen() {
         const cleanedSelectedOptions: Record<string, string> = {};
         
         Object.entries(progress.selectedOptions).forEach(([key, value]) => {
-          if (validGroupTitles.includes(key)) {
+          const mappedKey = key === '⚡ Export Tariff' ? '⚡ Import/Export Tariff' : key;
+          if (validGroupTitles.includes(mappedKey)) {
+            cleanedSelectedOptions[mappedKey] = value;
+          } else if (validGroupTitles.includes(key)) {
             cleanedSelectedOptions[key] = value;
           } else {
             console.log(`🗑️ Removing invalid selection: ${key} = ${value}`);
@@ -475,7 +478,10 @@ export default function FluxCalculatorScreen() {
         const cleanedSelectedOptions: Record<string, string> = {};
         
         Object.entries(progress.selectedOptions).forEach(([key, value]) => {
-          if (validGroupTitles.includes(key)) {
+          const mappedKey = key === '⚡ Export Tariff' ? '⚡ Import/Export Tariff' : key;
+          if (validGroupTitles.includes(mappedKey)) {
+            cleanedSelectedOptions[mappedKey] = value;
+          } else if (validGroupTitles.includes(key)) {
             cleanedSelectedOptions[key] = value;
           }
         });
@@ -826,12 +832,17 @@ export default function FluxCalculatorScreen() {
                         <View style={styles.radioCircleInner} />
                       )}
                     </View>
-                    <Text style={[
-                      styles.radioButtonText,
-                      isOptionSelected(group.title, option.shapeName) && styles.radioButtonTextSelected
-                    ]}>
-                      {option.label}
-                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[
+                        styles.radioButtonText,
+                        isOptionSelected(group.title, option.shapeName) && styles.radioButtonTextSelected
+                      ]}>
+                        {option.label}
+                      </Text>
+                      {option.shapeName === 'BatterySC' && (
+                        <Text style={styles.radioButtonNote}>Used for single rate customers</Text>
+                      )}
+                    </View>
                   </View>
                   
                   {isOptionSelected(group.title, option.shapeName) && (
@@ -842,6 +853,16 @@ export default function FluxCalculatorScreen() {
             </View>
           </View>
         ))}
+
+        {/* Self consumption only for single rate: show warning when Dual Rate + Self-Consumption selected */}
+        {selectedOptions['⚡ Energy Use'] === 'DualRate' && selectedOptions['🔋 Battery Type'] === 'BatterySC' && (
+          <View style={styles.warningBanner}>
+            <Ionicons name="warning" size={20} color="#b91c1c" style={{ marginRight: 10 }} />
+            <Text style={styles.warningBannerText}>
+              Self consumption is only used for single rate customers. Consider selecting Overnight Charging for dual rate / off-peak.
+            </Text>
+          </View>
+        )}
 
         {/* Loading Overlay */}
         {loading && (
@@ -1037,6 +1058,12 @@ const styles = StyleSheet.create({
     color: '#374151',
     fontWeight: '500',
   },
+  radioButtonNote: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
   radioButtonTextSelected: {
     color: '#10b981',
     fontWeight: '600',
@@ -1116,5 +1143,23 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(185, 28, 28, 0.4)',
+    backgroundColor: 'rgba(185, 28, 28, 0.08)',
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  warningBannerText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#1e293b',
   },
 });

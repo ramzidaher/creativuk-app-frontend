@@ -3,12 +3,23 @@
  * This allows instant display without waiting for Excel API calls
  */
 
+/** Options for dropdown-with-override (e.g. "5", "6", … "20" for 5p–20p) */
+export function rangeOptions(from: number, to: number): string[] {
+  return Array.from({ length: to - from + 1 }, (_, i) => String(from + i));
+}
+
 export interface InputFieldDefinition {
   id: string;
   label: string;
   type: 'text' | 'number' | 'dropdown' | 'date';
   required: boolean;
   cellReference: string; // Excel cell reference for backend
+  /** Static dropdown options; when set with allowOverride, renders as dropdown + editable number (override) */
+  dropdownOptions?: string[];
+  /** If true and dropdownOptions set, user can type a custom value instead of picking from list */
+  allowOverride?: boolean;
+  /** Shown below the field (e.g. "Use current rates") */
+  helperText?: string;
   enabledBy?: {
     solar?: boolean;
     battery?: boolean;
@@ -175,14 +186,15 @@ export const DYNAMIC_INPUT_FIELDS: InputFieldDefinition[] = [
     enabledBy: { batteryInverter: true },
   },
 
-  // OFF-PEAK SPECIFIC: CURRENT ELECTRICITY TARIFF (ENERGY USE section)
+  // OFF-PEAK SPECIFIC: CURRENT ELECTRICITY TARIFF (ENERGY USE section) — dropdown with override
   {
     id: 'current_single_day_rate',
     label: 'Single / Day Rate (p/kWh)',
     type: 'number',
     required: false,
     cellReference: 'C50',
-    // Enabled when SingleRate OR DualRate selected (always shown, but logic in getEnabledFields)
+    dropdownOptions: rangeOptions(10, 35), // 10p to 35p
+    allowOverride: true,
     enabledByRadio: { '⚡ Energy Use': ['SingleRate', 'DualRate'] },
   },
   {
@@ -191,7 +203,8 @@ export const DYNAMIC_INPUT_FIELDS: InputFieldDefinition[] = [
     type: 'number',
     required: false,
     cellReference: 'C51',
-    // Only enabled when DualRate selected
+    dropdownOptions: rangeOptions(5, 20), // 5p to 20p
+    allowOverride: true,
     enabledByRadio: { '⚡ Energy Use': ['DualRate'] },
   },
   {
@@ -200,18 +213,20 @@ export const DYNAMIC_INPUT_FIELDS: InputFieldDefinition[] = [
     type: 'number',
     required: false,
     cellReference: 'C52',
-    // Only enabled when DualRate selected
+    dropdownOptions: rangeOptions(1, 10), // 1 to 10 hr
+    allowOverride: true,
     enabledByRadio: { '⚡ Energy Use': ['DualRate'] },
   },
 
-  // OFF-PEAK SPECIFIC: NEW ELECTRICITY TARIFF (ENERGY USE section)
+  // OFF-PEAK SPECIFIC: NEW ELECTRICITY TARIFF (ENERGY USE section) — dropdown with override
   {
     id: 'new_day_rate',
     label: 'Day Rate (p/kWh)',
     type: 'number',
     required: false,
     cellReference: 'C53',
-    // Enabled only when "Overnight Charging Battery" is selected
+    dropdownOptions: rangeOptions(10, 35), // 10p to 35p
+    allowOverride: true,
     enabledByRadio: { '🔋 Battery Type': ['BatteryOC'] },
   },
   {
@@ -220,7 +235,8 @@ export const DYNAMIC_INPUT_FIELDS: InputFieldDefinition[] = [
     type: 'number',
     required: false,
     cellReference: 'C54',
-    // Enabled only when "Overnight Charging Battery" is selected
+    dropdownOptions: rangeOptions(5, 20), // 5p to 20p
+    allowOverride: true,
     enabledByRadio: { '🔋 Battery Type': ['BatteryOC'] },
   },
 
@@ -329,16 +345,18 @@ export const DYNAMIC_INPUT_FIELDS: InputFieldDefinition[] = [
     },
   },
 
-  // OFF-PEAK: EXPORT TARIFF
+  // OFF-PEAK: EXPORT TARIFF — dropdown 10p–15p, note: use current rates
   {
     id: 'export_tariff_rate',
-    label: 'Export Tariff Rate (p/kWh)',
+    label: 'Import/Export Tariff Rate (p/kWh)',
     type: 'number',
     required: false,
     cellReference: 'C63',
-    // Enabled only when export tariff radio = "Yes"
-    enabledByRadio: { '⚡ Export Tariff': ['ExportYes'] },
-    disabledByRadio: { '⚡ Export Tariff': ['ExportNo'] },
+    dropdownOptions: rangeOptions(10, 15),
+    allowOverride: true,
+    helperText: 'Use current rates',
+    enabledByRadio: { '⚡ Import/Export Tariff': ['ExportYes'] },
+    disabledByRadio: { '⚡ Import/Export Tariff': ['ExportNo'] },
   },
 
   // OFF-PEAK & FLUX: EXISTING SYSTEM
@@ -740,18 +758,23 @@ export function toInputField(
   enabled: boolean;
   cellReference: string;
   dropdownOptions?: string[];
+  allowOverride?: boolean;
+  helperText?: string;
 } {
+  const options = fieldDef.type === 'dropdown' && dropdownOptions.length > 0
+    ? dropdownOptions
+    : (fieldDef.dropdownOptions ?? []);
   return {
     id: fieldDef.id,
     label: fieldDef.label,
     type: fieldDef.type,
     value,
     required: fieldDef.required,
-    enabled: true, // All fields from this config are enabled (filtered by getEnabledFields)
+    enabled: true,
     cellReference: fieldDef.cellReference,
-    ...(fieldDef.type === 'dropdown' && dropdownOptions.length > 0
-      ? { dropdownOptions }
-      : {}),
+    ...(options.length > 0 ? { dropdownOptions: options } : {}),
+    ...(fieldDef.allowOverride === true ? { allowOverride: true } : {}),
+    ...(fieldDef.helperText ? { helperText: fieldDef.helperText } : {}),
   };
 }
 

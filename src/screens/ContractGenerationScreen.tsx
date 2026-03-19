@@ -998,9 +998,9 @@ export default function ContractGenerationScreen() {
     try {
       console.log('🔍 ContractGenerationScreen: Checking if disclaimer is needed for opportunity:', opportunityId);
       
-      // Check survey data to see if user has energy bill
+      // Check survey data to see if user has energy bill (skipCache so we get latest after Yes→No change)
       const { surveyApi } = await import('../utils/api');
-      const surveyResponse = await surveyApi.getSurvey(opportunityId);
+      const surveyResponse = await surveyApi.getSurvey(opportunityId, { skipCache: true });
       
       if (surveyResponse.success && surveyResponse.data) {
         const surveyData = surveyResponse.data;

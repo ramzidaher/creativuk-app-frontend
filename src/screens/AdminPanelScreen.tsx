@@ -150,6 +150,8 @@ const AdminPanelScreen: React.FC = () => {
   const [systemSettings, setSystemSettings] = useState<any[]>([]);
   const [isLoadingSettings, setIsLoadingSettings] = useState(false);
   const [stepNavigationEnabled, setStepNavigationEnabled] = useState(true);
+  const [calculatorOffPeakEnabled, setCalculatorOffPeakEnabled] = useState(true);
+  const [calculatorFluxEnabled, setCalculatorFluxEnabled] = useState(true);
 
   // User data viewing state - removed individual user data viewing
 
@@ -647,6 +649,23 @@ const AdminPanelScreen: React.FC = () => {
             setStepNavigationEnabled(true); // Default to true if parsing fails
           }
         }
+        // Calculator visibility settings
+        const offPeakSetting = response.data.find((setting: any) => setting.key === 'calculator_off_peak_enabled');
+        if (offPeakSetting) {
+          try {
+            setCalculatorOffPeakEnabled(JSON.parse(offPeakSetting.value));
+          } catch {
+            setCalculatorOffPeakEnabled(true);
+          }
+        }
+        const fluxSetting = response.data.find((setting: any) => setting.key === 'calculator_flux_enabled');
+        if (fluxSetting) {
+          try {
+            setCalculatorFluxEnabled(JSON.parse(fluxSetting.value));
+          } catch {
+            setCalculatorFluxEnabled(true);
+          }
+        }
       } else {
         Alert.alert('Error', 'Failed to fetch system settings');
       }
@@ -686,6 +705,52 @@ const AdminPanelScreen: React.FC = () => {
       Alert.alert('Error', `Failed to update step navigation setting: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       console.log('🔧 AdminPanel: Setting loading state to false');
+      setIsLoadingSettings(false);
+    }
+  };
+
+  const updateCalculatorOffPeakSetting = async (enabled: boolean) => {
+    try {
+      setIsLoadingSettings(true);
+      const response = await systemSettingsApi.upsertSetting(
+        'calculator_off_peak_enabled',
+        JSON.stringify(enabled),
+        'Show or hide the Off Peak calculator for users',
+        'calculator',
+        true
+      );
+      if (response.success) {
+        setCalculatorOffPeakEnabled(enabled);
+        Alert.alert('Success', `Off Peak calculator ${enabled ? 'enabled' : 'disabled'} successfully`);
+      } else {
+        Alert.alert('Error', `Failed to update setting: ${response.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      Alert.alert('Error', `Failed to update setting: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsLoadingSettings(false);
+    }
+  };
+
+  const updateCalculatorFluxSetting = async (enabled: boolean) => {
+    try {
+      setIsLoadingSettings(true);
+      const response = await systemSettingsApi.upsertSetting(
+        'calculator_flux_enabled',
+        JSON.stringify(enabled),
+        'Show or hide the Flux calculator for users',
+        'calculator',
+        true
+      );
+      if (response.success) {
+        setCalculatorFluxEnabled(enabled);
+        Alert.alert('Success', `Flux calculator ${enabled ? 'enabled' : 'disabled'} successfully`);
+      } else {
+        Alert.alert('Error', `Failed to update setting: ${response.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      Alert.alert('Error', `Failed to update setting: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
       setIsLoadingSettings(false);
     }
   };
@@ -804,7 +869,6 @@ const AdminPanelScreen: React.FC = () => {
                 <Text style={styles.primaryActionButtonText}>Create User</Text>
               </TouchableOpacity>
             )}
-            
             <TouchableOpacity
               style={[styles.primaryActionButton, { backgroundColor: theme.primaryButton }]}
               onPress={() => navigation.navigate('ContactAppointments')}
@@ -1369,6 +1433,88 @@ const AdminPanelScreen: React.FC = () => {
                       </Text>
                     </View>
                   </View>
+                </View>
+              </View>
+
+              {/* Off Peak Calculator Setting */}
+              <View style={[styles.settingCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+                <View style={styles.settingHeader}>
+                  <View style={styles.settingInfo}>
+                    <Text style={[styles.settingTitle, { color: theme.primaryText }]}>Off Peak Calculator</Text>
+                    <Text style={[styles.settingDescription, { color: theme.secondaryText }]}>
+                      Show or hide the Off Peak calculator for users
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.settingToggle,
+                      {
+                        backgroundColor: calculatorOffPeakEnabled ? theme.successButton : theme.dangerButton,
+                        opacity: isLoadingSettings ? 0.5 : 1,
+                      }
+                    ]}
+                    onPress={() => updateCalculatorOffPeakSetting(!calculatorOffPeakEnabled)}
+                    disabled={isLoadingSettings}
+                  >
+                    <View style={[
+                      styles.settingToggleKnob,
+                      {
+                        backgroundColor: '#ffffff',
+                        transform: [{ translateX: calculatorOffPeakEnabled ? 24 : 2 }],
+                      }
+                    ]} />
+                  </TouchableOpacity>
+                </View>
+                <View style={[styles.settingStatus, { backgroundColor: theme.inputBackground }]}>
+                  <Feather
+                    name={calculatorOffPeakEnabled ? "check-circle" : "x-circle"}
+                    size={16}
+                    color={calculatorOffPeakEnabled ? theme.successButton : theme.dangerButton}
+                  />
+                  <Text style={[styles.settingStatusText, { color: theme.secondaryText }]}>
+                    Off Peak calculator is {calculatorOffPeakEnabled ? 'visible' : 'hidden'} to users
+                  </Text>
+                </View>
+              </View>
+
+              {/* Flux Calculator Setting */}
+              <View style={[styles.settingCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+                <View style={styles.settingHeader}>
+                  <View style={styles.settingInfo}>
+                    <Text style={[styles.settingTitle, { color: theme.primaryText }]}>Flux Calculator</Text>
+                    <Text style={[styles.settingDescription, { color: theme.secondaryText }]}>
+                      Show or hide the Flux calculator for users
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.settingToggle,
+                      {
+                        backgroundColor: calculatorFluxEnabled ? theme.successButton : theme.dangerButton,
+                        opacity: isLoadingSettings ? 0.5 : 1,
+                      }
+                    ]}
+                    onPress={() => updateCalculatorFluxSetting(!calculatorFluxEnabled)}
+                    disabled={isLoadingSettings}
+                  >
+                    <View style={[
+                      styles.settingToggleKnob,
+                      {
+                        backgroundColor: '#ffffff',
+                        transform: [{ translateX: calculatorFluxEnabled ? 24 : 2 }],
+                      }
+                    ]} />
+                  </TouchableOpacity>
+                </View>
+                <View style={[styles.settingStatus, { backgroundColor: theme.inputBackground }]}>
+                  <Feather
+                    name={calculatorFluxEnabled ? "check-circle" : "x-circle"}
+                    size={16}
+                    color={calculatorFluxEnabled ? theme.successButton : theme.dangerButton}
+                  />
+                  <Text style={[styles.settingStatusText, { color: theme.secondaryText }]}>
+                    Flux calculator is {calculatorFluxEnabled ? 'visible' : 'hidden'} to users
+                  </Text>
                 </View>
               </View>
 

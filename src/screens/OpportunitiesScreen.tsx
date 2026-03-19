@@ -20,7 +20,8 @@ import SearchBar from '../components/SearchBar';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Opportunity } from '../types';
-import { opportunitiesApi } from '../utils/api';
+import { api, opportunitiesApi, adminOpportunityDetailsApi, adminAnalyticsApi } from '../utils/api';
+import { formatScheduledAtDisplay } from '../utils/dateUtils';
 
 const { width, height } = Dimensions.get('window');
 
@@ -28,7 +29,6 @@ export default function OpportunitiesScreen() {
   const navigation = useNavigation<any>();
   const { user, isAuthenticated } = useAuth();
   const { theme, isDark, toggleTheme } = useTheme();
-  
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -43,6 +43,8 @@ export default function OpportunitiesScreen() {
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(true); // Set to true for testing
+  // Map of owner id/ghlUserId/email -> display name (for admin when backend only returns IDs)
+  const [ownerNameMap, setOwnerNameMap] = useState<Record<string, string>>({});
 
   // Initialize animations
   useEffect(() => {
@@ -90,32 +92,37 @@ export default function OpportunitiesScreen() {
       console.log('Appointments: API response error:', response.error);
 
       if (response.success && response.data) {
-        // The unified endpoint returns only opportunities with appointments
-        const allOpportunities = response.data.opportunities || [];
+        // The unified endpoint returns opportunities with appointments
+        let allOpportunities: Opportunity[] = response.data.opportunities || [];
+        const ids = new Set(allOpportunities.map((o: Opportunity) => o.id || (o as any).ghlOpportunityId));
+
+        // Merge manual opportunities so they always show in Appointments tab
+        try {
+          const manualRes = await opportunitiesApi.getManualOpportunities();
+          if (manualRes.success && manualRes.data?.opportunities?.length) {
+            const manualList = manualRes.data.opportunities as Opportunity[];
+            manualList.forEach((opp: any) => {
+              const id = opp.id || opp.ghlOpportunityId;
+              if (id && !ids.has(id)) {
+                ids.add(id);
+                allOpportunities.push({
+                  ...opp,
+                  source: opp.source || 'MANUAL',
+                  hasAppointment: true,
+                  classification: 'CONFIRMED',
+                } as Opportunity);
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('Appointments: Could not merge manual opportunities', e);
+        }
 
         console.log('Appointments: Processed appointments:', {
           totalCount: allOpportunities.length,
           withAppointments: allOpportunities.filter(opp => opp.hasAppointment).length,
         });
-        
-        // Debug: Log opportunities with appointments
-        console.log('🔧 Opportunities with appointments (raw from API):', allOpportunities.length);
-        
-        // Log sample opportunities to debug date format
-        if (allOpportunities.length > 0) {
-          const sampleWithDate = allOpportunities.find(opp => opp.appointmentDetails?.date);
-          if (sampleWithDate) {
-            console.log('🔧 Sample opportunity with date:', {
-              name: sampleWithDate.name,
-              hasAppointment: sampleWithDate.hasAppointment,
-              date: sampleWithDate.appointmentDetails?.date,
-              dateType: typeof sampleWithDate.appointmentDetails?.date,
-            });
-          }
-        }
 
-        // Don't filter here - let the useMemo handle filtering
-        // This allows the date filter to work properly
         setOpportunities(allOpportunities);
         console.log('Appointments: Loaded all opportunities:', allOpportunities.length);
       } else {
@@ -139,16 +146,68 @@ export default function OpportunitiesScreen() {
     }
   };
 
+  const fetchOwnerNamesIfAdmin = async () => {
+    if (user?.role !== 'ADMIN') return;
+    try {
+      const map: Record<string, string> = {};
+
+      // 1) Same source as Admin Users list: users with opportunities (or analytics users)
+      let response = await adminOpportunityDetailsApi.getAllUsersWithOpportunities();
+      if (!response.success && response.error?.includes('404')) {
+        response = await adminAnalyticsApi.getAllUsers();
+      }
+      if (response.success) {
+        const data = response.data?.data ?? response.data;
+        const raw = Array.isArray(data) ? data : [];
+        const items = raw.map((item: any) => item?.user ?? item);
+        items.forEach((u: any) => {
+          const name = (u?.name || u?.username || u?.email || '').trim();
+          if (!name) return;
+          if (u?.id) map[String(u.id).trim()] = name;
+          if (u?.ghlUserId) map[String(u.ghlUserId).trim()] = name;
+          if (u?.email) map[String(u.email).trim()] = name;
+          const ownerId = u?.ownerId ?? u?.owner?.id ?? u?.assignedUserId;
+          if (ownerId) map[String(ownerId).trim()] = name;
+        });
+      }
+
+      // 2) Same source as Admin Panel Users tab: GHL status (id + ghlUserId per user)
+      try {
+        const ghlRes = await api.get<{ users?: Array<{ id: string; username?: string; name?: string; ghlUserId?: string | null }> }>('/user/ghl-status');
+        if (ghlRes.success && ghlRes.data?.users?.length) {
+          ghlRes.data.users.forEach((u: any) => {
+            const name = (u?.name || u?.username || '').trim();
+            if (!name) return;
+            if (u?.id) map[String(u.id).trim()] = name;
+            if (u?.ghlUserId) map[String(u.ghlUserId).trim()] = name;
+          });
+        }
+      } catch {
+        // non-fatal: we already have map from step 1
+      }
+
+      setOwnerNameMap(map);
+    } catch {
+      setOwnerNameMap({});
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     opportunitiesApi.clearCache();
     await fetchOpportunities();
+    if (user?.role === 'ADMIN') await fetchOwnerNamesIfAdmin();
     setRefreshing(false);
   };
 
   useEffect(() => {
     fetchOpportunities();
   }, [isAuthenticated]);
+
+  // When admin, fetch users list to resolve owner IDs to names (backend may only return assignedTo/owner id)
+  useEffect(() => {
+    if (user?.role === 'ADMIN' && isAuthenticated) fetchOwnerNamesIfAdmin();
+  }, [user?.role, isAuthenticated]);
 
   // Helper function to normalize a date to local date (ignoring time and timezone)
   // This ensures we compare dates correctly regardless of timezone
@@ -194,6 +253,12 @@ export default function OpportunitiesScreen() {
     console.log('🔧 Opportunities before date filter:', opportunities.length);
     
     const filtered = opportunities.filter(opp => {
+      // Manual opportunities: always include (they may use scheduledAt instead of appointmentDetails)
+      const isManual = opp.source === 'MANUAL' || opp.stageName === '(Manual) Home Survey Booked';
+      if (isManual) {
+        return true;
+      }
+
       // Only include opportunities that have appointments
       if (!opp.hasAppointment) {
         console.log('🔧 Filtering out - no hasAppointment flag:', opp.name);
@@ -258,6 +323,22 @@ export default function OpportunitiesScreen() {
     
     // When date filter is applied, only show opportunities with appointments within the range
     const filtered = opportunities.filter(opp => {
+      // Manual opportunities: include if scheduledAt in range, or if no scheduledAt (show in range)
+      const isManual = opp.source === 'MANUAL' || opp.stageName === '(Manual) Home Survey Booked';
+      if (isManual) {
+        const manualDateStr = opp.scheduledAt;
+        if (!manualDateStr) return true; // no date = include when range is set
+        try {
+          const d = parseAndNormalizeDate(manualDateStr);
+          if (!d) return true;
+          if (filterStartNormalized && d < filterStartNormalized) return false;
+          if (filterEndNormalized && d > filterEndNormalized) return false;
+          return true;
+        } catch {
+          return true;
+        }
+      }
+
       // Only include opportunities that have appointments
       if (!opp.hasAppointment || !opp.appointmentDetails?.date) {
         return false;
@@ -385,9 +466,12 @@ export default function OpportunitiesScreen() {
     // Apply search filter first
     if (searchQuery) {
       const beforeSearch = filtered.length;
+      const q = searchQuery.toLowerCase();
       filtered = filtered.filter(opp =>
-        opp.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        opp.stageName?.toLowerCase().includes(searchQuery.toLowerCase())
+        opp.name?.toLowerCase().includes(q) ||
+        opp.stageName?.toLowerCase().includes(q) ||
+        opp.customerName?.toLowerCase().includes(q) ||
+        opp.contactName?.toLowerCase().includes(q)
       );
       console.log('🔧 After search filter:', filtered.length, '(was:', beforeSearch, ')');
     }
@@ -405,11 +489,13 @@ export default function OpportunitiesScreen() {
       console.log('🔧 Applied default "today only" filter (no date range set)');
     }
     
-    // Sort by appointment date (earliest first)
+    // Sort by appointment/scheduled date (earliest first)
     filtered.sort((a, b) => {
       try {
-        const dateA = a.appointmentDetails?.date ? new Date(a.appointmentDetails.date) : null;
-        const dateB = b.appointmentDetails?.date ? new Date(b.appointmentDetails.date) : null;
+        const dateStrA = a.appointmentDetails?.date ?? (a.source === 'MANUAL' ? a.scheduledAt : null);
+        const dateStrB = b.appointmentDetails?.date ?? (b.source === 'MANUAL' ? b.scheduledAt : null);
+        const dateA = dateStrA ? new Date(dateStrA) : null;
+        const dateB = dateStrB ? new Date(dateStrB) : null;
         
         // If both have dates, compare them
         if (dateA && dateB && !isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
@@ -480,22 +566,32 @@ export default function OpportunitiesScreen() {
 
   const isAdmin = user?.role === 'ADMIN';
 
+  const looksLikeId = (s: string) => s.length >= 12 && !/\s/.test(s) && /^[a-zA-Z0-9]+$/.test(s);
+
   const getOpportunityOwnerLabel = (opp: Opportunity): { primary: string; secondary?: string } | null => {
-    // Only show on admin view
     if (!isAdmin) return null;
 
-    const ownerName =
+    const fromBackend =
       opp.owner?.name ||
       opp.owner?.username ||
       opp.assignedToName ||
-      opp.assignedTo ||
       null;
+    const idOrFallback = opp.assignedTo || opp.owner?.id || opp.owner?.ghlUserId || null;
 
-    if (!ownerName) return { primary: 'Unassigned' };
+    const primary =
+      fromBackend && !looksLikeId(fromBackend)
+        ? fromBackend
+        : (idOrFallback && ownerNameMap[idOrFallback]) ||
+          (fromBackend && ownerNameMap[fromBackend]) ||
+          (idOrFallback && ownerNameMap[idOrFallback]) ||
+          fromBackend ||
+          idOrFallback ||
+          'Unassigned';
 
     const role = opp.owner?.role || undefined;
+    const resolvedPrimary = looksLikeId(primary) ? (ownerNameMap[primary] || null) : primary;
     return {
-      primary: ownerName,
+      primary: resolvedPrimary ?? (idOrFallback ? 'Unknown' : 'Unassigned'),
       secondary: role,
     };
   };
@@ -510,6 +606,31 @@ export default function OpportunitiesScreen() {
       opp.assignedToName ||
       'unassigned';
     return String(key);
+  };
+
+  // Same customer-name resolution order as AdminUserOpportunitiesScreen and WorkflowsScreen
+  const getDisplayName = (opp: Opportunity): string => {
+    const o = opp as Opportunity & {
+      customerName?: string;
+      contactFirstName?: string;
+      contactLastName?: string;
+      opportunityDetails?: { customerName?: string; address?: string };
+      contact?: { name?: string; firstName?: string; lastName?: string };
+    };
+    const fromDetails = o.opportunityDetails?.customerName?.trim();
+    if (fromDetails) return fromDetails;
+    if (o.customerName?.trim()) return o.customerName.trim();
+    const firstLast = [o.contactFirstName, o.contactLastName].filter(Boolean).join(' ').trim();
+    if (firstLast) return firstLast;
+    if (o.contact?.name?.trim()) return o.contact.name.trim();
+    const contactFirstLast = [o.contact?.firstName, o.contact?.lastName].filter(Boolean).join(' ').trim();
+    if (contactFirstLast) return contactFirstLast;
+    if (opp.contactName?.trim()) return opp.contactName.trim();
+    const name = (opp.name || '').trim();
+    if (!name) return 'Unnamed Opportunity';
+    const looksLikeId = name.length >= 15 && !/\s/.test(name) && /^[a-zA-Z0-9]+$/.test(name);
+    if (looksLikeId) return `Customer ${(opp.id || name).slice(-6)}`;
+    return name;
   };
 
   const renderOpportunityCard = (opp: Opportunity, index: number) => (
@@ -532,7 +653,7 @@ export default function OpportunitiesScreen() {
           <View style={styles.cardTitleRow}>
             <View style={styles.titleContainer}>
               <Text style={[styles.opportunityName, { color: theme.primaryText }]} numberOfLines={2}>
-                {opp.name || 'Unnamed Opportunity'}
+                {getDisplayName(opp)}
               </Text>
               <View style={styles.stageContainer}>
                 <View style={[styles.stageDot, { backgroundColor: theme.primaryButton }]} />
@@ -564,31 +685,45 @@ export default function OpportunitiesScreen() {
           
           {/* APPOINTMENT INDICATORS */}
           <View style={styles.appointmentContainer}>
-            {opp.hasAppointment ? (
-              <View style={[styles.appointmentBadge, styles.hasAppointmentBadge]}>
-                <MaterialIcons name="event-available" size={18} color="#fff" />
-                <Text style={styles.appointmentText}>Has Appointment</Text>
-              </View>
-            ) : (
-              <View style={[styles.appointmentBadge, styles.noAppointmentBadge]}>
-                <MaterialIcons name="event-busy" size={18} color="#fff" />
-                <Text style={styles.appointmentText}>No Appointment</Text>
-              </View>
-            )}
+            {(() => {
+              const isManual = opp.source === 'MANUAL' || opp.stageName === '(Manual) Home Survey Booked';
+              const showHasAppointment = opp.hasAppointment || isManual;
+              return showHasAppointment ? (
+                <View style={[styles.appointmentBadge, styles.hasAppointmentBadge]}>
+                  <MaterialIcons name="event-available" size={18} color="#fff" />
+                  <Text style={styles.appointmentText}>Has Appointment</Text>
+                </View>
+              ) : (
+                <View style={[styles.appointmentBadge, styles.noAppointmentBadge]}>
+                  <MaterialIcons name="event-busy" size={18} color="#fff" />
+                  <Text style={styles.appointmentText}>No Appointment</Text>
+                </View>
+              );
+            })()}
             
-            {opp.classification && (
-              <View style={[styles.classificationBadge,
-                opp.classification === 'CONFIRMED' ? styles.confirmedBadge :
-                opp.classification === 'MULTIPLE' ? styles.multipleBadge :
-                opp.classification === 'NO_APPOINTMENT' ? styles.noAppointmentBadge :
-                styles.errorBadge
-              ]}>
-                <Text style={styles.classificationText}>
-                  {opp.classification === 'CONFIRMED' ? '✅ Confirmed' :
-                   opp.classification === 'MULTIPLE' ? '❓ Multiple' :
-                   opp.classification === 'NO_APPOINTMENT' ? '❌ No Appt' :
-                   '⚠️ Error'}
-                </Text>
+            {(() => {
+              const isManual = opp.source === 'MANUAL' || opp.stageName === '(Manual) Home Survey Booked';
+              const effectiveClassification = isManual ? 'CONFIRMED' : opp.classification;
+              if (!effectiveClassification) return null;
+              return (
+                <View style={[styles.classificationBadge,
+                  effectiveClassification === 'CONFIRMED' ? styles.confirmedBadge :
+                  effectiveClassification === 'MULTIPLE' ? styles.multipleBadge :
+                  effectiveClassification === 'NO_APPOINTMENT' ? styles.noAppointmentBadge :
+                  styles.errorBadge
+                ]}>
+                  <Text style={styles.classificationText}>
+                    {effectiveClassification === 'CONFIRMED' ? '✅ Confirmed' :
+                     effectiveClassification === 'MULTIPLE' ? '❓ Multiple' :
+                     effectiveClassification === 'NO_APPOINTMENT' ? '❌ No Appt' :
+                     '⚠️ Error'}
+                  </Text>
+                </View>
+              );
+            })()}
+            {(opp.source === 'MANUAL' || opp.stageName === '(Manual) Home Survey Booked') && (
+              <View style={[styles.classificationBadge, styles.manualBadge]}>
+                <Text style={styles.classificationText}>Manual</Text>
               </View>
             )}
           </View>
@@ -607,6 +742,21 @@ export default function OpportunitiesScreen() {
                   formatAppointmentDate(opp.appointmentDetails.date) : 
                   opp.appointmentDetails.rawText || 'Details in CRM'
                 }
+              </Text>
+            </View>
+          )}
+
+          {/* SCHEDULED (e.g. manual opportunity scheduledAt) */}
+          {opp.scheduledAt && (
+            <View style={styles.appointmentTimeContainer}>
+              <View style={styles.appointmentTimeRow}>
+                <Feather name="calendar" size={16} color={theme.secondaryText} />
+                <Text style={[styles.appointmentTimeLabel, { color: theme.secondaryText }]}>
+                  Scheduled:
+                </Text>
+              </View>
+              <Text style={[styles.appointmentTimeText, { color: theme.primaryText }]}>
+                {formatScheduledAtDisplay(opp.scheduledAt)}
               </Text>
             </View>
           )}
@@ -1239,6 +1389,9 @@ const styles = StyleSheet.create({
   },
   errorBadge: {
     backgroundColor: '#ef4444',
+  },
+  manualBadge: {
+    backgroundColor: '#3b82f6',
   },
   classificationText: {
     fontSize: 14,

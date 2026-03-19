@@ -51,6 +51,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import OpportunitiesScreen from './src/screens/OpportunitiesScreen';
 import OpportunitiesWithAppointmentsScreen from './src/screens/OpportunitiesWithAppointmentsScreen';
 import OpportunityDetailsScreen from './src/screens/OpportunityDetailsScreen';
+import OpportunityManagementScreen from './src/screens/OpportunityManagementScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import TestOpportunitiesScreen from './src/screens/TestOpportunitiesScreen';
 
@@ -83,6 +84,8 @@ import StatisticsAnalyticsScreen from './src/screens/StatisticsAnalyticsScreen';
 import AdminUsersListScreen from './src/screens/AdminUsersListScreen';
 import AdminUserOpportunitiesScreen from './src/screens/AdminUserOpportunitiesScreen';
 import AdminOpportunityDetailsScreen from './src/screens/AdminOpportunityDetailsScreen';
+import CreateManualOpportunityScreen from './src/screens/CreateManualOpportunityScreen';
+import EditManualOpportunityScreen from './src/screens/EditManualOpportunityScreen';
 import SurveyScreen from './src/screens/SurveyScreen';
 import TemplateSelectionScreen from './src/screens/TemplateSelectionScreen';
 import WorkflowsScreen from './src/screens/WorkflowsScreen';
@@ -118,6 +121,8 @@ export type RootStackParamList = {
   ForgotPassword: undefined;
   MainTabs: undefined;
   OpportunityDetails: { opportunityId: string };
+  OpportunityManagement: undefined;
+  EditManualOpportunity: { opportunityId: string };
   AdminUsersList: undefined;
   AdminUserOpportunities: { userId: string; userName?: string };
   AdminOpportunityDetails: { opportunityId: string };
@@ -260,6 +265,7 @@ export type RootStackParamList = {
   DocuSeal: undefined;
 
   AdminPanel: undefined;
+  AdminCreateManualOpportunity: undefined;
   OpportunitiesWithAppointments: undefined;
   TestOpportunities: undefined;
   ContactAppointments: undefined;
@@ -291,7 +297,7 @@ export type TabParamList = {
 
 // Deep linking configuration for web URLs
 const linking: LinkingOptions<RootStackParamList> = {
-  prefixes: ['https://creativuk-app.paldev.tech', 'http://localhost:8081'],
+  prefixes: ['https://app.creativuk.co.uk', 'http://localhost:8081'],
   config: {
     screens: {
       // Main app screens
@@ -385,6 +391,8 @@ const linking: LinkingOptions<RootStackParamList> = {
       
       // Other screens
       OpportunityDetails: 'opportunity/:opportunityId',
+      OpportunityManagement: 'opportunity-management',
+      EditManualOpportunity: 'edit-manual-opportunity/:opportunityId',
       OpportunitiesWithAppointments: 'opportunities-with-appointments',
       TestOpportunities: 'test-opportunities',
       ContactAppointments: 'contact-appointments',
@@ -609,6 +617,27 @@ function ProfileScreen() {
 
           {/* Action Buttons */}
           <View style={styles.actionsSection}>
+            {/* Opportunity management - Admin only */}
+            {isAdmin && (
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: theme.primaryButton }]}
+                onPress={() => navigation.navigate('OpportunityManagement')}
+              >
+                <View style={styles.actionButtonContent}>
+                  <View style={[styles.actionIcon, { backgroundColor: theme.primaryButton + '20' }]}>
+                    <Ionicons name="briefcase" size={20} color={theme.primaryButton} />
+                  </View>
+                  <View style={styles.actionText}>
+                    <Text style={styles.actionTitle}>Opportunity management</Text>
+                    <Text style={[styles.actionSubtitle, { color: theme.secondaryText }]}>
+                      View and manage your opportunities
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={theme.secondaryText} />
+                </View>
+              </TouchableOpacity>
+            )}
+
             {/* Statistics & Analytics Button - Admin Only */}
             {isAdmin && (
               <TouchableOpacity
@@ -719,6 +748,20 @@ function AppNavigator() {
           <Stack.Screen 
             name="OpportunityDetails" 
             component={OpportunityDetailsScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen 
+            name="OpportunityManagement" 
+            component={OpportunityManagementScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen 
+            name="EditManualOpportunity" 
+            component={EditManualOpportunityScreen}
             options={{
               headerShown: false,
             }}
@@ -992,6 +1035,13 @@ function AppNavigator() {
           <Stack.Screen 
             name="AdminOpportunityDetails" 
             component={AdminOpportunityDetailsScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen 
+            name="AdminCreateManualOpportunity" 
+            component={CreateManualOpportunityScreen}
             options={{
               headerShown: false,
             }}

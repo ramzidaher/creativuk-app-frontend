@@ -17,7 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AdminGuard from '../components/AdminGuard';
 import { useTheme } from '../context/ThemeContext';
-import { adminOpportunityDetailsApi } from '../utils/api';
+import { adminOpportunityDetailsApi, opportunitiesApi } from '../utils/api';
 
 const { width } = Dimensions.get('window');
 
@@ -339,6 +339,7 @@ const AdminOpportunityDetailsScreen: React.FC = () => {
   
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [opportunityDetails, setOpportunityDetails] = useState<any | null>(null);
   
   // Collapsible sections state
@@ -415,6 +416,48 @@ const AdminOpportunityDetailsScreen: React.FC = () => {
     setRefreshing(false);
   };
 
+  const isManualOpportunity =
+    opportunityDetails?.opportunity?.source === 'MANUAL' || opportunityDetails?.source === 'MANUAL';
+
+  const handleDelete = () => {
+    if (!opportunityId || !isManualOpportunity) return;
+
+    const manualId =
+      opportunityDetails?.opportunity?.id ||
+      opportunityDetails?.id ||
+      opportunityId;
+
+    const doDelete = async () => {
+      setDeleting(true);
+      try {
+        const response = await opportunitiesApi.deleteManualOpportunity(manualId);
+        if (response.success) {
+          if (navigation.canGoBack?.()) navigation.goBack();
+          else navigation.navigate('OpportunityManagement');
+          Alert.alert('Deleted', 'Manual opportunity has been deleted.', [{ text: 'OK' }]);
+        } else {
+          setDeleting(false);
+          Alert.alert('Error', response.error || 'Failed to delete opportunity');
+        }
+      } catch (e) {
+        setDeleting(false);
+        Alert.alert('Error', (e as Error)?.message || 'Failed to delete opportunity');
+      }
+    };
+
+    // Alert confirmations can be unreliable on web; use window.confirm there.
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const ok = window.confirm('Delete this manual opportunity? This cannot be undone.');
+      if (ok) void doDelete();
+      return;
+    }
+
+    Alert.alert('Delete manual opportunity', 'Are you sure you want to delete this manual opportunity? This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: doDelete },
+    ]);
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.primaryBackground }]}>
@@ -441,17 +484,53 @@ const AdminOpportunityDetailsScreen: React.FC = () => {
         ]}
       >
         <View style={[styles.header, { backgroundColor: theme.cardBackground, borderBottomColor: theme.cardBorder }]}>
-          <View style={styles.headerTop}>
+          <View style={[styles.headerTop, { justifyContent: 'space-between' }]}>
             <TouchableOpacity
               style={[styles.backButton, { borderColor: theme.borderColor }]}
-              onPress={() => navigation.goBack()}
+              onPress={() => {
+                if (navigation.canGoBack?.()) navigation.goBack();
+                else navigation.navigate('MainTabs', { screen: 'Profile' });
+              }}
             >
               <Feather name="arrow-left" size={24} color={theme.primaryText} />
             </TouchableOpacity>
+            {isManualOpportunity && (
+              <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                <TouchableOpacity
+                  style={[styles.editButton, { backgroundColor: theme.primaryButton }]}
+                  onPress={() => {
+                    const manualId =
+                      opportunityDetails?.opportunity?.id ||
+                      opportunityDetails?.id ||
+                      opportunityId;
+                    navigation.navigate('EditManualOpportunity', { opportunityId: manualId });
+                  }}
+                >
+                  <Feather name="edit-2" size={18} color="#fff" />
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.deleteButton, { backgroundColor: theme.dangerButton }]}
+                  onPress={handleDelete}
+                  disabled={deleting}
+                >
+                  {deleting ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Feather name="trash-2" size={18} color="#fff" />
+                      <Text style={styles.deleteButtonText}>Delete</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
           <View style={styles.headerText}>
             <Text style={[styles.title, { color: theme.primaryText }]}>Opportunity Details</Text>
-            <Text style={[styles.subtitle, { color: theme.secondaryText }]}>Complete opportunity information</Text>
+            <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+              {isManualOpportunity ? 'Manual opportunity (admin)' : 'Complete opportunity information'}
+            </Text>
           </View>
         </View>
 
@@ -464,6 +543,28 @@ const AdminOpportunityDetailsScreen: React.FC = () => {
         >
           {opportunityDetails ? (
             <View style={styles.dataSection}>
+              {/* Assigned to (prominent) */}
+              {(() => {
+                const opp = opportunityDetails.opportunity || opportunityDetails;
+                const assignedName =
+                  opp?.owner?.name ||
+                  opp?.owner?.username ||
+                  opp?.assignedToName ||
+                  opp?.user?.name ||
+                  opp?.user?.username;
+                const assignedId = opp?.userId || opp?.owner?.id;
+                if (!assignedName && !assignedId) return null;
+                return (
+                  <View style={[styles.assignedToCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+                    <Feather name="user" size={18} color={theme.primaryButton} />
+                    <Text style={[styles.assignedToLabel, { color: theme.secondaryText }]}>Assigned to</Text>
+                    <Text style={[styles.assignedToValue, { color: theme.primaryText }]}>
+                      {assignedName || '—'}
+                    </Text>
+                  </View>
+                );
+              })()}
+
               {/* Opportunity Information */}
               {opportunityDetails.opportunity && (
                 <CollapsibleSection
@@ -805,6 +906,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1.5,
   },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 8,
+  },
+  editButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 8,
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   headerText: {
     alignItems: 'center',
   },
@@ -835,6 +962,24 @@ const styles = StyleSheet.create({
   },
   dataSection: {
     marginBottom: 24,
+  },
+  assignedToCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+    gap: 10,
+  },
+  assignedToLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  assignedToValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
   },
   detailSection: {
     marginBottom: 24,
