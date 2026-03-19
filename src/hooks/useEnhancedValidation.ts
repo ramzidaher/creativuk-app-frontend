@@ -8,6 +8,8 @@ interface ValidationField {
   fieldType: 'text' | 'dropdown' | 'image' | 'date' | 'checkbox';
   validationRule?: (value: any) => boolean;
   errorMessage?: string;
+  minImages?: number;
+  maxImages?: number;
 }
 
 interface ValidationResult {
@@ -65,7 +67,7 @@ export const useEnhancedValidation = () => {
     { fieldName: 'targetRoofs', displayName: 'Target Roofs Images', pageNumber: 7, isRequired: true, fieldType: 'image' },
     { fieldName: 'roofAngle', displayName: 'Roof Angle Images', pageNumber: 7, isRequired: true, fieldType: 'image' },
     { fieldName: 'roofTileCloseup', displayName: 'Roof Tile Closeup Images', pageNumber: 7, isRequired: true, fieldType: 'image' },
-    { fieldName: 'internalCeilingPictures', displayName: 'Internal Ceiling Pictures', pageNumber: 7, isRequired: false, fieldType: 'image' },
+    { fieldName: 'internalCeilingPictures', displayName: 'Internal Ceiling Pictures', pageNumber: 7, isRequired: true, fieldType: 'image', minImages: 4, maxImages: 10 },
     { fieldName: 'roofTileType', displayName: 'Roof Tile Type', pageNumber: 7, isRequired: true, fieldType: 'dropdown' },
     { fieldName: 'fuseBoard', displayName: 'Fuse Board Images', pageNumber: 7, isRequired: true, fieldType: 'image' },
     { fieldName: 'electricMeter', displayName: 'Electric Meter Images', pageNumber: 7, isRequired: true, fieldType: 'image' },
@@ -105,7 +107,8 @@ export const useEnhancedValidation = () => {
       if (field.fieldType === 'image') {
         // Check uploaded files for image fields
         const images = uploadedFiles[field.fieldName] || [];
-        isValid = Array.isArray(images) && images.length >= 2; // Minimum 2 images required
+        const minRequired = field.minImages ?? 2;
+        isValid = Array.isArray(images) && images.length >= minRequired;
         fieldValue = images;
       } else {
         // Check form data for other field types

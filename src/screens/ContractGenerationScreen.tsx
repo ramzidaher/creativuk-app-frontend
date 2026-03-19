@@ -561,21 +561,22 @@ export default function ContractGenerationScreen() {
       });
       console.log('🔍 Images grouped by field:', imagesByField);
       
-      const requiredImageFields = [
-        'energyBill',
-        'frontDoor', 
-        'frontProperty',
-        'targetRoofs',
-        'roofAngle',
-        'roofTileCloseup',
-        'electricMeter',
-        'fuseBoard',
-        'batteryInverterLocation'
+      const requiredImageFields: { field: string; minImages: number }[] = [
+        { field: 'energyBill', minImages: 1 },
+        { field: 'frontDoor', minImages: 1 },
+        { field: 'frontProperty', minImages: 1 },
+        { field: 'targetRoofs', minImages: 1 },
+        { field: 'roofAngle', minImages: 1 },
+        { field: 'roofTileCloseup', minImages: 1 },
+        { field: 'internalCeilingPictures', minImages: 4 },
+        { field: 'electricMeter', minImages: 1 },
+        { field: 'fuseBoard', minImages: 1 },
+        { field: 'batteryInverterLocation', minImages: 1 }
       ];
 
       const missingFields: string[] = [];
       
-      for (const field of requiredImageFields) {
+      for (const { field, minImages: minRequired } of requiredImageFields) {
         // Special case: Energy bill images are only required if hasEnergyBill is "Yes"
         if (field === 'energyBill') {
           const pageData = surveyData.page4;
@@ -609,22 +610,37 @@ export default function ContractGenerationScreen() {
           fieldFiles = surveyData.page4[`${field}Files`];
           foundLocation = 'page4';
         }
-        // 3. Check page5 for other images
+        // 3. Check page6 for frontDoor, frontProperty, targetRoofs, propertySides
+        else if (['frontDoor', 'frontProperty', 'targetRoofs', 'propertySides'].includes(field) && surveyData.page6?.[`${field}Files`]) {
+          fieldFiles = surveyData.page6[`${field}Files`];
+          foundLocation = 'page6';
+        }
+        // 4. Check page7 for roofAngle, roofTileCloseup, internalCeilingPictures, etc.
+        else if (surveyData.page7?.[`${field}Files`]) {
+          fieldFiles = surveyData.page7[`${field}Files`];
+          foundLocation = 'page7';
+        }
+        // 5. Check page5 for other images (legacy)
         else if (field !== 'energyBill' && surveyData.page5?.[`${field}Files`]) {
           fieldFiles = surveyData.page5[`${field}Files`];
           foundLocation = 'page5';
         }
-        // 4. Check if images are stored directly in the field (without Files suffix) - for energyBill
+        // 6. Check if images are stored directly in the field (without Files suffix) - for energyBill
         else if (field === 'energyBill' && Array.isArray(surveyData.page4?.[field])) {
           fieldFiles = surveyData.page4[field];
           foundLocation = 'page4.direct';
         }
-        // 5. Check page5 direct field (without Files suffix)
+        // 7. Check page7 direct field
+        else if (Array.isArray((surveyData.page7 as any)?.[field])) {
+          fieldFiles = (surveyData.page7 as any)[field];
+          foundLocation = 'page7.direct';
+        }
+        // 8. Check page5 direct field (legacy)
         else if (field !== 'energyBill' && Array.isArray(surveyData.page5?.[field])) {
           fieldFiles = surveyData.page5[field];
           foundLocation = 'page5.direct';
         }
-        // 6. Check if images are in a nested images object
+        // 9. Check if images are in a nested images object
         else if (surveyData.images && typeof surveyData.images === 'object') {
           // Check if there's an images object with field-specific arrays
           if (Array.isArray(surveyData.images[field])) {
@@ -653,8 +669,8 @@ export default function ContractGenerationScreen() {
           console.log(`📸 Sample image data for ${field}:`, fieldFiles[0]);
         }
         
-        // Require at least 1 image (changed from 2 to be more lenient)
-        if (imageCount < 1) {
+        // Require field-specific minimum images
+        if (imageCount < minRequired) {
           const fieldDisplayName = field
             .replace(/([A-Z])/g, ' $1')
             .replace(/^./, str => str.toUpperCase())
@@ -666,9 +682,10 @@ export default function ContractGenerationScreen() {
             .replace(/Roof Tile Closeup/g, 'Roof Tile Closeup')
             .replace(/Electric Meter/g, 'Electric Meter')
             .replace(/Fuse Board/g, 'Fuse Board')
-            .replace(/Battery Inverter Location/g, 'Battery & Inverter Location');
+            .replace(/Battery Inverter Location/g, 'Battery & Inverter Location')
+            .replace(/Internal Ceiling Pictures/g, 'Internal Ceiling Pictures');
           
-          missingFields.push(`${fieldDisplayName} (${imageCount}/1 image)`);
+          missingFields.push(`${fieldDisplayName} (${imageCount}/${minRequired} images)`);
         } else {
           console.log(`✅ Field ${field} has ${imageCount} images - VALID`);
         }
