@@ -8,8 +8,7 @@ interface ValidationField {
   fieldType: 'text' | 'dropdown' | 'image' | 'date' | 'checkbox';
   validationRule?: (value: any) => boolean;
   errorMessage?: string;
-  minImages?: number;
-  maxImages?: number;
+  minImages?: number; // For image fields with custom minimum (default 2)
 }
 
 interface ValidationResult {
@@ -67,7 +66,7 @@ export const useEnhancedValidation = () => {
     { fieldName: 'targetRoofs', displayName: 'Target Roofs Images', pageNumber: 7, isRequired: true, fieldType: 'image' },
     { fieldName: 'roofAngle', displayName: 'Roof Angle Images', pageNumber: 7, isRequired: true, fieldType: 'image' },
     { fieldName: 'roofTileCloseup', displayName: 'Roof Tile Closeup Images', pageNumber: 7, isRequired: true, fieldType: 'image' },
-    { fieldName: 'internalCeilingPictures', displayName: 'Internal Ceiling Pictures', pageNumber: 7, isRequired: true, fieldType: 'image', minImages: 4, maxImages: 10 },
+    { fieldName: 'internalCeilingPictures', displayName: 'Internal Ceiling Pictures', pageNumber: 7, isRequired: true, fieldType: 'image', minImages: 4 },
     { fieldName: 'roofTileType', displayName: 'Roof Tile Type', pageNumber: 7, isRequired: true, fieldType: 'dropdown' },
     { fieldName: 'fuseBoard', displayName: 'Fuse Board Images', pageNumber: 7, isRequired: true, fieldType: 'image' },
     { fieldName: 'electricMeter', displayName: 'Electric Meter Images', pageNumber: 7, isRequired: true, fieldType: 'image' },

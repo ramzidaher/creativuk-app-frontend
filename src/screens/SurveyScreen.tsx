@@ -743,14 +743,12 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
     files = [], 
     onRemove, 
     required = false,
-    minImages,
-    maxImages,
     fieldName,
+    minRequired = 2,
+    maxFiles = 10,
     ...props 
   }: any) => {
     const currentCount = files.length;
-    const minRequired = minImages ?? 2;
-    const maxAllowed = maxImages ?? 10;
     const isComplete = required ? currentCount >= minRequired : true;
     
     return (
@@ -766,7 +764,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
               modernStyles.imageCount, 
               { color: isComplete ? '#10b981' : '#f59e0b' }
             ]}>
-              {currentCount}/{maxAllowed} images
+              {currentCount}/{maxFiles} images
             </Text>
             {required && !isComplete && (
               <Ionicons name="warning" size={16} color="#f59e0b" style={modernStyles.warningIcon} />
@@ -3000,29 +2998,24 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       console.log('🔍 uploadedFiles keys:', Object.keys(uploadedFiles || {}));
       console.log('🔍 uploadedFilesRef keys:', Object.keys(uploadedFilesRef.current || {}));
       
-      const requiredImageFields: { field: string; minImages: number }[] = [
-        { field: 'energyBill', minImages: 2 },
-        { field: 'frontDoor', minImages: 2 },
-        { field: 'frontProperty', minImages: 2 },
-        { field: 'targetRoofs', minImages: 2 },
-        { field: 'roofAngle', minImages: 2 },
-        { field: 'roofTileCloseup', minImages: 2 },
-        { field: 'internalCeilingPictures', minImages: 4 },
-        { field: 'electricMeter', minImages: 2 },
-        { field: 'fuseBoard', minImages: 2 },
-        { field: 'batteryInverterLocation', minImages: 2 }
+      // Fields with custom min requirements (default is 2, internalCeilingPictures requires 4)
+      const requiredImageFieldsConfig: { field: string; minRequired: number }[] = [
+        { field: 'energyBill', minRequired: 2 },
+        { field: 'frontDoor', minRequired: 2 },
+        { field: 'frontProperty', minRequired: 2 },
+        { field: 'targetRoofs', minRequired: 2 },
+        { field: 'roofAngle', minRequired: 2 },
+        { field: 'roofTileCloseup', minRequired: 2 },
+        { field: 'internalCeilingPictures', minRequired: 4 },
+        { field: 'electricMeter', minRequired: 2 },
+        { field: 'fuseBoard', minRequired: 2 },
+        { field: 'batteryInverterLocation', minRequired: 2 }
       ];
 
       const missingImages: { field: string; current: number; required: number }[] = [];
-      const fieldToPage: Record<string, string> = {
-        energyBill: 'page4',
-        epcCertificate: 'page5',
-        frontDoor: 'page6', frontProperty: 'page6', targetRoofs: 'page6', propertySides: 'page6',
-        roofAngle: 'page7', otherRoofPictures: 'page7', roofTileCloseup: 'page7', internalCeilingPictures: 'page7',
-        otherBuildings: 'page7', electricMeter: 'page7', garage: 'page7', fuseBoard: 'page7', batteryInverterLocation: 'page7'
-      };
+      const page7Fields = ['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'electricMeter', 'garage', 'fuseBoard', 'batteryInverterLocation'];
       
-      for (const { field, minImages: minRequired } of requiredImageFields) {
+      for (const { field, minRequired } of requiredImageFieldsConfig) {
         // Special case: Energy bill images are only required if hasEnergyBill is "Yes"
         if (field === 'energyBill') {
           const pageData = formData.page4;
@@ -3043,10 +3036,20 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         const imagesFromRef = uploadedFilesRef.current[field] || [];
         
         // Check survey data for images stored on server (previously saved)
-        const pageKey = fieldToPage[field] || 'page7';
-        const pageData = formData[pageKey as keyof typeof formData];
-        const surveyPage = survey ? (survey as any)[pageKey] : undefined;
-        const imagesFromSurvey = (pageData as any)?.[`${field}Files`] || surveyPage?.[`${field}Files`] || [];
+        let imagesFromSurvey: any[] = [];
+        if (field === 'energyBill') {
+          const page4Data = formData.page4;
+          const surveyPage4 = survey?.page4;
+          imagesFromSurvey = page4Data?.[`${field}Files`] || surveyPage4?.[`${field}Files`] || [];
+        } else if (page7Fields.includes(field)) {
+          const page7Data = formData.page7;
+          const surveyPage7 = survey?.page7;
+          imagesFromSurvey = page7Data?.[`${field}Files`] || (surveyPage7 as any)?.[`${field}Files`] || [];
+        } else {
+          const page5Data = formData.page5;
+          const surveyPage5 = survey?.page5;
+          imagesFromSurvey = page5Data?.[`${field}Files`] || surveyPage5?.[`${field}Files`] || [];
+        }
         
         // Count images from current session (state and ref)
         const totalFromState = Array.isArray(imagesFromState) ? imagesFromState.length : 0;
@@ -3057,14 +3060,13 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         // This allows validation to pass if images were uploaded in current session OR saved previously
         const totalImages = Math.max(totalFromState, totalFromRef, totalFromSurvey);
         
-        console.log(`🔍 Field ${field}: ${totalImages} images total (min ${minRequired})`);
+        console.log(`🔍 Field ${field}: ${totalImages} images total`);
         console.log(`🔍   - From state (current): ${totalFromState}`);
         console.log(`🔍   - From ref (current): ${totalFromRef}`);
         console.log(`🔍   - From survey (saved): ${totalFromSurvey}`);
         console.log(`🔍   - Total: ${totalImages}`);
         
-        // Check for missing images - use field-specific minimum
-        // Images can be from current session OR previously saved
+        // Check for missing images - use field-specific min required
         if (totalImages < minRequired) {
           console.log(`❌ Field ${field} is missing images: ${totalImages}/${minRequired}`);
           missingImages.push({
@@ -3099,10 +3101,10 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
             .replace(/Target Roofs/g, 'Target Roofs')
             .replace(/Roof Angle/g, 'Roof Angle')
             .replace(/Roof Tile Closeup/g, 'Roof Tile Closeup')
-            .replace(/Internal Ceiling Pictures/g, 'Internal Ceiling Pictures')
             .replace(/Electric Meter/g, 'Electric Meter')
             .replace(/Fuse Board/g, 'Fuse Board')
-            .replace(/Battery Inverter Location/g, 'Battery & Inverter Location');
+            .replace(/Battery Inverter Location/g, 'Battery & Inverter Location')
+            .replace(/Internal Ceiling Pictures/g, 'Internal Ceiling Pictures');
           
           return `• ${fieldDisplayName}: ${item.current}/${item.required} images`;
         }).join('\n');
@@ -5168,9 +5170,10 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
               files={uploadedFiles.internalCeilingPictures || []}
               onRemove={(index: number) => removeFile('internalCeilingPictures', index)}
               required={true}
-              minImages={4}
-              maxImages={10}
+              minRequired={4}
+              maxFiles={10}
             />
+            <Text style={[styles.helperText, { color: theme.secondaryText }]}>Minimum 4 images required, up to 10</Text>
           </View>
         </View>
       </View>

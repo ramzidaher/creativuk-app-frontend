@@ -561,22 +561,23 @@ export default function ContractGenerationScreen() {
       });
       console.log('🔍 Images grouped by field:', imagesByField);
       
-      const requiredImageFields: { field: string; minImages: number }[] = [
-        { field: 'energyBill', minImages: 1 },
-        { field: 'frontDoor', minImages: 1 },
-        { field: 'frontProperty', minImages: 1 },
-        { field: 'targetRoofs', minImages: 1 },
-        { field: 'roofAngle', minImages: 1 },
-        { field: 'roofTileCloseup', minImages: 1 },
-        { field: 'internalCeilingPictures', minImages: 4 },
-        { field: 'electricMeter', minImages: 1 },
-        { field: 'fuseBoard', minImages: 1 },
-        { field: 'batteryInverterLocation', minImages: 1 }
+      const requiredImageFieldsConfig: { field: string; minRequired: number }[] = [
+        { field: 'energyBill', minRequired: 1 },
+        { field: 'frontDoor', minRequired: 1 },
+        { field: 'frontProperty', minRequired: 1 },
+        { field: 'targetRoofs', minRequired: 1 },
+        { field: 'roofAngle', minRequired: 1 },
+        { field: 'roofTileCloseup', minRequired: 1 },
+        { field: 'internalCeilingPictures', minRequired: 4 },
+        { field: 'electricMeter', minRequired: 1 },
+        { field: 'fuseBoard', minRequired: 1 },
+        { field: 'batteryInverterLocation', minRequired: 1 }
       ];
+      const page7Fields = ['roofAngle', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'electricMeter', 'garage', 'fuseBoard', 'batteryInverterLocation'];
 
       const missingFields: string[] = [];
       
-      for (const { field, minImages: minRequired } of requiredImageFields) {
+      for (const { field, minRequired } of requiredImageFieldsConfig) {
         // Special case: Energy bill images are only required if hasEnergyBill is "Yes"
         if (field === 'energyBill') {
           const pageData = surveyData.page4;
@@ -610,37 +611,32 @@ export default function ContractGenerationScreen() {
           fieldFiles = surveyData.page4[`${field}Files`];
           foundLocation = 'page4';
         }
-        // 3. Check page6 for frontDoor, frontProperty, targetRoofs, propertySides
-        else if (['frontDoor', 'frontProperty', 'targetRoofs', 'propertySides'].includes(field) && surveyData.page6?.[`${field}Files`]) {
-          fieldFiles = surveyData.page6[`${field}Files`];
-          foundLocation = 'page6';
-        }
-        // 4. Check page7 for roofAngle, roofTileCloseup, internalCeilingPictures, etc.
-        else if (surveyData.page7?.[`${field}Files`]) {
+        // 3. Check page7 for page7 image fields
+        else if (page7Fields.includes(field) && surveyData.page7?.[`${field}Files`]) {
           fieldFiles = surveyData.page7[`${field}Files`];
           foundLocation = 'page7';
         }
-        // 5. Check page5 for other images (legacy)
+        // 4. Check page5 for other images
         else if (field !== 'energyBill' && surveyData.page5?.[`${field}Files`]) {
           fieldFiles = surveyData.page5[`${field}Files`];
           foundLocation = 'page5';
         }
-        // 6. Check if images are stored directly in the field (without Files suffix) - for energyBill
+        // 5. Check if images are stored directly in the field (without Files suffix) - for energyBill
         else if (field === 'energyBill' && Array.isArray(surveyData.page4?.[field])) {
           fieldFiles = surveyData.page4[field];
           foundLocation = 'page4.direct';
         }
-        // 7. Check page7 direct field
-        else if (Array.isArray((surveyData.page7 as any)?.[field])) {
-          fieldFiles = (surveyData.page7 as any)[field];
+        // 6. Check page7 direct field for page7 fields
+        else if (page7Fields.includes(field) && Array.isArray(surveyData.page7?.[field])) {
+          fieldFiles = surveyData.page7[field];
           foundLocation = 'page7.direct';
         }
-        // 8. Check page5 direct field (legacy)
+        // 7. Check page5 direct field (without Files suffix)
         else if (field !== 'energyBill' && Array.isArray(surveyData.page5?.[field])) {
           fieldFiles = surveyData.page5[field];
           foundLocation = 'page5.direct';
         }
-        // 9. Check if images are in a nested images object
+        // 8. Check if images are in a nested images object
         else if (surveyData.images && typeof surveyData.images === 'object') {
           // Check if there's an images object with field-specific arrays
           if (Array.isArray(surveyData.images[field])) {
@@ -669,7 +665,6 @@ export default function ContractGenerationScreen() {
           console.log(`📸 Sample image data for ${field}:`, fieldFiles[0]);
         }
         
-        // Require field-specific minimum images
         if (imageCount < minRequired) {
           const fieldDisplayName = field
             .replace(/([A-Z])/g, ' $1')
@@ -680,10 +675,10 @@ export default function ContractGenerationScreen() {
             .replace(/Target Roofs/g, 'Target Roofs')
             .replace(/Roof Angle/g, 'Roof Angle')
             .replace(/Roof Tile Closeup/g, 'Roof Tile Closeup')
+            .replace(/Internal Ceiling Pictures/g, 'Internal Ceiling Pictures')
             .replace(/Electric Meter/g, 'Electric Meter')
             .replace(/Fuse Board/g, 'Fuse Board')
-            .replace(/Battery Inverter Location/g, 'Battery & Inverter Location')
-            .replace(/Internal Ceiling Pictures/g, 'Internal Ceiling Pictures');
+            .replace(/Battery Inverter Location/g, 'Battery & Inverter Location');
           
           missingFields.push(`${fieldDisplayName} (${imageCount}/${minRequired} images)`);
         } else {
