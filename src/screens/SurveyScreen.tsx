@@ -2,7 +2,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -74,6 +74,11 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
   const routeParams = route.params as RouteParams;
   const opportunityId = props?.opportunityId || routeParams?.opportunityId;
   const { isAuthenticated, user } = useAuth();
+  const isAdminUser = user?.role === 'ADMIN';
+  const surveyValidationOptions = useMemo(
+    () => (isAdminUser ? { skipFieldNames: ['homeOwnersAvailable'] as string[] } : undefined),
+    [isAdminUser]
+  );
   const { theme, isDark, toggleTheme } = useTheme();
   
   const [currentPage, setCurrentPage] = useState(1);
@@ -576,7 +581,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
     if (!visible) return null;
 
     // Generate detailed validation report
-    const validationReport = generateValidationReport(formData, uploadedFiles);
+    const validationReport = generateValidationReport(formData, uploadedFiles, surveyValidationOptions);
 
     return (
       <Modal
@@ -3175,7 +3180,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       
       // Enhanced validation using the new validation system (for non-image fields)
       console.log('🔍 Validating all survey fields (excluding images)...');
-      const validationResult = validateAllPages(formData, uploadedFiles);
+      const validationResult = validateAllPages(formData, uploadedFiles, surveyValidationOptions);
       
       // Filter out image field errors - we already validated images above
       const nonImageErrors = validationResult.missingFields.filter(field => field.fieldType !== 'image');
@@ -3644,6 +3649,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         </View>
       </View>
 
+      {!isAdminUser && (
       <View style={[styles.section, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
         <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Customer Name *</Text>
         <View style={styles.row}>
@@ -3677,6 +3683,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           </View>
         </View>
       </View>
+      )}
 
       <View style={[styles.section, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
         <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Address *</Text>
@@ -3743,6 +3750,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         />
       </View>
 
+      {!isAdminUser && (
+      <View>
       <ModernCard style={{ marginBottom: 20 }}>
         <View style={modernStyles.inputContainer}>
           <Text style={[modernStyles.inputLabel, { color: theme.primaryText }]}>
@@ -4308,6 +4317,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           )}
 
         </View>
+      )}
+      </View>
       )}
     </View>
   );
@@ -5596,7 +5607,10 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       8: ['shadingIssues', 'scaffolding', 'customerSignature', 'renewableExecutiveSignature'] // Page 8 has image fields (EV images conditional)
     };
     
-    let fields = coreRequiredFields[pageNumber] || [];
+    let fields = [...(coreRequiredFields[pageNumber] || [])];
+    if (pageNumber === 1 && isAdminUser) {
+      fields = fields.filter((f) => f !== 'homeOwnersAvailable');
+    }
     
     // For page 8, conditionally include EV images only if customer has EV charger
     if (pageNumber === 8 && formData.page8?.evChargerRequired === 'Yes') {
@@ -5639,7 +5653,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       const page1Data = pageData as any; // Type assertion for page 1 specific fields
       const hasUserInput = page1Data.customerFirstName || page1Data.customerLastName || 
                           page1Data.addressLine1 || page1Data.postcode || 
-                          page1Data.homeOwnersAvailable;
+                          (!isAdminUser && page1Data.homeOwnersAvailable);
       if (hasUserInput) {
         console.log(`🔍 Page ${pageNumber}: Has user input, considering complete`);
         return true;
@@ -5859,17 +5873,19 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       case 1:
         const page1Data = formData.page1;
         
-        // Check home owners availability
-        if (!page1Data?.homeOwnersAvailable) {
-          missingFields.push('Home Owners Availability');
-          fieldsToHighlight.add('homeOwnersAvailable');
-        }
-        
-        // Check appointment date/time if rebooking is needed
-        if (page1Data?.homeOwnersAvailable === HomeOwnerAvailability.NO_REBOOK_APPOINTMENT) {
-          if (!page1Data.appointmentDateTime) {
-            missingFields.push('New Appointment Date & Time');
-            fieldsToHighlight.add('appointmentDateTime');
+        if (!isAdminUser) {
+          // Check home owners availability
+          if (!page1Data?.homeOwnersAvailable) {
+            missingFields.push('Home Owners Availability');
+            fieldsToHighlight.add('homeOwnersAvailable');
+          }
+          
+          // Check appointment date/time if rebooking is needed
+          if (page1Data?.homeOwnersAvailable === HomeOwnerAvailability.NO_REBOOK_APPOINTMENT) {
+            if (!page1Data.appointmentDateTime) {
+              missingFields.push('New Appointment Date & Time');
+              fieldsToHighlight.add('appointmentDateTime');
+            }
           }
         }
         
@@ -5961,7 +5977,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
   };
 
   const validateCurrentPage = () => {
-    const validation = validatePage(currentPage, formData, uploadedFiles);
+    const validation = validatePage(currentPage, formData, uploadedFiles, surveyValidationOptions);
     
     // Filter out image field errors - images are optional and can be uploaded later
     const nonImageErrors = validation.missingFields.filter(field => field.fieldType !== 'image');

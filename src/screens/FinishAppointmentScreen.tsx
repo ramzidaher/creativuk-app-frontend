@@ -324,7 +324,7 @@ export default function FinishAppointmentScreen() {
                     styles.outcomeTitle,
                     { color: selectedOutcome === 'lost' ? theme.dangerButton : theme.primaryText }
                   ]}>
-                    Lost
+                    Quote
                   </Text>
                   <Text style={[styles.outcomeDescription, { color: theme.secondaryText }]}>
                     Customer declined the proposal

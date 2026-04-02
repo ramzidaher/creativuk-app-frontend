@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import BottomNavigation from '../components/BottomNavigation';
+import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
 interface RouteParams {
@@ -27,6 +28,7 @@ export default function ExpressConsentSigningScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
   const { opportunityId } = route.params as RouteParams;
+  const { user, isLoading: authLoading } = useAuth();
   const { theme, isDark, toggleTheme } = useTheme();
 
   const [step, setStep] = useState<'loading' | 'signing' | 'status'>('loading');
@@ -47,9 +49,14 @@ export default function ExpressConsentSigningScreen() {
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (user?.role === 'ADMIN') {
+      navigation.replace('BookingConfirmationSigning', { opportunityId });
+      return;
+    }
     loadCustomerDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authLoading, user?.role, opportunityId, navigation]);
 
   // Auto-poll status when on status step
   useEffect(() => {

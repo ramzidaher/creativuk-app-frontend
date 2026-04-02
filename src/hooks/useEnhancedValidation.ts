@@ -18,6 +18,11 @@ interface ValidationResult {
   pageErrors: { [pageNumber: number]: ValidationField[] };
 }
 
+export type SurveyValidationOptions = {
+  /** Field names to skip (e.g. admin-only UX hides homeowner questions on page 1) */
+  skipFieldNames?: string[];
+};
+
 export const useEnhancedValidation = () => {
   // Define all survey fields with their locations and requirements
   const surveyFields: ValidationField[] = [
@@ -81,12 +86,14 @@ export const useEnhancedValidation = () => {
   ];
 
   // Validate a specific page
-  const validatePage = useCallback((pageNumber: number, formData: any, uploadedFiles: any): ValidationResult => {
+  const validatePage = useCallback((pageNumber: number, formData: any, uploadedFiles: any, options?: SurveyValidationOptions): ValidationResult => {
+    const skipNames = new Set(options?.skipFieldNames ?? []);
     const pageFields = surveyFields.filter(field => field.pageNumber === pageNumber);
     const missingFields: ValidationField[] = [];
     const fieldsToHighlight = new Set<string>();
 
     for (const field of pageFields) {
+      if (skipNames.has(field.fieldName)) continue;
       if (!field.isRequired) continue;
 
       // Special case: Energy bill images are only required if hasEnergyBill is "Yes"
@@ -143,13 +150,13 @@ export const useEnhancedValidation = () => {
   }, []);
 
   // Validate all pages
-  const validateAllPages = useCallback((formData: any, uploadedFiles: any): ValidationResult => {
+  const validateAllPages = useCallback((formData: any, uploadedFiles: any, options?: SurveyValidationOptions): ValidationResult => {
     const allMissingFields: ValidationField[] = [];
     const allFieldsToHighlight = new Set<string>();
     const pageErrors: { [pageNumber: number]: ValidationField[] } = {};
 
     for (let pageNum = 1; pageNum <= 8; pageNum++) {
-      const pageValidation = validatePage(pageNum, formData, uploadedFiles);
+      const pageValidation = validatePage(pageNum, formData, uploadedFiles, options);
       
       if (!pageValidation.isValid) {
         allMissingFields.push(...pageValidation.missingFields);
@@ -177,8 +184,8 @@ export const useEnhancedValidation = () => {
   }, []);
 
   // Generate detailed validation report
-  const generateValidationReport = useCallback((formData: any, uploadedFiles: any) => {
-    const validation = validateAllPages(formData, uploadedFiles);
+  const generateValidationReport = useCallback((formData: any, uploadedFiles: any, options?: SurveyValidationOptions) => {
+    const validation = validateAllPages(formData, uploadedFiles, options);
     
     const report = {
       isValid: validation.isValid,

@@ -146,7 +146,7 @@ const WinLossStatsCard: React.FC<WinLossStatsCardProps> = ({
           </Text>
           <Text style={[styles.noDataText, { color: theme.secondaryText }]}>
             Starting now, your sales performance will be tracked automatically.{'\n'}
-            Data will appear here once you complete opportunities and mark them as won or lost.
+            Data will appear here once you complete opportunities and mark them as won or quote.
           </Text>
           <View style={[styles.infoBox, { backgroundColor: theme.primaryButton + '10', borderColor: theme.primaryButton + '30' }]}>
             <MaterialIcons name="info" size={16} color={theme.primaryButton} />
@@ -231,13 +231,13 @@ const WinLossStatsCard: React.FC<WinLossStatsCardProps> = ({
           </View>
         </View>
 
-        {/* Losses */}
+        {/* Quote (non-won) */}
         <View style={[styles.statRow, { borderBottomColor: theme.cardBorder }]}>
           <View style={styles.statLeft}>
             <View style={[styles.statIcon, { backgroundColor: theme.dangerButton }]}>
               <MaterialIcons name="cancel" size={16} color="white" />
             </View>
-            <Text style={[styles.statLabel, { color: theme.primaryText }]}>Lost</Text>
+            <Text style={[styles.statLabel, { color: theme.primaryText }]}>Quote</Text>
           </View>
           <View style={styles.statRight}>
             <Text style={[styles.statValue, { color: theme.primaryText }]}>{stats.lost}</Text>

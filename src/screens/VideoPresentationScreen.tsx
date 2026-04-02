@@ -973,7 +973,7 @@ export default function VideoPresentationScreen() {
             </View>
             
             <Text style={[styles.approvalTitle, { color: theme.primaryText }]}>
-              Assessment Approved Code:
+              Assessment Code:
             </Text>
             
             <View style={[styles.approvalCodeContainer, { backgroundColor: theme.tertiaryBackground, borderColor: theme.borderColor }]}>

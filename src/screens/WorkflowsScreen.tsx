@@ -48,7 +48,7 @@ interface WorkflowItem {
     email: string;
     role: string;
   };
-  outcomeStatus?: OpportunityOutcomeType | null; // Won/Lost status for admin view
+  outcomeStatus?: OpportunityOutcomeType | null; // Won/Quote (LOST) status for admin view
 }
 
 export default function WorkflowsScreen() {
@@ -95,7 +95,10 @@ export default function WorkflowsScreen() {
       if (workflowsResponse.success && workflowsResponse.data) {
         const workflows = workflowsResponse.data.map((workflow: any, index: number) => {
           
-          const currentStepData = workflow.steps?.find((step: any) => step.stepNumber === workflow.currentStep);
+          let currentStepData = workflow.steps?.find((step: any) => step.stepNumber === workflow.currentStep);
+          if (user?.role === 'ADMIN' && currentStepData?.stepType === 'EXPRESS_CONSENT') {
+            currentStepData = { ...currentStepData, stepType: 'BOOKING_CONFIRMATION' };
+          }
           const stepTitle = currentStepData ? getStepTitle(currentStepData.stepType) : 'Unknown Step';
           const stepDescription = currentStepData ? getStepDescription(currentStepData.stepType) : 'Processing progress step';
           
@@ -507,7 +510,7 @@ export default function WorkflowsScreen() {
                   {workflow.outcomeStatus === OpportunityOutcomeType.WON 
                     ? 'Won' 
                     : workflow.outcomeStatus === OpportunityOutcomeType.LOST
-                    ? 'Lost'
+                    ? 'Quote'
                     : workflow.outcomeStatus === OpportunityOutcomeType.ABANDONED
                     ? 'Abandoned'
                     : workflow.outcomeStatus === OpportunityOutcomeType.IN_PROGRESS

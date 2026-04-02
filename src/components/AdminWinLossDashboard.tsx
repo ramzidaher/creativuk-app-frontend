@@ -306,7 +306,7 @@ const AdminWinLossDashboard: React.FC<AdminWinLossDashboardProps> = ({
             <MaterialIcons name="cancel" size={14} color="white" />
           </View>
           <Text style={[styles.userStatValue, { color: theme.primaryText }]}>{item.lost}</Text>
-          <Text style={[styles.userStatLabel, { color: theme.secondaryText }]}>Lost</Text>
+          <Text style={[styles.userStatLabel, { color: theme.secondaryText }]}>Quote</Text>
         </View>
 
         <View style={styles.userStat}>
@@ -418,7 +418,7 @@ const AdminWinLossDashboard: React.FC<AdminWinLossDashboardProps> = ({
           </View>
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryValue, { color: theme.primaryText }]}>{totals.lost}</Text>
-            <Text style={[styles.summaryLabel, { color: theme.secondaryText }]}>Lost</Text>
+            <Text style={[styles.summaryLabel, { color: theme.secondaryText }]}>Quote</Text>
           </View>
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryValue, { color: theme.primaryText }]}>{totals.cancelled}</Text>

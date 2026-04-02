@@ -34,6 +34,7 @@ export default function SolarWorkflowScreen() {
   const route = useRoute();
   const { opportunityId, opportunity: passedOpportunity } = route.params as RouteParams;
   const { user, isAuthenticated } = useAuth();
+  const isAdminUser = user?.role === 'ADMIN';
   const { theme, isDark, toggleTheme } = useTheme();
   
   const [opportunity, setOpportunity] = useState<any | null>(null);
@@ -74,7 +75,7 @@ export default function SolarWorkflowScreen() {
     ]).catch(error => {
       console.error('🔍 SolarWorkflowScreen: Error loading initial data:', error);
     });
-  }, [opportunityId]);
+  }, [opportunityId, user?.role]);
 
   // Refresh step navigation setting when screen comes into focus
   useEffect(() => {
@@ -417,18 +418,20 @@ export default function SolarWorkflowScreen() {
           }
         }
 
-        // Add express consent step if it's missing (some backends may not yet return it in /steps)
-        const expressConsentStepExists = transformedSteps.some((step: any) => step.stepType === 'EXPRESS_CONSENT');
-        if (!expressConsentStepExists) {
-          console.log('🔍 SolarWorkflowScreen: Adding express consent step - not found in backend steps');
-          transformedSteps.push({
-            stepNumber: 9, // Placeholder - will be renumbered later
-            stepType: 'EXPRESS_CONSENT',
-            title: 'Express Consent Signing',
-            description: 'Sign the express consent form for work to commence',
-            required: true,
-            estimatedDuration: 10
-          });
+        // Add express consent step if it's missing (some backends may not yet return it in /steps). Admins skip this step in the UI.
+        if (!isAdminUser) {
+          const expressConsentStepExists = transformedSteps.some((step: any) => step.stepType === 'EXPRESS_CONSENT');
+          if (!expressConsentStepExists) {
+            console.log('🔍 SolarWorkflowScreen: Adding express consent step - not found in backend steps');
+            transformedSteps.push({
+              stepNumber: 9, // Placeholder - will be renumbered later
+              stepType: 'EXPRESS_CONSENT',
+              title: 'Express Consent Signing',
+              description: 'Sign the express consent form for work to commence',
+              required: true,
+              estimatedDuration: 10
+            });
+          }
         }
         
         // Sort steps to ensure proper order (now includes disclaimer step if needed)
@@ -463,6 +466,10 @@ export default function SolarWorkflowScreen() {
         if (!shouldShowDisclaimer) {
           finalSteps = finalSteps.filter((step: any) => step.stepType !== 'DISCLAIMER_SIGNING');
           console.log('🔍 SolarWorkflowScreen: Filtered out disclaimer step - user has energy bill');
+        }
+        if (isAdminUser) {
+          finalSteps = finalSteps.filter((step: any) => step.stepType !== 'EXPRESS_CONSENT');
+          console.log('🔍 SolarWorkflowScreen: Filtered out express consent step - admin user');
         }
         
         // Reassign step numbers based on the new order
@@ -1014,10 +1021,21 @@ export default function SolarWorkflowScreen() {
     const shouldEnforceStepOrder = !stepNavigationEnabled;
     
     if (shouldEnforceStepOrder) {
-      const stepProgress = workflowProgress?.steps.find((s: any) => s.stepNumber === stepNumber);
+      const stepProgress =
+        workflowProgress?.steps.find((s: any) => s.stepType === stepInfo?.stepType) ??
+        workflowProgress?.steps.find((s: any) => s.stepNumber === stepNumber);
       const isCompleted = stepProgress?.status === 'COMPLETED';
       const isSkipped = stepProgress?.status === 'SKIPPED';
-      const isCurrent = stepNumber === currentStep;
+      const currentStepMeta = workflowProgress?.steps?.find((s: any) => s.stepNumber === currentStep);
+      let isCurrent: boolean;
+      if (isAdminUser && currentStepMeta?.stepType === 'EXPRESS_CONSENT') {
+        isCurrent =
+          stepInfo?.stepType === 'BOOKING_CONFIRMATION' || stepInfo?.stepType === 'EMAIL_CONFIRMATION';
+      } else if (currentStepMeta?.stepType && stepInfo?.stepType) {
+        isCurrent = stepInfo.stepType === currentStepMeta.stepType;
+      } else {
+        isCurrent = stepNumber === currentStep;
+      }
       
       // First 3 steps (Survey, OpenSolar, Calculator) are always accessible
       const isFirstThreeSteps = stepInfo?.stepType === 'SITE_SURVEY' || 
@@ -1036,11 +1054,13 @@ export default function SolarWorkflowScreen() {
           return true; // First step is always accessible
         }
         
-        // Check all steps before this one
+        // Check all steps before this one (match progress by step type so it stays correct when steps are filtered)
         for (let i = 1; i < stepNumber; i++) {
-          const prevStepProgress = workflowProgress.steps.find((s: any) => s.stepNumber === i);
-          const prevStepStatus = prevStepProgress?.status;
           const prevStep = workflowSteps.find((s: any) => s.stepNumber === i);
+          const prevStepProgress = prevStep
+            ? workflowProgress.steps.find((s: any) => s.stepType === prevStep.stepType)
+            : undefined;
+          const prevStepStatus = prevStepProgress?.status;
           
           // Special handling for OpenSolar step - check if project is linked
           if (prevStep?.stepType === 'OPEN_SOLAR' && openSolarProjectId) {
@@ -1163,6 +1183,10 @@ export default function SolarWorkflowScreen() {
     }
 
     if (stepInfo?.stepType === 'EXPRESS_CONSENT') {
+      if (isAdminUser) {
+        navigation.navigate('BookingConfirmationSigning', { opportunityId });
+        return;
+      }
       console.log('🔍 Navigating to express consent signing screen');
       navigation.navigate('ExpressConsentSigning', { opportunityId });
       return;
@@ -1206,11 +1230,22 @@ export default function SolarWorkflowScreen() {
   };
 
   const renderStep = (step: any) => {
-    const stepProgress = workflowProgress?.steps.find((s: any) => s.stepNumber === step.stepNumber);
+    const stepProgress =
+      workflowProgress?.steps.find((s: any) => s.stepType === step.stepType) ??
+      workflowProgress?.steps.find((s: any) => s.stepNumber === step.stepNumber);
     const isCompleted = stepProgress?.status === 'COMPLETED';
     const isInProgress = stepProgress?.status === 'IN_PROGRESS';
     const isSkipped = stepProgress?.status === 'SKIPPED';
-    const isCurrent = step.stepNumber === currentStep;
+    const currentStepMeta = workflowProgress?.steps?.find((s: any) => s.stepNumber === currentStep);
+    let isCurrent: boolean;
+    if (isAdminUser && currentStepMeta?.stepType === 'EXPRESS_CONSENT') {
+      isCurrent =
+        step.stepType === 'BOOKING_CONFIRMATION' || step.stepType === 'EMAIL_CONFIRMATION';
+    } else if (currentStepMeta?.stepType) {
+      isCurrent = step.stepType === currentStepMeta.stepType;
+    } else {
+      isCurrent = step.stepNumber === currentStep;
+    }
     
     // Special handling for OpenSolar step - show as completed when project is linked
     const isOpenSolarStep = step.stepType === 'OPEN_SOLAR';
@@ -1236,9 +1271,11 @@ export default function SolarWorkflowScreen() {
       
       // Check all steps before this one
       for (let i = 1; i < step.stepNumber; i++) {
-        const prevStepProgress = workflowProgress.steps.find((s: any) => s.stepNumber === i);
-        const prevStepStatus = prevStepProgress?.status;
         const prevStep = workflowSteps.find((s: any) => s.stepNumber === i);
+        const prevStepProgress = prevStep
+          ? workflowProgress.steps.find((s: any) => s.stepType === prevStep.stepType)
+          : undefined;
+        const prevStepStatus = prevStepProgress?.status;
         
         // Special handling for OpenSolar step - check if project is linked
         if (prevStep?.stepType === 'OPEN_SOLAR' && openSolarProjectId) {
@@ -1543,7 +1580,7 @@ export default function SolarWorkflowScreen() {
                         : '#3b82f6'
                     }
                   ]}>
-                    {jobStatus === 'WON' ? '✓ Won' : jobStatus === 'LOST' ? '✗ Lost' : '⏳ In Progress'}
+                    {jobStatus === 'WON' ? '✓ Won' : jobStatus === 'LOST' ? '✗ Quote' : '⏳ In Progress'}
                   </Text>
                 )}
               </View>
@@ -1576,7 +1613,7 @@ export default function SolarWorkflowScreen() {
                   ) : (
                     <View style={styles.outcomeButtonContent}>
                       <Feather name="x" size={16} color="#ffffff" />
-                      <Text style={styles.outcomeButtonText}>Lost</Text>
+                      <Text style={styles.outcomeButtonText}>Quote</Text>
                     </View>
                   )}
                 </TouchableOpacity>

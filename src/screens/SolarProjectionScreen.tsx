@@ -1519,10 +1519,6 @@ export default function SolarProjectionScreen() {
           <Text style={[styles.metadataTitle, { color: theme.secondaryText }]}>Data Information</Text>
           <View style={[styles.metadataCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
              <View style={styles.metadataRow}>
-               <Text style={[styles.metadataLabel, { color: theme.secondaryText }]}>Source:</Text>
-               <Text style={[styles.metadataValue, { color: theme.primaryText }]}>{safeGet(solarData, 'metadata.sourceFile', 'N/A')}</Text>
-             </View>
-             <View style={styles.metadataRow}>
                <Text style={[styles.metadataLabel, { color: theme.secondaryText }]}>Sheet:</Text>
                <Text style={[styles.metadataValue, { color: theme.primaryText }]}>{safeGet(solarData, 'metadata.sheetName', 'N/A')}</Text>
              </View>
