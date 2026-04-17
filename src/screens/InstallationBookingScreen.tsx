@@ -74,7 +74,10 @@ export default function InstallationBookingScreen() {
     'Kanji': ['Phil'], // Updated: only Phil
     'Kenji': ['Darren', 'Nick'], // Updated: Darren and Nick
     'Alex': ['Phil', 'Darren', 'Nick'],
-    'James': ['Owen', 'Richard'] // Updated: James now has Owen and Richard instead of Jon
+    'James': ['Owen', 'Richard'], // Updated: James now has Owen and Richard instead of Jon
+    'Hamzah': ['Phil', 'Darren', 'Nick', 'Owen', 'Richard', 'Antonio'],
+    'Haider': ['Phil', 'Darren', 'Nick', 'Owen', 'Richard', 'Antonio'],
+    'Rafee': ['Phil', 'Darren', 'Nick', 'Owen', 'Richard', 'Antonio']
   };
 
   // Installer notes for booking duration (updated)
@@ -83,7 +86,8 @@ export default function InstallationBookingScreen() {
     'Darren': 'Install should be booked over two days',
     'Nick': 'Install should be booked over two days',
     'Owen': 'Install should be booked over two days', // New installer
-    'Richard': 'Install should be booked over two days' // New installer
+    'Richard': 'Install should be booked over two days', // New installer
+    'Antonio': 'Install should be booked over two days'
   };
 
   // Available installer calendars with notes
@@ -92,14 +96,15 @@ export default function InstallationBookingScreen() {
     { id: 'Darren', name: 'Darren Powell', color: '#388e3c', note: installerNotes['Darren'] },
     { id: 'Nick', name: 'Nicholas Goldson', color: '#7b1fa2', note: installerNotes['Nick'] },
     { id: 'Owen', name: 'Owen Shannon', color: '#f57c00', note: installerNotes['Owen'] },
-    { id: 'Richard', name: 'Richard Orchard', color: '#d32f2f', note: installerNotes['Richard'] }
+    { id: 'Richard', name: 'Richard Orchard', color: '#d32f2f', note: installerNotes['Richard'] },
+    { id: 'Antonio', name: 'Antonio Hadley', color: '#00897b', note: installerNotes['Antonio'] }
   ];
 
   // Check if user is a surveyor (has surveyor role or is in the surveyor list)
   const isSurveyor = useMemo(() => {
     if (!user?.name) return false;
     const userFirstName = user.name.split(' ')[0];
-    const surveyorNames = ['Andrew', 'Ion', 'Jordan', 'Onur', 'James', 'Kenji', 'Alex'];
+    const surveyorNames = ['Andrew', 'Ion', 'Jordan', 'Onur', 'James', 'Kenji', 'Alex', 'Hamzah', 'Haider', 'Rafee'];
     return surveyorNames.includes(userFirstName);
   }, [user?.name]);
 
@@ -165,7 +170,8 @@ export default function InstallationBookingScreen() {
       for (const calendar of calendars) {
         try {
             const token = await authApi.getAccessToken();
-            const apiUrl = `${process.env.EXPO_PUBLIC_API_BASE_URL || ' /api/'}/calendar/${calendar.id}/events?startDate=${startDate}&endDate=${endDate}`;
+            const apiBaseUrl = (process.env.EXPO_PUBLIC_API_BASE_URL || '/api').replace(/\/$/, '');
+            const apiUrl = `${apiBaseUrl}/calendar/${calendar.id}/events?startDate=${startDate}&endDate=${endDate}`;
             console.log('🔍 Fetching calendar events for:', calendar.id, 'from:', apiUrl);
             
             const response = await fetch(apiUrl, {
@@ -646,7 +652,8 @@ export default function InstallationBookingScreen() {
 
       console.log('Booking appointment with data:', bookingData);
 
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || ' /api/'}/calendar/book-appointment`, {
+      const apiBaseUrl = (process.env.EXPO_PUBLIC_API_BASE_URL || '/api').replace(/\/$/, '');
+      const response = await fetch(`${apiBaseUrl}/calendar/book-appointment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1427,7 +1434,7 @@ export default function InstallationBookingScreen() {
         <View style={styles.content}>
           {/* Select Installer */}
           <View style={styles.section}>
-          <View style={styles.sectionTitleContainer}>
+            <View style={styles.sectionTitleContainer}>
             <Text style={styles.sectionTitle}>Select Installer</Text>
             {user?.role === 'ADMIN' && (
               <View style={styles.adminBadge}>

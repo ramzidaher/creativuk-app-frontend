@@ -94,6 +94,7 @@ export interface SurveyPage1 {
   county: string;
   postcode: string;
   homeOwnersAvailable: HomeOwnerAvailability;
+  appointmentDurationConfirmed?: string;
   appointmentDateTime?: string;
 }
 
@@ -108,6 +109,10 @@ export interface SurveyPage3 {
   lengthOfStay?: string;
   movingPlans?: string;
   occupants?: string;
+  occupantsChangingSoon?: string;
+  extensionsPlanned?: string;
+  roofChangesAlterations?: string;
+  panelInstallationIssues?: string;
 }
 
 export interface SurveyPage4 {
@@ -181,6 +186,9 @@ export interface Survey {
   page3?: SurveyPage3;
   page4?: SurveyPage4;
   page5?: SurveyPage5;
+  page6?: SurveyPage6;
+  page7?: SurveyPage7;
+  page8?: SurveyPage8;
   createdAt: string;
   updatedAt: string;
   submittedAt?: string;

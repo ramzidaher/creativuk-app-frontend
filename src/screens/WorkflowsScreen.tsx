@@ -96,8 +96,14 @@ export default function WorkflowsScreen() {
         const workflows = workflowsResponse.data.map((workflow: any, index: number) => {
           
           let currentStepData = workflow.steps?.find((step: any) => step.stepNumber === workflow.currentStep);
-          if (user?.role === 'ADMIN' && currentStepData?.stepType === 'EXPRESS_CONSENT') {
-            currentStepData = { ...currentStepData, stepType: 'BOOKING_CONFIRMATION' };
+          if (
+            user?.role === 'ADMIN' &&
+            (
+              currentStepData?.stepType === 'BOOKING_CONFIRMATION' ||
+              currentStepData?.stepType === 'EMAIL_CONFIRMATION'
+            )
+          ) {
+            currentStepData = { ...currentStepData, stepType: 'PAYMENT' };
           }
           const stepTitle = currentStepData ? getStepTitle(currentStepData.stepType) : 'Unknown Step';
           const stepDescription = currentStepData ? getStepDescription(currentStepData.stepType) : 'Processing progress step';

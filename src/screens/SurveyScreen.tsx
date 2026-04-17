@@ -1347,6 +1347,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           county: parsedCounty || '',
           postcode: postcode || '',
           homeOwnersAvailable: HomeOwnerAvailability.YES_SKIP_NEXT,
+          appointmentDurationConfirmed: 'Yes',
           appointmentDateTime: appointmentDateTimeString,
         };
         
@@ -2285,6 +2286,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       updateFormData('page1', {
         date: currentDate,
         homeOwnersAvailable: 'YES_SKIP_NEXT',
+        appointmentDurationConfirmed: 'Yes',
         appointmentDateTime: `${currentDate} at 10:00 AM`
       });
 
@@ -3043,16 +3045,16 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         // Check survey data for images stored on server (previously saved)
         let imagesFromSurvey: any[] = [];
         if (field === 'energyBill') {
-          const page4Data = formData.page4;
-          const surveyPage4 = survey?.page4;
+          const page4Data = formData.page4 as any;
+          const surveyPage4 = survey?.page4 as any;
           imagesFromSurvey = page4Data?.[`${field}Files`] || surveyPage4?.[`${field}Files`] || [];
         } else if (page7Fields.includes(field)) {
-          const page7Data = formData.page7;
-          const surveyPage7 = survey?.page7;
-          imagesFromSurvey = page7Data?.[`${field}Files`] || (surveyPage7 as any)?.[`${field}Files`] || [];
+          const page7Data = formData.page7 as any;
+          const surveyPage7 = survey?.page7 as any;
+          imagesFromSurvey = page7Data?.[`${field}Files`] || surveyPage7?.[`${field}Files`] || [];
         } else {
-          const page5Data = formData.page5;
-          const surveyPage5 = survey?.page5;
+          const page5Data = formData.page5 as any;
+          const surveyPage5 = survey?.page5 as any;
           imagesFromSurvey = page5Data?.[`${field}Files`] || surveyPage5?.[`${field}Files`] || [];
         }
         
@@ -3774,10 +3776,29 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
             <Ionicons name="chevron-down" size={20} color={theme.secondaryText} />
           </TouchableOpacity>
         </View>
+
+        <View style={modernStyles.inputContainer}>
+          <Text style={[modernStyles.inputLabel, { color: theme.primaryText }]}>
+            Appointment will take up to 1hr 30mins <Text style={{ color: theme.dangerButton }}>*</Text>
+          </Text>
+          <TouchableOpacity
+            style={[modernStyles.dropdownWrapper, { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder }]}
+            onPress={() => {
+              setOpenDropdown('Appointment will take up to 1hr 30mins');
+              setShowDropdownModal(true);
+            }}
+          >
+            <Text style={[modernStyles.dropdownText, { color: theme.primaryText }]}>
+              {formData.page1.appointmentDurationConfirmed || 'Please Select'}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color={theme.secondaryText} />
+          </TouchableOpacity>
+        </View>
       </ModernCard>
 
-      {/* Only show appointment section if user selected "No, rebook appointment" */}
-      {formData.page1.homeOwnersAvailable === HomeOwnerAvailability.NO_REBOOK_APPOINTMENT && (
+      {/* Show rebooking if homeowners are unavailable or duration is not accepted */}
+      {(formData.page1.homeOwnersAvailable === HomeOwnerAvailability.NO_REBOOK_APPOINTMENT ||
+        formData.page1.appointmentDurationConfirmed === 'No') && (
         <View style={[styles.section, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
           <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>⏰ New Appointment Date & Time</Text>
           
@@ -4518,6 +4539,76 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
             >
               <Text style={[modernStyles.dropdownText, { color: theme.primaryText }]}>
                 {formData.page3.occupants || 'Please Select'}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color={theme.secondaryText} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Row 4: Future Occupants and Extensions */}
+        <View style={styles.twoColumnGrid}>
+          <View style={styles.column}>
+            <Text style={[styles.label, { color: theme.primaryText }]}>Are there any new occupants now or in the near future?</Text>
+            <TouchableOpacity
+              style={[modernStyles.dropdownWrapper, { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder }]}
+              onPress={() => {
+                setOpenDropdown('Are there any new occupants now or in the near future');
+                setShowDropdownModal(true);
+              }}
+            >
+              <Text style={[modernStyles.dropdownText, { color: theme.primaryText }]}>
+                {formData.page3.occupantsChangingSoon || 'Please Select'}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color={theme.secondaryText} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.column}>
+            <Text style={[styles.label, { color: theme.primaryText }]}>Any planned extensions?</Text>
+            <TouchableOpacity
+              style={[modernStyles.dropdownWrapper, { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder }]}
+              onPress={() => {
+                setOpenDropdown('Any planned extensions');
+                setShowDropdownModal(true);
+              }}
+            >
+              <Text style={[modernStyles.dropdownText, { color: theme.primaryText }]}>
+                {formData.page3.extensionsPlanned || 'Please Select'}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color={theme.secondaryText} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Row 5: Roof Changes and Panel Installation Issues */}
+        <View style={styles.twoColumnGrid}>
+          <View style={styles.column}>
+            <Text style={[styles.label, { color: theme.primaryText }]}>Any roof changes or alterations planned?</Text>
+            <TouchableOpacity
+              style={[modernStyles.dropdownWrapper, { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder }]}
+              onPress={() => {
+                setOpenDropdown('Any roof changes or alterations planned');
+                setShowDropdownModal(true);
+              }}
+            >
+              <Text style={[modernStyles.dropdownText, { color: theme.primaryText }]}>
+                {formData.page3.roofChangesAlterations || 'Please Select'}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color={theme.secondaryText} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.column}>
+            <Text style={[styles.label, { color: theme.primaryText }]}>Anything that may affect panels being installed?</Text>
+            <TouchableOpacity
+              style={[modernStyles.dropdownWrapper, { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder }]}
+              onPress={() => {
+                setOpenDropdown('Anything that may affect panels being installed');
+                setShowDropdownModal(true);
+              }}
+            >
+              <Text style={[modernStyles.dropdownText, { color: theme.primaryText }]}>
+                {formData.page3.panelInstallationIssues || 'Please Select'}
               </Text>
               <Ionicons name="chevron-down" size={20} color={theme.secondaryText} />
             </TouchableOpacity>
@@ -5597,7 +5688,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
     
     // Define core required fields for each page (minimum to consider page "started")
     const coreRequiredFields: { [key: number]: string[] } = {
-      1: ['customerFirstName', 'customerLastName', 'addressLine1', 'postcode', 'date', 'homeOwnersAvailable', 'renewableExecutiveLastName', 'renewableExecutiveFirstName'],
+      1: ['customerFirstName', 'customerLastName', 'addressLine1', 'postcode', 'date', 'homeOwnersAvailable', 'appointmentDurationConfirmed', 'renewableExecutiveLastName', 'renewableExecutiveFirstName'],
       2: ['propertyType', 'bedrooms', 'lengthOfStay', 'movingPlans', 'occupants', 'heatingType'],
       3: ['prepaidMeter', 'phaseMeter', 'epcRating', 'previousFunding', 'financialIssues', 'creditRating'],
       4: ['installationAvailability', 'roofTileType', 'solarBatteryStorage', 'evChargerRequired', 'optimisersRequired', 'scaffoldingRequired'],
@@ -5610,6 +5701,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
     let fields = [...(coreRequiredFields[pageNumber] || [])];
     if (pageNumber === 1 && isAdminUser) {
       fields = fields.filter((f) => f !== 'homeOwnersAvailable');
+      fields = fields.filter((f) => f !== 'appointmentDurationConfirmed');
     }
     
     // For page 8, conditionally include EV images only if customer has EV charger
@@ -5879,9 +5971,18 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
             missingFields.push('Home Owners Availability');
             fieldsToHighlight.add('homeOwnersAvailable');
           }
+
+          // Check appointment duration confirmation
+          if (!page1Data?.appointmentDurationConfirmed) {
+            missingFields.push('Appointment will take up to 1hr 30mins');
+            fieldsToHighlight.add('appointmentDurationConfirmed');
+          }
           
           // Check appointment date/time if rebooking is needed
-          if (page1Data?.homeOwnersAvailable === HomeOwnerAvailability.NO_REBOOK_APPOINTMENT) {
+          if (
+            page1Data?.homeOwnersAvailable === HomeOwnerAvailability.NO_REBOOK_APPOINTMENT ||
+            page1Data?.appointmentDurationConfirmed === 'No'
+          ) {
             if (!page1Data.appointmentDateTime) {
               missingFields.push('New Appointment Date & Time');
               fieldsToHighlight.add('appointmentDateTime');
@@ -7400,6 +7501,9 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
                     : formData.page1.homeOwnersAvailable === HomeOwnerAvailability.NO_REBOOK_APPOINTMENT
                     ? 'No, rebook appointment'
                     : '';
+                } else if (openDropdown === 'Appointment will take up to 1hr 30mins') {
+                  options = ['Yes', 'No'];
+                  currentValue = formData.page1.appointmentDurationConfirmed || '';
                 } else if (openDropdown === 'Property') {
                   options = ['House', 'Flat', 'Bungalow', 'Maisonette', 'Other'];
                   currentValue = formData.page3.property || '';
@@ -7418,6 +7522,18 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
                 } else if (openDropdown === 'How Many Occupants live in the property') {
                   options = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10+'];
                   currentValue = formData.page3.occupants || '';
+                } else if (openDropdown === 'Are there any new occupants now or in the near future') {
+                  options = ['Yes', 'No'];
+                  currentValue = formData.page3.occupantsChangingSoon || '';
+                } else if (openDropdown === 'Any planned extensions') {
+                  options = ['Yes', 'No'];
+                  currentValue = formData.page3.extensionsPlanned || '';
+                } else if (openDropdown === 'Any roof changes or alterations planned') {
+                  options = ['Yes', 'No'];
+                  currentValue = formData.page3.roofChangesAlterations || '';
+                } else if (openDropdown === 'Anything that may affect panels being installed') {
+                  options = ['Yes', 'No'];
+                  currentValue = formData.page3.panelInstallationIssues || '';
                 } else if (openDropdown === 'Heating Type') {
                   options = ['Gas', 'Electric', 'Oil', 'Heat Pump', 'Other'];
                   currentValue = formData.page4.heatingType || '';
@@ -7481,6 +7597,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
                           ? HomeOwnerAvailability.YES_SKIP_NEXT 
                           : HomeOwnerAvailability.NO_REBOOK_APPOINTMENT;
                         updateFormData('page1', { homeOwnersAvailable: value });
+                      } else if (openDropdown === 'Appointment will take up to 1hr 30mins') {
+                        updateFormData('page1', { appointmentDurationConfirmed: option });
                       } else if (openDropdown === 'Property') {
                         updateFormData('page3', { property: option });
                       } else if (openDropdown === 'Type of property') {
@@ -7493,6 +7611,14 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
                         updateFormData('page3', { movingPlans: option });
                       } else if (openDropdown === 'How Many Occupants live in the property') {
                         updateFormData('page3', { occupants: option });
+                      } else if (openDropdown === 'Are there any new occupants now or in the near future') {
+                        updateFormData('page3', { occupantsChangingSoon: option });
+                      } else if (openDropdown === 'Any planned extensions') {
+                        updateFormData('page3', { extensionsPlanned: option });
+                      } else if (openDropdown === 'Any roof changes or alterations planned') {
+                        updateFormData('page3', { roofChangesAlterations: option });
+                      } else if (openDropdown === 'Anything that may affect panels being installed') {
+                        updateFormData('page3', { panelInstallationIssues: option });
                       } else if (openDropdown === 'Heating Type') {
                         updateFormData('page4', { heatingType: option });
                       } else if (openDropdown === 'Do you have any of the following') {

@@ -16,7 +16,6 @@ import {
     View
 } from 'react-native';
 import BottomNavigation from '../components/BottomNavigation';
-import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { systemSettingsApi } from '../utils/api';
 // Digital signature components
@@ -31,9 +30,7 @@ export default function ContractSigningScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
   const { opportunityId } = route.params as RouteParams;
-  const { user } = useAuth();
   const { theme, isDark, toggleTheme } = useTheme();
-  const isAdminUser = user?.role === 'ADMIN';
   
   const [step, setStep] = useState<'loading' | 'selecting' | 'signing' | 'verification' | 'processing' | 'status'>('loading');
   const [signature, setSignature] = useState<string | null>(null);
@@ -1525,23 +1522,23 @@ export default function ContractSigningScreen() {
                       submissionId: submissionId,
                       status: 'completed'
                     });
-                    // Admins skip express consent; go to booking confirmation
+                    // Admins skip booking confirmation only; continue to express consent
                     navigation.navigate(
-                      isAdminUser ? 'BookingConfirmationSigning' : 'ExpressConsentSigning',
+                      'ExpressConsentSigning',
                       { opportunityId }
                     );
                   } catch (error) {
                     console.error('Error completing contract signing step:', error);
                     // Still navigate even if step completion fails
                     navigation.navigate(
-                      isAdminUser ? 'BookingConfirmationSigning' : 'ExpressConsentSigning',
+                      'ExpressConsentSigning',
                       { opportunityId }
                     );
                   }
                 }}
               >
                 <Text style={styles.nextButtonText}>
-                  {isAdminUser ? 'Next: Booking Confirmation' : 'Next: Express Consent'}
+                  Next: Express Consent
                 </Text>
                 <Ionicons name="arrow-forward" size={20} color="white" />
               </TouchableOpacity>

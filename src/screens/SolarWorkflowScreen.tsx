@@ -468,8 +468,12 @@ export default function SolarWorkflowScreen() {
           console.log('🔍 SolarWorkflowScreen: Filtered out disclaimer step - user has energy bill');
         }
         if (isAdminUser) {
-          finalSteps = finalSteps.filter((step: any) => step.stepType !== 'EXPRESS_CONSENT');
-          console.log('🔍 SolarWorkflowScreen: Filtered out express consent step - admin user');
+          finalSteps = finalSteps.filter(
+            (step: any) =>
+              step.stepType !== 'BOOKING_CONFIRMATION' &&
+              step.stepType !== 'EMAIL_CONFIRMATION'
+          );
+          console.log('🔍 SolarWorkflowScreen: Filtered out booking confirmation steps - admin user');
         }
         
         // Reassign step numbers based on the new order
@@ -1183,16 +1187,16 @@ export default function SolarWorkflowScreen() {
     }
 
     if (stepInfo?.stepType === 'EXPRESS_CONSENT') {
-      if (isAdminUser) {
-        navigation.navigate('BookingConfirmationSigning', { opportunityId });
-        return;
-      }
       console.log('🔍 Navigating to express consent signing screen');
       navigation.navigate('ExpressConsentSigning', { opportunityId });
       return;
     }
     
     if (stepInfo?.stepType === 'BOOKING_CONFIRMATION' || stepInfo?.stepType === 'EMAIL_CONFIRMATION') {
+      if (isAdminUser) {
+        navigation.navigate('Payment', { opportunityId });
+        return;
+      }
       console.log('🔍 Navigating to booking confirmation signing screen');
       navigation.navigate('BookingConfirmationSigning', { opportunityId });
       return;

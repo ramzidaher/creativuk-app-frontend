@@ -34,7 +34,6 @@ export default function OpenSolarProjectScreen() {
   
   console.log('OpenSolarProject: Opportunity:', opportunity?.name);
   
-  const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [openSolarProject, setOpenSolarProject] = useState<any>(null);
   const [isLinkingProject, setIsLinkingProject] = useState(false);
   const [manualProjectId, setManualProjectId] = useState('');
@@ -42,7 +41,7 @@ export default function OpenSolarProjectScreen() {
   const [isCompletingStep, setIsCompletingStep] = useState(false);
   
   // Search and link existing project states
-  const [searchStep, setSearchStep] = useState<'main' | 'search' | 'select' | 'create'>('main');
+  const [searchStep, setSearchStep] = useState<'main' | 'search' | 'select'>('main');
   const [searchAddress, setSearchAddress] = useState('');
   const [searchProjects, setSearchProjects] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -65,163 +64,6 @@ export default function OpenSolarProjectScreen() {
       }, 100);
     }
   }, []);
-
-  // OpenSolar configuration
-  const openSolarConfig = {
-            apiEndpoint: ' /api/opensolar-public'
-  };
-
-  // Get the address from the opportunity
-  const getProjectAddress = () => {
-    if (opportunity?.contactAddress) {
-      return opportunity.contactAddress;
-    }
-    if (opportunity?.address) {
-      return opportunity.address;
-    }
-    if (opportunity?.location) {
-      return opportunity.location;
-    }
-    return '';
-  };
-
-  // Get postcode from opportunity
-  const getProjectPostcode = () => {
-    if (opportunity?.contactPostcode) {
-      return opportunity.contactPostcode;
-    }
-    if (opportunity?.postcode) {
-      return opportunity.postcode;
-    }
-    return '';
-  };
-
-  // Create OpenSolar project via API
-  const createOpenSolarProject = async () => {
-    try {
-      setIsCreatingProject(true);
-      
-      const customerName = opportunity?.contact?.name || opportunity?.name || 'Guest User';
-      const customerEmail = opportunity?.contact?.email || opportunity?.email || '';
-      const customerPhone = opportunity?.contact?.phone || opportunity?.phone || '';
-
-      const projectData = {
-        name: opportunity?.name || 'Solar Project',
-        address: getProjectAddress(),
-        postcode: getProjectPostcode(),
-        customer_name: customerName,
-        customer_email: customerEmail,
-        customer_phone: customerPhone
-      };
-
-      const response = await fetch(`${openSolarConfig.apiEndpoint}/create-project-authenticated`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(projectData)
-      }); 
-
-      const result = await response.json();
-      
-      if (result.success) {
-        console.log('✅ OpenSolar project created successfully:', result.data);
-        
-        // Save the project to the database
-        try {
-          console.log('💾 Saving project to database...');
-          const { api } = await import('../utils/api');
-          const saveResponse: any = await api.post('/opensolar/save-project', {
-            opportunityId,
-            opensolarProjectId: result.data.project.id
-          });
-          
-          console.log('💾 Save project response:', saveResponse);
-          
-          if (saveResponse.success || (saveResponse.data && saveResponse.data.success)) {
-            console.log('✅ Project saved to database successfully');
-            
-            // Set the linked project
-            const linkedProject = {
-              id: result.data.project.id,
-              title: result.data.project.title || `Project ${result.data.project.id}`,
-              address: result.data.project.address,
-              isLinked: true
-            };
-            
-            setOpenSolarProject(linkedProject);
-            
-            // Show success message with better UX
-            Alert.alert(
-              '🎉 Project Created & Linked Successfully!', 
-              `Your new OpenSolar project has been created and linked to this opportunity!\n\nProject ID: ${result.data.project.id}\nTitle: ${result.data.project.title}\n\nYou can now open the design page to start designing your solar system.`,
-              [
-                {
-                  text: 'Open Design Now',
-                  onPress: () => {
-                    // Open the design page directly in OpenSolar
-                    const designUrl = `https://app.opensolar.com/projects/${result.data.project.id}/design`;
-                    if (Platform.OS === 'web') {
-                      window.open(designUrl, '_blank');
-                    } else {
-                      Linking.openURL(designUrl);
-                    }
-                  }
-                },
-                {
-                  text: 'Stay Here',
-                  style: 'cancel'
-                }
-              ]
-            );
-          } else {
-            console.log('⚠️ Failed to save project to database, but project was created in OpenSolar');
-            throw new Error('Failed to save project to database');
-          }
-        } catch (saveError: any) {
-          console.error('❌ Error saving project to database:', saveError);
-          
-          // Even if saving fails, we can still use the project
-          const linkedProject = {
-            id: result.data.project.id,
-            title: result.data.project.title || `Project ${result.data.project.id}`,
-            address: result.data.project.address,
-            isLinked: false // Mark as not linked to database
-          };
-          
-          setOpenSolarProject(linkedProject);
-          
-          Alert.alert(
-            '⚠️ Project Created (Database Save Failed)', 
-            `Your OpenSolar project was created successfully, but there was an issue saving it to the database.\n\nProject ID: ${result.data.project.id}\nTitle: ${result.data.project.title}\n\nYou can still use the project, but it may not be properly linked to this opportunity.`,
-            [
-              {
-                text: 'Open Design Now',
-                onPress: () => {
-                  const designUrl = `https://app.opensolar.com/projects/${result.data.project.id}/design`;
-                  if (Platform.OS === 'web') {
-                    window.open(designUrl, '_blank');
-                  } else {
-                    Linking.openURL(designUrl);
-                  }
-                }
-              },
-              {
-                text: 'OK',
-                style: 'cancel'
-              }
-            ]
-          );
-        }
-      } else {
-        throw new Error(result.message || 'Failed to create project');
-      }
-    } catch (error: any) {
-      console.error('❌ Error creating OpenSolar project:', error);
-      Alert.alert('Error', `Failed to create OpenSolar project: ${error.message}`);
-      setIsCreatingProject(false);
-    }
-  };
 
   // Search for existing OpenSolar projects
   const handleSearchProjects = () => {
@@ -566,19 +408,6 @@ export default function OpenSolarProjectScreen() {
     }
   };
 
-  // Create new project
-  const handleCreateProject = () => {
-    // This will trigger the project creation flow
-    setSearchStep('create');
-  };
-
-  // Reset project linking
-  const resetProject = () => {
-    setOpenSolarProject(null);
-    setShowManualLink(false);
-    setManualProjectId('');
-  };
-
   // Complete the OpenSolar step and navigate to next step
   const completeOpenSolarStep = async () => {
     // Prevent multiple calls
@@ -777,16 +606,6 @@ export default function OpenSolarProjectScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.secondaryButton, { borderColor: theme.primaryButton }]}
-              onPress={resetProject}
-            >
-              <Feather name="repeat" size={20} color={theme.primaryButton} />
-              <Text style={[styles.secondaryButtonText, { color: theme.primaryButton }]}>
-                Link Different Project
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
               style={[styles.secondaryButton, { borderColor: theme.cardBorder }]}
               onPress={() => setSearchStep('main')}
             >
@@ -834,24 +653,8 @@ export default function OpenSolarProjectScreen() {
             </View>
             
             <Text style={[styles.sectionSubtitle, { color: theme.secondaryText }]}>
-              Choose how you want to proceed with your OpenSolar project.
+              Search and link your existing OpenSolar project.
             </Text>
-
-            {/* Create New Project Option */}
-            <TouchableOpacity
-              style={[styles.primaryButton, { backgroundColor: theme.primaryButton }]}
-              onPress={createOpenSolarProject}
-              disabled={isCreatingProject}
-            >
-              {isCreatingProject ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <Feather name="plus-circle" size={20} color="#ffffff" />
-              )}
-              <Text style={styles.primaryButtonText}>
-                {isCreatingProject ? 'Creating Project...' : 'Create OpenSolar Project'}
-              </Text>
-            </TouchableOpacity>
 
             {/* Search Existing Project Option */}
             <TouchableOpacity
@@ -864,16 +667,6 @@ export default function OpenSolarProjectScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* Manual Link Option */}
-            <TouchableOpacity
-              style={[styles.secondaryButton, { borderColor: theme.primaryButton }]}
-              onPress={() => setShowManualLink(true)}
-            >
-              <Feather name="link" size={20} color={theme.primaryButton} />
-              <Text style={[styles.secondaryButtonText, { color: theme.primaryButton }]}>
-                Link to Existing Project
-              </Text>
-            </TouchableOpacity>
           </View>
         ) : searchStep === 'search' ? (
           // Search Projects Section
@@ -955,7 +748,7 @@ export default function OpenSolarProjectScreen() {
                 <Text style={[styles.noResultsSubtext, { color: theme.secondaryText }]}>
                   {searchError && searchError.includes('rate limit') 
                     ? 'OpenSolar API is temporarily unavailable due to high usage. Please try again in a few minutes.'
-                    : 'No projects were found for this address. You can either:'
+                    : 'No projects were found for this address.'
                   }
                 </Text>
                 
@@ -963,21 +756,11 @@ export default function OpenSolarProjectScreen() {
                   <View style={styles.noResultsOptions}>
                     <TouchableOpacity
                       style={[styles.optionButton, { backgroundColor: theme.primaryButton }]}
-                      onPress={() => setShowManualLink(true)}
+                      onPress={() => setSearchStep('search')}
                     >
-                      <Ionicons name="link" size={20} color="#ffffff" />
+                      <Ionicons name="refresh" size={20} color="#ffffff" />
                       <Text style={styles.optionButtonText}>
-                        Link Existing Project
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity
-                      style={[styles.optionButton, { backgroundColor: theme.cardBackground, borderColor: theme.primaryButton, borderWidth: 1 }]}
-                      onPress={handleCreateProject}
-                    >
-                      <Ionicons name="add-circle" size={20} color={theme.primaryButton} />
-                      <Text style={[styles.optionButtonText, { color: theme.primaryButton }]}>
-                        Create New Project
+                        Search Again
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -1034,75 +817,6 @@ export default function OpenSolarProjectScreen() {
             >
               <Feather name="arrow-left" size={20} color={theme.primaryText} />
               <Text style={[styles.searchBackButtonText, { color: theme.primaryText }]}>Back to Search</Text>
-            </TouchableOpacity>
-          </View>
-        ) : !openSolarProject ? (
-          // Project Creation Section
-          <View style={styles.section}>
-            <View style={[styles.sectionHeader, { backgroundColor: theme.cardBackground }]}>
-              <Ionicons name="sunny" size={32} color={theme.primaryButton} />
-              <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
-                Create New OpenSolar Project
-              </Text>
-            </View>
-            
-            <View style={[styles.projectInfo, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-              <Text style={[styles.infoLabel, { color: theme.secondaryText }]}>Project Name:</Text>
-              <Text style={[styles.infoValue, { color: theme.primaryText }]}>
-                {opportunity?.name || 'Solar Project'}
-              </Text>
-              
-              <Text style={[styles.infoLabel, { color: theme.secondaryText }]}>Address:</Text>
-              <Text style={[styles.infoValue, { color: theme.primaryText }]}>
-                {getProjectAddress() || 'Not specified'}
-              </Text>
-              
-              <Text style={[styles.infoLabel, { color: theme.secondaryText }]}>Postcode:</Text>
-              <Text style={[styles.infoValue, { color: theme.primaryText }]}>
-                {getProjectPostcode() || 'Not specified'}
-              </Text>
-              
-              <Text style={[styles.infoLabel, { color: theme.secondaryText }]}>Customer:</Text>
-              <Text style={[styles.infoValue, { color: theme.primaryText }]}>
-                {opportunity?.contact?.name || 'Guest User'}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.primaryButton, { backgroundColor: theme.primaryButton }]}
-              onPress={createOpenSolarProject}
-              disabled={isCreatingProject}
-            >
-              {isCreatingProject ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <Feather name="plus-circle" size={20} color="#ffffff" />
-              )}
-              <Text style={styles.primaryButtonText}>
-                {isCreatingProject ? 'Creating Project...' : 'Create OpenSolar Project'}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Search Existing Project Option */}
-            <TouchableOpacity
-              style={[styles.secondaryButton, { borderColor: theme.primaryButton }]}
-              onPress={handleSearchProjects}
-            >
-              <Feather name="search" size={20} color={theme.primaryButton} />
-              <Text style={[styles.secondaryButtonText, { color: theme.primaryButton }]}>
-                Search Existing Project
-              </Text>
-            </TouchableOpacity>
-
-            {/* Manual Link Option */}
-            <TouchableOpacity
-              style={[styles.secondaryButton, { borderColor: theme.primaryButton }]}
-              onPress={() => setShowManualLink(true)}
-            >
-              <Feather name="link" size={20} color={theme.primaryButton} />
-              <Text style={[styles.secondaryButtonText, { color: theme.primaryButton }]}>
-                Link to Existing Project
-              </Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -1170,16 +884,6 @@ export default function OpenSolarProjectScreen() {
               <Feather name="edit" size={20} color={theme.primaryButton} />
               <Text style={[styles.secondaryButtonText, { color: theme.primaryButton }]}>
                 Update Project ID
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.secondaryButton, { borderColor: theme.primaryButton }]}
-              onPress={resetProject}
-            >
-              <Feather name="repeat" size={20} color={theme.primaryButton} />
-              <Text style={[styles.secondaryButtonText, { color: theme.primaryButton }]}>
-                Link Different Project
               </Text>
             </TouchableOpacity>
 
