@@ -463,4 +463,53 @@ export interface OpportunityOutcomeData {
   value?: number;
   notes?: string;
   stageAtOutcome?: string;
-} 
+}
+
+export interface ReportSummaryItem {
+  opportunityId: string;
+  userId: string;
+  customerName: string | null;
+  value: number;
+  createdAt: string;
+}
+
+export interface ReportSummaryResponse {
+  scope: 'user' | 'all';
+  selectedUserId: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  stats: {
+    soldCount: number;
+    quotedCount: number;
+    appointmentsCount: number;
+    conversionRate: number | null;
+    totalValue: number;
+  };
+  items: ReportSummaryItem[];
+  byUser?: Array<{
+    userId: string;
+    userName: string;
+    userEmail: string | null;
+    userRole: string | null;
+    soldCount: number;
+    quotedCount: number;
+    appointmentsCount: number;
+    conversionRate: number | null;
+    totalValue: number;
+  }>;
+}
+
+export interface ReportTimeseriesRow {
+  month: string;
+  soldCount: number;
+  quotedCount: number;
+  appointmentsCount: number;
+  conversionRate: number | null;
+  totalValue: number;
+}
+
+export interface ReportTimeseriesResponse {
+  scope: 'user' | 'all';
+  selectedUserId: string | null;
+  rows: ReportTimeseriesRow[];
+}
