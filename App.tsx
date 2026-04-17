@@ -81,6 +81,7 @@ import SignComScreen from './src/screens/SignComScreen';
 import SignComWebScreen from './src/screens/SignComWebScreen';
 import SolarWorkflowScreen from './src/screens/SolarWorkflowScreen';
 import StatisticsAnalyticsScreen from './src/screens/StatisticsAnalyticsScreen';
+import ReportsScreen from './src/screens/ReportsScreen';
 import AdminUsersListScreen from './src/screens/AdminUsersListScreen';
 import AdminUserOpportunitiesScreen from './src/screens/AdminUserOpportunitiesScreen';
 import AdminOpportunityDetailsScreen from './src/screens/AdminOpportunityDetailsScreen';
@@ -286,6 +287,7 @@ export type RootStackParamList = {
   Payment: { opportunityId: string };
   WelcomeEmail: { opportunityId: string; opportunity?: any };
   FinishAppointment: { opportunityId: string; opportunity?: any };
+  Reports: undefined;
 };
 
 export type TabParamList = {
@@ -658,6 +660,24 @@ function ProfileScreen() {
                 </View>
               </TouchableOpacity>
             )}
+
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: theme.primaryButton }]}
+              onPress={() => navigation.navigate('Reports')}
+            >
+              <View style={styles.actionButtonContent}>
+                <View style={[styles.actionIcon, { backgroundColor: theme.primaryButton + '20' }]}>
+                  <Ionicons name="analytics" size={20} color={theme.primaryButton} />
+                </View>
+                <View style={styles.actionText}>
+                  <Text style={styles.actionTitle}>Reports</Text>
+                  <Text style={[styles.actionSubtitle, { color: theme.secondaryText }]}>
+                    View KPIs, trends, and export CSV
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={theme.secondaryText} />
+              </View>
+            </TouchableOpacity>
 
             {/* Admin Only - Admin Panel */}
             {isAdmin && (
@@ -1049,6 +1069,13 @@ function AppNavigator() {
           <Stack.Screen 
             name="AdminPanel" 
             component={AdminPanelScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen 
+            name="Reports" 
+            component={ReportsScreen}
             options={{
               headerShown: false,
             }}

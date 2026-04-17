@@ -2520,6 +2520,60 @@ export const adminAnalyticsApi = {
   }
 };
 
+export const reportsApi = {
+  async getSummary(startDate?: string, endDate?: string, userId?: string): Promise<ApiResponse<any>> {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    if (userId) params.append('userId', userId);
+    const query = params.toString();
+    return api.get<any>(`/reports/summary${query ? `?${query}` : ''}`);
+  },
+
+  async getTimeseries(startDate?: string, endDate?: string, userId?: string): Promise<ApiResponse<any>> {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    if (userId) params.append('userId', userId);
+    const query = params.toString();
+    return api.get<any>(`/reports/timeseries${query ? `?${query}` : ''}`);
+  },
+
+  async exportCsv(startDate?: string, endDate?: string, userId?: string): Promise<ApiResponse<{ filename: string; content: string }>> {
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        return { success: false, error: 'Authentication required' };
+      }
+    const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      if (userId) params.append('userId', userId);
+
+      const response = await fetch(buildApiUrl(`/reports/export.csv?${params.toString()}`), {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'ngrok-skip-browser-warning': 'true',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`CSV export failed: ${errorText}`);
+      }
+
+      const disposition = response.headers.get('content-disposition') || '';
+      const filenameMatch = disposition.match(/filename="([^"]+)"/);
+      const filename = filenameMatch?.[1] || `reports-${new Date().toISOString().slice(0, 10)}.csv`;
+      const content = await response.text();
+      return { success: true, data: { filename, content } };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'CSV export failed' };
+    }
+  }
+};
+
 // Admin Opportunity Details API
 export const adminOpportunityDetailsApi = {
   getAllUsersWithOpportunities: async (): Promise<ApiResponse<any>> => {
