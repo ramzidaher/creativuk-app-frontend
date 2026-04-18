@@ -564,7 +564,7 @@ function ProfileScreen() {
   const confirmNavigateToReports = () => {
     const title = 'Open reports?';
     const message =
-      'Reports contain confidential sales and performance data. Only continue if you are authorised to view this information.';
+      'Are you sure you want to open the reports?';
     // react-native-web: Alert.alert with multiple buttons often does not render on web — use window.confirm
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const ok = window.confirm(`${title}\n\n${message}`);
