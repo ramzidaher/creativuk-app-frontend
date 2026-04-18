@@ -315,6 +315,7 @@ export default function ReportsScreen() {
           </View>
         )}
       </ScrollView>
+      {/* Root must close SafeAreaView (not View) — matches opening tag above */}
     </SafeAreaView>
   );
 }
