@@ -132,7 +132,20 @@ export default function ReportsScreen() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        style={[
+          styles.scroll,
+          Platform.OS === 'web' && {
+            height: '100%',
+            maxHeight: '100%',
+          },
+        ]}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
+        showsVerticalScrollIndicator
+        scrollEventThrottle={16}
+      >
         <DateRangePicker
           startDate={startDate}
           endDate={endDate}
@@ -264,6 +277,8 @@ function StatCard({ label, value, color }: { label: string; value: string; color
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  /** Must fill space below header or ScrollView gets zero height and won’t scroll (especially on web). */
+  scroll: { flex: 1, minHeight: 0 },
   header: { paddingTop: 56, paddingBottom: 18, paddingHorizontal: 18, borderBottomWidth: 1 },
   title: { fontSize: 24, fontWeight: '700' },
   subtitle: { fontSize: 14, marginTop: 4 },
