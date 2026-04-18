@@ -562,18 +562,24 @@ function ProfileScreen() {
   const navigation = useNavigation<any>();
 
   const confirmNavigateToReports = () => {
-    Alert.alert(
-      'Open reports?',
-      'Reports contain confidential sales and performance data. Only continue if you are authorised to view this information.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Yes, continue',
-          onPress: () => navigation.navigate('Reports'),
-        },
-      ],
-      { cancelable: true },
-    );
+    const title = 'Open reports?';
+    const message =
+      'Reports contain confidential sales and performance data. Only continue if you are authorised to view this information.';
+    // react-native-web: Alert.alert with multiple buttons often does not render on web — use window.confirm
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const ok = window.confirm(`${title}\n\n${message}`);
+      if (ok) {
+        navigation.navigate('Reports');
+      }
+      return;
+    }
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Yes, continue',
+        onPress: () => navigation.navigate('Reports'),
+      },
+    ]);
   };
 
   const isAdmin = user?.role === 'ADMIN';
