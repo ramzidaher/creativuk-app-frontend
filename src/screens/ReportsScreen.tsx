@@ -137,6 +137,14 @@ export default function ReportsScreen() {
     return `${rate.toFixed(1)}%`;
   };
 
+  const formatPounds = (amount: number) =>
+    new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency: 'GBP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(amount);
+
   return (
     <SafeAreaView
       style={[
@@ -223,7 +231,7 @@ export default function ReportsScreen() {
         <View style={[styles.valueCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
           <Text style={[styles.valueLabel, { color: theme.secondaryText }]}>Total Value</Text>
           <Text style={[styles.valueAmount, { color: theme.primaryText }]}>
-            GBP {(summary?.stats.totalValue ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            {formatPounds(summary?.stats.totalValue ?? 0)}
           </Text>
         </View>
 
@@ -272,7 +280,7 @@ export default function ReportsScreen() {
               <View key={item.opportunityId} style={styles.dealRow}>
                 <Text style={[styles.dealName, { color: theme.primaryText }]}>{item.customerName || 'Unknown customer'}</Text>
                 <Text style={[styles.dealValue, { color: theme.successButton }]}>
-                  GBP {item.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  {formatPounds(item.value)}
                 </Text>
               </View>
             ))
@@ -295,7 +303,7 @@ export default function ReportsScreen() {
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={[styles.dealValue, { color: theme.successButton }]}>
-                      GBP {row.totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                      {formatPounds(row.totalValue)}
                     </Text>
                     <Text style={[styles.userMeta, { color: theme.secondaryText }]}>
                       {formatConversion(row.conversionRate)}
