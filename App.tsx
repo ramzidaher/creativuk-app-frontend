@@ -23,6 +23,7 @@ import {
 } from 'expo-status-bar';
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -559,7 +560,22 @@ function ProfileScreen() {
   const { logout, user } = useAuth();
   const { theme } = useTheme();
   const navigation = useNavigation<any>();
-  
+
+  const confirmNavigateToReports = () => {
+    Alert.alert(
+      'Open reports?',
+      'Reports contain confidential sales and performance data. Only continue if you are authorised to view this information.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes, continue',
+          onPress: () => navigation.navigate('Reports'),
+        },
+      ],
+      { cancelable: true },
+    );
+  };
+
   const isAdmin = user?.role === 'ADMIN';
   const isSurveyor = user?.role === 'SURVEYOR';
   
@@ -663,7 +679,7 @@ function ProfileScreen() {
 
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: theme.primaryButton }]}
-              onPress={() => navigation.navigate('Reports')}
+              onPress={confirmNavigateToReports}
             >
               <View style={styles.actionButtonContent}>
                 <View style={[styles.actionIcon, { backgroundColor: theme.primaryButton + '20' }]}>
