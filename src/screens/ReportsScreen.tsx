@@ -1,11 +1,24 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  Dimensions,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import DateRangePicker from '../components/DateRangePicker';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { reportsApi } from '../utils/api';
+
+const { width } = Dimensions.get('window');
 
 type SummaryData = {
   stats: {
@@ -43,6 +56,7 @@ type TimeseriesData = {
 };
 
 export default function ReportsScreen() {
+  const navigation = useNavigation();
   const { user } = useAuth();
   const { theme } = useTheme();
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -124,27 +138,58 @@ export default function ReportsScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.primaryBackground }]}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        { backgroundColor: theme.primaryBackground },
+        Platform.OS === 'web' && {
+          height: '100vh' as any,
+          maxHeight: '100vh' as any,
+          overflow: 'hidden',
+        },
+      ]}
+    >
       <View style={[styles.header, { borderBottomColor: theme.cardBorder, backgroundColor: theme.cardBackground }]}>
-        <Text style={[styles.title, { color: theme.primaryText }]}>Reports</Text>
-        <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
-          {isAdmin ? 'Company-wide reporting' : 'Your performance reporting'}
-        </Text>
+        <View style={styles.headerTop}>
+          <TouchableOpacity
+            style={[styles.backButton, { borderColor: theme.cardBorder, backgroundColor: theme.inputBackground }]}
+            onPress={() => navigation.goBack()}
+          >
+            <Feather name="arrow-left" size={22} color={theme.primaryText} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.headerText}>
+          <Text style={[styles.title, { color: theme.primaryText }]}>Reports</Text>
+          <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+            {isAdmin ? 'Company-wide reporting' : 'Your performance reporting'}
+          </Text>
+        </View>
       </View>
 
       <ScrollView
         style={[
-          styles.scroll,
+          styles.scrollView,
+          { backgroundColor: 'transparent' },
           Platform.OS === 'web' && {
             height: '100%',
             maxHeight: '100%',
           },
         ]}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[
+          styles.scrollContent,
+          Platform.OS === 'web' && {
+            minHeight: '100vh' as any,
+            paddingBottom: 100,
+          },
+        ]}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={theme.primaryButton} />}
+        showsVerticalScrollIndicator={Platform.OS === 'web'}
         nestedScrollEnabled
-        showsVerticalScrollIndicator
-        scrollEventThrottle={16}
+        scrollEnabled
+        bounces={Platform.OS !== 'web'}
+        alwaysBounceVertical={Platform.OS !== 'web'}
+        keyboardShouldPersistTaps="handled"
+        removeClippedSubviews={Platform.OS !== 'web'}
       >
         <DateRangePicker
           startDate={startDate}
@@ -262,7 +307,7 @@ export default function ReportsScreen() {
           </View>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -277,12 +322,38 @@ function StatCard({ label, value, color }: { label: string; value: string; color
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  /** Must fill space below header or ScrollView gets zero height and won’t scroll (especially on web). */
-  scroll: { flex: 1, minHeight: 0 },
-  header: { paddingTop: 56, paddingBottom: 18, paddingHorizontal: 18, borderBottomWidth: 1 },
-  title: { fontSize: 24, fontWeight: '700' },
-  subtitle: { fontSize: 14, marginTop: 4 },
-  content: { padding: 16, gap: 12, paddingBottom: 40 },
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 8 : 6,
+    paddingBottom: 18,
+    paddingHorizontal: width < 768 ? 16 : 20,
+    borderBottomWidth: 1,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  headerText: {
+    alignItems: 'center',
+  },
+  title: { fontSize: width < 768 ? 24 : 28, fontWeight: '800', textAlign: 'center' },
+  subtitle: { fontSize: 14, marginTop: 6, textAlign: 'center', fontWeight: '500' },
+  /** Same pattern as ProfileScreen / SolarWorkflowScreen — flex fills space under header so ScrollView scrolls. */
+  scrollView: {
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: width < 768 ? 16 : 20,
+    paddingTop: 12,
+  },
+  scrollContent: { gap: 12, paddingBottom: 48 },
   actions: { flexDirection: 'row', gap: 8 },
   actionButton: {
     flexDirection: 'row',
