@@ -970,19 +970,16 @@ export default function SolarWorkflowScreen() {
           console.warn('Record outcome failed:', recordResult.status === 'fulfilled' ? recordResult.value.error : recordResult.reason);
         }
 
-        // Mark the final step as completed (WELCOME_EMAIL step)
         const finishStep = await workflowApi.getWorkflowSteps();
-        
-        if (finishStep.success && finishStep.data) {
-          const step = finishStep.data.find((s: any) => s.stepType === 'WELCOME_EMAIL');
-          if (step) {
-            await workflowApi.completeStep(opportunityId, step.stepNumber, {
-              outcome: outcome,
-              organizedAt: new Date().toISOString(),
-              folderPath: (result as any).folderPath
-            });
-          }
-        }
+        const welcomeStepNumber =
+          finishStep.success && finishStep.data
+            ? finishStep.data.find((s: any) => s.stepType === 'WELCOME_EMAIL')?.stepNumber ?? 13
+            : 13;
+        await workflowApi.completeStep(opportunityId, welcomeStepNumber, {
+          outcome: outcome,
+          organizedAt: new Date().toISOString(),
+          folderPath: (result as any).folderPath,
+        });
         
         // Update job status
         setJobStatus(outcome.toUpperCase() as 'WON' | 'LOST');

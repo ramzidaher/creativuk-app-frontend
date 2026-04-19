@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { opportunitiesApi, opportunityOutcomesApi } from '../utils/api';
+import { OpportunityOutcomeType } from '../types';
 
 const { width, height } = Dimensions.get('window');
 
@@ -60,7 +62,7 @@ export default function FinishAppointmentScreen() {
       if (progressResponse.success && progressResponse.data) {
         surveyStep = progressResponse.data.steps?.find((s: any) => s.stepNumber === 1);
         calculatorStep = progressResponse.data.steps?.find((s: any) => s.stepNumber === 3);
-        contractStep = progressResponse.data.steps?.find((s: any) => s.stepNumber === 5);
+        contractStep = progressResponse.data.steps?.find((s: any) => s.stepNumber === 8);
         proposalStep = progressResponse.data.steps?.find((s: any) => s.stepNumber === 4);
       }
       
@@ -83,20 +85,28 @@ export default function FinishAppointmentScreen() {
       });
       
       if (result.success) {
-        // Mark the final step as completed
+        const outcomeType =
+          selectedOutcome === 'won' ? OpportunityOutcomeType.WON : OpportunityOutcomeType.LOST;
+        await Promise.allSettled([
+          opportunitiesApi.updateStatus(opportunityId, selectedOutcome),
+          opportunityOutcomesApi.recordOutcome({
+            ghlOpportunityId: opportunityId,
+            userId: user?.id ?? '',
+            outcome: outcomeType,
+          }),
+        ]);
+
         const finishStep = await workflowApi.getWorkflowSteps();
-        
-        if (finishStep.success && finishStep.data) {
-          const step = finishStep.data.find((s: any) => s.stepType === 'FINISH_APPOINTMENT');
-          if (step) {
-            await workflowApi.completeStep(opportunityId, step.stepNumber, {
-              outcome: selectedOutcome,
-              organizedAt: new Date().toISOString(),
-              folderPath: (result as any).folderPath
-            });
-          }
-        }
-        
+        const welcomeStepNumber =
+          finishStep.success && finishStep.data
+            ? finishStep.data.find((s: any) => s.stepType === 'WELCOME_EMAIL')?.stepNumber ?? 13
+            : 13;
+        await workflowApi.completeStep(opportunityId, welcomeStepNumber, {
+          outcome: selectedOutcome,
+          organizedAt: new Date().toISOString(),
+          folderPath: (result as any).folderPath,
+        });
+
         // Show success modal instead of alert
         setShowSuccessModal(true);
       } else {

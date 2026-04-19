@@ -44,6 +44,13 @@ type SummaryData = {
     conversionRate: number | null;
     totalValue: number;
   }>;
+  /** Admin-only: survey page 2 → contract / quote / 2h cap (not shown to surveyors). */
+  cycleTiming?: {
+    completedCount: number;
+    avgDurationSeconds: number | null;
+    medianDurationSeconds: number | null;
+    byEndReason: Record<string, number>;
+  };
 };
 
 type TimeseriesData = {
@@ -144,6 +151,17 @@ export default function ReportsScreen() {
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,
     }).format(amount);
+
+  const formatDurationSeconds = (seconds: number | null | undefined) => {
+    if (seconds === null || seconds === undefined || Number.isNaN(seconds)) return '—';
+    const s = Math.max(0, Math.floor(seconds));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${sec}s`;
+    return `${sec}s`;
+  };
 
   return (
     <SafeAreaView
@@ -314,6 +332,59 @@ export default function ReportsScreen() {
             )}
           </View>
         )}
+
+        {isAdmin && summary?.cycleTiming && (
+          <View style={[styles.sectionCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Appointment cycle time</Text>
+            <Text style={[styles.chartHint, { color: theme.secondaryText }]}>
+              Internal reporting only. Clock starts when survey page 2 is first saved; ends at contract signed (won), quote
+              (lost), or 2 hours maximum. Not shown to field reps.
+            </Text>
+            {summary.cycleTiming.completedCount === 0 ? (
+              <Text style={[styles.emptyText, { color: theme.secondaryText }]}>
+                No completed cycles in this date range (by end time).
+              </Text>
+            ) : (
+              <>
+                <View style={styles.cycleRow}>
+                  <Text style={[styles.dealName, { color: theme.secondaryText }]}>Completed cycles</Text>
+                  <Text style={[styles.dealValue, { color: theme.primaryText }]}>{summary.cycleTiming.completedCount}</Text>
+                </View>
+                <View style={styles.cycleRow}>
+                  <Text style={[styles.dealName, { color: theme.secondaryText }]}>Average duration</Text>
+                  <Text style={[styles.dealValue, { color: theme.primaryText }]}>
+                    {formatDurationSeconds(summary.cycleTiming.avgDurationSeconds)}
+                  </Text>
+                </View>
+                <View style={styles.cycleRow}>
+                  <Text style={[styles.dealName, { color: theme.secondaryText }]}>Median duration</Text>
+                  <Text style={[styles.dealValue, { color: theme.primaryText }]}>
+                    {formatDurationSeconds(summary.cycleTiming.medianDurationSeconds)}
+                  </Text>
+                </View>
+                <Text style={[styles.dealsCaption, { color: theme.secondaryText, marginTop: 6 }]}>By end reason</Text>
+                <View style={styles.cycleRow}>
+                  <Text style={[styles.dealName, { color: theme.secondaryText }]}>Contract signed</Text>
+                  <Text style={[styles.dealValue, { color: theme.primaryText }]}>
+                    {summary.cycleTiming.byEndReason?.WON_CONTRACT_SIGNED ?? 0}
+                  </Text>
+                </View>
+                <View style={styles.cycleRow}>
+                  <Text style={[styles.dealName, { color: theme.secondaryText }]}>Quoted</Text>
+                  <Text style={[styles.dealValue, { color: theme.primaryText }]}>
+                    {summary.cycleTiming.byEndReason?.LOST_QUOTED ?? 0}
+                  </Text>
+                </View>
+                <View style={styles.cycleRow}>
+                  <Text style={[styles.dealName, { color: theme.secondaryText }]}>2h cap</Text>
+                  <Text style={[styles.dealValue, { color: theme.primaryText }]}>
+                    {summary.cycleTiming.byEndReason?.TIMEOUT_2H ?? 0}
+                  </Text>
+                </View>
+              </>
+            )}
+          </View>
+        )}
       </ScrollView>
       {/* Root must close SafeAreaView (not View) — matches opening tag above */}
     </SafeAreaView>
@@ -402,4 +473,5 @@ const styles = StyleSheet.create({
   dealValue: { fontSize: 14, fontWeight: '700' },
   userRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   userMeta: { fontSize: 12, marginTop: 2 },
+  cycleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 });
