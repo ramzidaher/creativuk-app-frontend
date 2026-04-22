@@ -23,7 +23,7 @@ import {
 } from 'expo-status-bar';
 import {
   ActivityIndicator,
-  Alert,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -560,26 +560,10 @@ function ProfileScreen() {
   const { logout, user } = useAuth();
   const { theme } = useTheme();
   const navigation = useNavigation<any>();
+  const [showReportsConfirm, setShowReportsConfirm] = React.useState(false);
 
   const confirmNavigateToReports = () => {
-    const title = 'Open reports?';
-    const message =
-      'Are you sure you want to open the reports?';
-    // react-native-web: Alert.alert with multiple buttons often does not render on web — use window.confirm
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const ok = window.confirm(`${title}\n\n${message}`);
-      if (ok) {
-        navigation.navigate('Reports');
-      }
-      return;
-    }
-    Alert.alert(title, message, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Yes, continue',
-        onPress: () => navigation.navigate('Reports'),
-      },
-    ]);
+    setShowReportsConfirm(true);
   };
 
   const isAdmin = user?.role === 'ADMIN';
@@ -735,6 +719,39 @@ function ProfileScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={showReportsConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReportsConfirm(false)}
+      >
+        <View style={styles.confirmOverlay}>
+          <View style={[styles.confirmCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.confirmTitle, { color: theme.primaryText }]}>Open reports?</Text>
+            <Text style={[styles.confirmText, { color: theme.secondaryText }]}>
+              Are you sure you want to open the reports?
+            </Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={[styles.confirmButton, { borderColor: theme.cardBorder, backgroundColor: theme.inputBackground }]}
+                onPress={() => setShowReportsConfirm(false)}
+              >
+                <Text style={[styles.confirmButtonText, { color: theme.primaryText }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmButton, { backgroundColor: theme.primaryButton }]}
+                onPress={() => {
+                  setShowReportsConfirm(false);
+                  navigation.navigate('Reports');
+                }}
+              >
+                <Text style={[styles.confirmButtonText, { color: '#ffffff' }]}>Yes, continue</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1418,6 +1435,47 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginLeft: 8,
     letterSpacing: -0.2,
+  },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  confirmCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 18,
+  },
+  confirmTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  confirmText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  confirmActions: {
+    marginTop: 14,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  confirmButton: {
+    minWidth: 112,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+  },
+  confirmButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

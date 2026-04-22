@@ -25,12 +25,14 @@ type SummaryData = {
     soldCount: number;
     quotedCount: number;
     appointmentsCount: number;
+    satAppointmentsCount?: number;
     /** Percent sold vs appointments, or null when there are wins but no appointment rows in range. */
     conversionRate: number | null;
     totalValue: number;
   };
   items: Array<{
     opportunityId: string;
+    userId?: string | null;
     customerName: string | null;
     value: number;
   }>;
@@ -41,6 +43,7 @@ type SummaryData = {
     soldCount: number;
     quotedCount: number;
     appointmentsCount: number;
+    appointmentCustomers?: string[];
     conversionRate: number | null;
     totalValue: number;
   }>;
@@ -71,6 +74,7 @@ export default function ReportsScreen() {
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [series, setSeries] = useState<TimeseriesData | null>(null);
+  const [userSoldItems, setUserSoldItems] = useState<SummaryData['items']>([]);
 
   const isAdmin = user?.role === 'ADMIN';
   const startDateIso = useMemo(() => (startDate ? startDate.toISOString() : undefined), [startDate]);
@@ -78,9 +82,10 @@ export default function ReportsScreen() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [summaryRes, seriesRes] = await Promise.all([
+    const [summaryRes, seriesRes, mySummaryRes] = await Promise.all([
       reportsApi.getSummary(startDateIso, endDateIso),
       reportsApi.getTimeseries(startDateIso, endDateIso),
+      user?.id ? reportsApi.getSummary(startDateIso, endDateIso, user.id) : Promise.resolve(null),
     ]);
     if (!summaryRes.success) {
       Alert.alert('Reports', summaryRes.error || 'Failed to load reports');
@@ -94,8 +99,13 @@ export default function ReportsScreen() {
     }
     setSummary(summaryRes.data || null);
     setSeries(seriesRes.data || null);
+    if (mySummaryRes?.success) {
+      setUserSoldItems(mySummaryRes.data?.items || []);
+    } else {
+      setUserSoldItems((summaryRes.data?.items as SummaryData['items']) || []);
+    }
     setLoading(false);
-  }, [startDateIso, endDateIso]);
+  }, [startDateIso, endDateIso, user?.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -136,6 +146,15 @@ export default function ReportsScreen() {
 
   const allDeals = summary?.items ?? [];
   const topDeals = allDeals.slice(0, 8);
+  const myDeals = userSoldItems ?? [];
+  const myTopDeals = myDeals.slice(0, 8);
+  const userNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    (summary?.byUser || []).forEach((u) => {
+      map.set(u.userId, u.userName || 'Unknown');
+    });
+    return map;
+  }, [summary?.byUser]);
   const chartRows = series?.rows ?? [];
   const maxSold = Math.max(1, ...chartRows.map((row) => row.soldCount));
 
@@ -238,13 +257,22 @@ export default function ReportsScreen() {
         <View style={styles.grid}>
           <StatCard label="Sold" value={`${summary?.stats.soldCount ?? 0}`} color={theme.primaryButton} />
           <StatCard label="Quoted" value={`${summary?.stats.quotedCount ?? 0}`} color={theme.successButton} />
-          <StatCard label="Appointments" value={`${summary?.stats.appointmentsCount ?? 0}`} color={theme.secondaryButton} />
+          <StatCard
+            label={isAdmin ? 'Sat Appts' : 'Appointments'}
+            value={`${isAdmin ? summary?.stats.satAppointmentsCount ?? 0 : summary?.stats.appointmentsCount ?? 0}`}
+            color={theme.secondaryButton}
+          />
           <StatCard
             label="Conversion"
             value={formatConversion(summary?.stats.conversionRate)}
             color={theme.warningButton}
           />
         </View>
+        {isAdmin ? (
+          <Text style={[styles.dealsCaption, { color: theme.secondaryText }]}>
+            Admin conversion uses fully sat appointments only (quoted/won), excluding incomplete or rescheduled visits.
+          </Text>
+        ) : null}
 
         <View style={[styles.valueCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
           <Text style={[styles.valueLabel, { color: theme.secondaryText }]}>Total Value</Text>
@@ -285,17 +313,48 @@ export default function ReportsScreen() {
         </View>
 
         <View style={[styles.sectionCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-          <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Top deals</Text>
+          <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
+            {isAdmin ? 'Sold appointments (all users)' : 'Top deals'}
+          </Text>
           {allDeals.length > topDeals.length ? (
             <Text style={[styles.dealsCaption, { color: theme.secondaryText }]}>
               Showing {topDeals.length} of {allDeals.length} deals. Total value above includes all deals in range.
             </Text>
           ) : null}
-          {topDeals.length === 0 ? (
+          {(isAdmin ? allDeals.length : topDeals.length) === 0 ? (
             <Text style={[styles.emptyText, { color: theme.secondaryText }]}>No sold records in this range.</Text>
           ) : (
-            topDeals.map((item) => (
+            (isAdmin ? allDeals : topDeals).map((item) => (
               <View key={item.opportunityId} style={styles.dealRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.dealName, { color: theme.primaryText }]}>{item.customerName || 'Unknown customer'}</Text>
+                  {isAdmin ? (
+                    <Text style={[styles.userMeta, { color: theme.secondaryText }]}>
+                      Sold by: {item.userId ? userNameById.get(item.userId) || 'Unknown user' : 'Unknown user'}
+                    </Text>
+                  ) : null}
+                </View>
+                <Text style={[styles.dealValue, { color: theme.successButton }]}>{formatPounds(item.value)}</Text>
+              </View>
+            ))
+          )}
+        </View>
+
+        <View style={[styles.sectionCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+          <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Your sold customers</Text>
+          <Text style={[styles.dealsCaption, { color: theme.secondaryText }]}>
+            This list is always based on your own sold deals and customer names.
+          </Text>
+          {myDeals.length > myTopDeals.length ? (
+            <Text style={[styles.dealsCaption, { color: theme.secondaryText }]}>
+              Showing {myTopDeals.length} of {myDeals.length} sold records.
+            </Text>
+          ) : null}
+          {myTopDeals.length === 0 ? (
+            <Text style={[styles.emptyText, { color: theme.secondaryText }]}>No sold records for your user in this range.</Text>
+          ) : (
+            myTopDeals.map((item) => (
+              <View key={`my-${item.opportunityId}`} style={styles.dealRow}>
                 <Text style={[styles.dealName, { color: theme.primaryText }]}>{item.customerName || 'Unknown customer'}</Text>
                 <Text style={[styles.dealValue, { color: theme.successButton }]}>
                   {formatPounds(item.value)}
@@ -318,6 +377,11 @@ export default function ReportsScreen() {
                     <Text style={[styles.userMeta, { color: theme.secondaryText }]}>
                       {row.userRole || 'Unknown role'} - {row.soldCount} sold / {row.appointmentsCount} appts
                     </Text>
+                    {row.appointmentCustomers && row.appointmentCustomers.length > 0 ? (
+                      <Text style={[styles.userMeta, { color: theme.secondaryText }]}>
+                        Appt customers: {row.appointmentCustomers.join(', ')}
+                      </Text>
+                    ) : null}
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={[styles.dealValue, { color: theme.successButton }]}>
