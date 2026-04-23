@@ -20,8 +20,7 @@ import {
 import WinLossStatsCard from '../components/WinLossStatsCard';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { Appointment, OpportunitiesResponse } from '../types';
-import { opportunitiesApi, opportunityOutcomesApi } from '../utils/api';
+import { reportsApi } from '../utils/api';
 // React Native Paper components for automatic theme switching
 import { Switch } from 'react-native-paper';
 import MobileCanvasSignaturePad from '../components/MobileCanvasSignaturePad';
@@ -43,9 +42,8 @@ const DashboardScreen = () => {
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
   // State management
-  const [opportunitiesData, setOpportunitiesData] = useState<OpportunitiesResponse | null>(null);
   const [salesPerformanceData, setSalesPerformanceData] = useState<any>(null);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [previousSalesPerformanceData, setPreviousSalesPerformanceData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,11 +93,15 @@ const DashboardScreen = () => {
   // Get sales performance insights from real data
   const getSalesInsights = () => {
     if (salesPerformanceData) {
+      const stats = salesPerformanceData.stats || {};
+      const appointmentsMetric = isAdmin
+        ? (stats.satAppointmentsCount ?? stats.appointmentsCount ?? 0)
+        : (stats.appointmentsCount ?? 0);
       return {
-        appointments: salesPerformanceData.confirmedAppointments || 0, // Use confirmed appointments
-        sales: salesPerformanceData.won || 0, // Sales Won = won opportunities
-        conversionRate: salesPerformanceData.conversionRate || 0,
-        salesValue: salesPerformanceData.wonValue || 0,
+        appointments: appointmentsMetric,
+        sales: stats.soldCount || 0,
+        conversionRate: stats.conversionRate || 0,
+        salesValue: stats.totalValue || 0,
       };
     }
     
@@ -114,7 +116,7 @@ const DashboardScreen = () => {
 
   // Calculate trend data based on current vs previous period
   const getTrendData = () => {
-    if (!salesPerformanceData) {
+    if (!salesPerformanceData || !previousSalesPerformanceData) {
       return {
         appointments: { value: 0, isPositive: true },
         sales: { value: 0, isPositive: true },
@@ -123,12 +125,13 @@ const DashboardScreen = () => {
     }
 
     const current = getSalesInsights();
-    
-    // Mock previous period data - in real app, this would come from API
+    const previousStats = previousSalesPerformanceData.stats || {};
     const previous = {
-      appointments: Math.max(0, current.appointments - Math.floor(Math.random() * 5) - 1),
-      sales: Math.max(0, current.sales - Math.floor(Math.random() * 3) - 1),
-      conversionRate: Math.max(0, current.conversionRate - Math.floor(Math.random() * 10) - 1),
+      appointments: isAdmin
+        ? (previousStats.satAppointmentsCount ?? previousStats.appointmentsCount ?? 0)
+        : (previousStats.appointmentsCount ?? 0),
+      sales: previousStats.soldCount || 0,
+      conversionRate: previousStats.conversionRate || 0,
     };
 
     const calculateTrend = (current: number, previous: number) => {
@@ -144,80 +147,44 @@ const DashboardScreen = () => {
     };
   };
 
-  // Fetch sales performance data
-  const fetchSalesPerformanceData = async () => {
-    // Skip API calls if admin is logged in
-    if (isAdmin) {
-      return;
-    }
-    
-    try {
-      const response = await opportunityOutcomesApi.getUserStats();
-      if (response.success && response.data) {
-        setSalesPerformanceData(response.data);
-      }
-      // On failure (e.g. Failed to fetch), response.success is false; we just leave existing data unchanged
-    } catch (error) {
-      console.error('Error fetching sales performance data:', error);
-    }
+  const buildDateRange = (month: string, year: string) => {
+    const now = new Date();
+    const monthNum = month ? parseInt(month, 10) : now.getMonth() + 1;
+    const yearNum = year ? parseInt(year, 10) : now.getFullYear();
+    const start = new Date(yearNum, monthNum - 1, 1, 0, 0, 0, 0);
+    const end = new Date(yearNum, monthNum, 0, 23, 59, 59, 999);
+    return { start, end };
   };
 
-  // Add this function to fetch actual appointments
-  const fetchAppointmentsData = async () => {
-    // Skip API calls if admin is logged in
-    if (isAdmin) {
-      return { totalAppointments: 0, confirmedAppointments: 0, opportunities: [] };
-    }
-    
-    try {
-      console.log('🔍 Dashboard: Fetching appointments data...');
-      const response = await opportunitiesApi.getOpportunitiesWithAppointmentsUnified();
-      console.log('🔍 Dashboard: Appointments API response:', response);
-      
-      if (response.success && response.data) {
-        const opportunitiesWithAppointments = response.data.opportunities || [];
-        const confirmedAppointments = opportunitiesWithAppointments.filter(opp => 
-          opp.hasAppointment && opp.classification === 'CONFIRMED'
-        );
-        
-        console.log('🔍 Dashboard: Total opportunities with appointments:', opportunitiesWithAppointments.length);
-        console.log('🔍 Dashboard: Confirmed appointments:', confirmedAppointments.length);
-        
-        return {
-          totalAppointments: opportunitiesWithAppointments.length,
-          confirmedAppointments: confirmedAppointments.length,
-          opportunities: opportunitiesWithAppointments
-        };
-      }
-      return { totalAppointments: 0, confirmedAppointments: 0, opportunities: [] };
-    } catch (error) {
-      console.error('🔍 Dashboard: Error fetching appointments:', error);
-      return { totalAppointments: 0, confirmedAppointments: 0, opportunities: [] };
-    }
-  };
-
-
-  // Load dashboard data including sales performance
-  const fetchData = async () => {
+  // Load dashboard data using reporting API (same logic as Reports screen)
+  const fetchData = async (monthOverride?: string, yearOverride?: string) => {
     try {
       setError(null);
       setLoading(true);
-      
-      // Fetch both sales performance and appointments data
-      await Promise.all([
-        fetchSalesPerformanceData(),
-        fetchAppointmentsData().then(appointmentsData => {
-          setSalesPerformanceData((prev: any) => ({
-            ...prev,
-            ...appointmentsData
-          }));
-        })
+
+      const useMonth = monthOverride ?? selectedMonth;
+      const useYear = yearOverride ?? selectedYear;
+      const { start, end } = buildDateRange(useMonth, useYear);
+
+      const previousStart = new Date(start);
+      previousStart.setMonth(previousStart.getMonth() - 1);
+      const previousEnd = new Date(end);
+      previousEnd.setMonth(previousEnd.getMonth() - 1);
+
+      const targetUserId = isAdmin ? undefined : user?.id;
+      const [currentRes, previousRes] = await Promise.all([
+        reportsApi.getSummary(start.toISOString(), end.toISOString(), targetUserId),
+        reportsApi.getSummary(previousStart.toISOString(), previousEnd.toISOString(), targetUserId),
       ]);
-      
-      // Set data loaded
+
+      if (!currentRes.success) {
+        throw new Error(currentRes.error || 'Failed to load dashboard reporting');
+      }
+
+      setSalesPerformanceData(currentRes.data || null);
+      setPreviousSalesPerformanceData(previousRes.success ? previousRes.data || null : null);
       setDataLoaded(true);
       setLoading(false);
-      
     } catch (err) {
       console.error('Error loading dashboard:', err);
       setError('Failed to load dashboard');
@@ -229,8 +196,6 @@ const DashboardScreen = () => {
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchData();
-    // Also refresh win/loss stats specifically
-    await fetchSalesPerformanceData();
     // Force refresh of WinLossStatsCard
     setRefreshKey(prev => prev + 1);
     setRefreshing(false);
@@ -241,15 +206,13 @@ const DashboardScreen = () => {
     setSelectedMonth(month);
     setSelectedYear(year);
     setShowDatePicker(false);
-    setLoading(true);
-    await fetchData();
+    await fetchData(month, year);
   };
 
   // Reset to current month/year (mock)
   const resetToCurrentMonth = async () => {
     setSelectedMonth('');
     setSelectedYear('');
-    setLoading(true);
     await fetchData();
   };
 
@@ -439,13 +402,6 @@ const DashboardScreen = () => {
 
   // Load data on component mount with delay
   useEffect(() => {
-    // Skip API calls if admin is logged in
-    if (isAdmin) {
-      setDataLoaded(true);
-      setLoading(false);
-      return;
-    }
-    
     // Show dashboard immediately, load data in background
     const timer = setTimeout(() => {
       setLoading(true);
@@ -453,7 +409,7 @@ const DashboardScreen = () => {
     }, 100); // Small delay to show UI first
 
     return () => clearTimeout(timer);
-  }, [isAdmin]);
+  }, [isAdmin, user?.id]);
 
   const insights = getInsights();
 

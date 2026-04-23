@@ -2572,6 +2572,15 @@ export const reportsApi = {
       return { success: false, error: error instanceof Error ? error.message : 'CSV export failed' };
     }
   }
+  ,
+  async getAppointmentCycleReport(startDate?: string, endDate?: string, userId?: string): Promise<ApiResponse<any>> {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    if (userId) params.append('userId', userId);
+    const query = params.toString();
+    return api.get<any>(`/reports/appointment-cycle${query ? `?${query}` : ''}`);
+  }
 };
 
 // Admin Opportunity Details API

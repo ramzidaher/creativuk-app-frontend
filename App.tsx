@@ -83,6 +83,7 @@ import SignComWebScreen from './src/screens/SignComWebScreen';
 import SolarWorkflowScreen from './src/screens/SolarWorkflowScreen';
 import StatisticsAnalyticsScreen from './src/screens/StatisticsAnalyticsScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
+import AppointmentCycleTimeScreen from './src/screens/AppointmentCycleTimeScreen';
 import AdminUsersListScreen from './src/screens/AdminUsersListScreen';
 import AdminUserOpportunitiesScreen from './src/screens/AdminUserOpportunitiesScreen';
 import AdminOpportunityDetailsScreen from './src/screens/AdminOpportunityDetailsScreen';
@@ -289,6 +290,7 @@ export type RootStackParamList = {
   WelcomeEmail: { opportunityId: string; opportunity?: any };
   FinishAppointment: { opportunityId: string; opportunity?: any };
   Reports: undefined;
+  AppointmentCycleTime: undefined;
 };
 
 export type TabParamList = {
@@ -394,6 +396,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       
       // Other screens
       OpportunityDetails: 'opportunity/:opportunityId',
+      AppointmentCycleTime: 'reports/appointment-cycle',
       OpportunityManagement: 'opportunity-management',
       EditManualOpportunity: 'edit-manual-opportunity/:opportunityId',
       OpportunitiesWithAppointments: 'opportunities-with-appointments',
@@ -684,6 +687,26 @@ function ProfileScreen() {
                 <Ionicons name="chevron-forward" size={20} color={theme.secondaryText} />
               </View>
             </TouchableOpacity>
+
+            {isAdmin && (
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: theme.primaryButton }]}
+                onPress={() => navigation.navigate('AppointmentCycleTime')}
+              >
+                <View style={styles.actionButtonContent}>
+                  <View style={[styles.actionIcon, { backgroundColor: theme.primaryButton + '20' }]}>
+                    <Ionicons name="time" size={20} color={theme.primaryButton} />
+                  </View>
+                  <View style={styles.actionText}>
+                    <Text style={styles.actionTitle}>Appointment cycle time</Text>
+                    <Text style={[styles.actionSubtitle, { color: theme.secondaryText }]}>
+                      Detailed per-rep cycle duration reporting
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={theme.secondaryText} />
+                </View>
+              </TouchableOpacity>
+            )}
 
             {/* Admin Only - Admin Panel */}
             {isAdmin && (
@@ -1115,6 +1138,13 @@ function AppNavigator() {
           <Stack.Screen 
             name="Reports" 
             component={ReportsScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="AppointmentCycleTime"
+            component={AppointmentCycleTimeScreen}
             options={{
               headerShown: false,
             }}

@@ -16,7 +16,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import DateRangePicker from '../components/DateRangePicker';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { reportsApi } from '../utils/api';
+import { adminAnalyticsApi, reportsApi } from '../utils/api';
 
 const { width } = Dimensions.get('window');
 
@@ -75,17 +75,25 @@ export default function ReportsScreen() {
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [series, setSeries] = useState<TimeseriesData | null>(null);
   const [userSoldItems, setUserSoldItems] = useState<SummaryData['items']>([]);
+  const [adminUsers, setAdminUsers] = useState<Array<{ id: string; name: string; role?: string | null }>>([]);
+  const [selectedRepId, setSelectedRepId] = useState<string | null>(null);
 
   const isAdmin = user?.role === 'ADMIN';
+  const targetUserId = isAdmin ? selectedRepId || undefined : user?.id;
   const startDateIso = useMemo(() => (startDate ? startDate.toISOString() : undefined), [startDate]);
   const endDateIso = useMemo(() => (endDate ? endDate.toISOString() : undefined), [endDate]);
 
+  const selectedRepName = useMemo(() => {
+    if (!selectedRepId) return 'All reps';
+    return adminUsers.find((u) => u.id === selectedRepId)?.name || 'Selected rep';
+  }, [adminUsers, selectedRepId]);
+
   const load = useCallback(async () => {
     setLoading(true);
-    const [summaryRes, seriesRes, mySummaryRes] = await Promise.all([
-      reportsApi.getSummary(startDateIso, endDateIso),
-      reportsApi.getTimeseries(startDateIso, endDateIso),
-      user?.id ? reportsApi.getSummary(startDateIso, endDateIso, user.id) : Promise.resolve(null),
+    const [summaryRes, seriesRes, scopedSummaryRes] = await Promise.all([
+      reportsApi.getSummary(startDateIso, endDateIso, targetUserId),
+      reportsApi.getTimeseries(startDateIso, endDateIso, targetUserId),
+      targetUserId ? reportsApi.getSummary(startDateIso, endDateIso, targetUserId) : Promise.resolve(null),
     ]);
     if (!summaryRes.success) {
       Alert.alert('Reports', summaryRes.error || 'Failed to load reports');
@@ -99,18 +107,32 @@ export default function ReportsScreen() {
     }
     setSummary(summaryRes.data || null);
     setSeries(seriesRes.data || null);
-    if (mySummaryRes?.success) {
-      setUserSoldItems(mySummaryRes.data?.items || []);
+    if (scopedSummaryRes?.success) {
+      setUserSoldItems(scopedSummaryRes.data?.items || []);
     } else {
       setUserSoldItems((summaryRes.data?.items as SummaryData['items']) || []);
     }
     setLoading(false);
-  }, [startDateIso, endDateIso, user?.id]);
+  }, [startDateIso, endDateIso, targetUserId]);
+
+  const loadAdminUsers = useCallback(async () => {
+    if (!isAdmin) return;
+    const usersRes = await adminAnalyticsApi.getAllUsers();
+    if (!usersRes.success || !usersRes.data) {
+      return;
+    }
+    const rawUsers = Array.isArray(usersRes.data) ? usersRes.data : usersRes.data.users;
+    const reps = (Array.isArray(rawUsers) ? rawUsers : [])
+      .filter((u: any) => !!u?.id && u?.role !== 'ADMIN')
+      .map((u: any) => ({ id: String(u.id), name: String(u.name || u.email || 'Unknown'), role: u.role || null }));
+    setAdminUsers(reps);
+  }, [isAdmin]);
 
   useFocusEffect(
     useCallback(() => {
+      loadAdminUsers();
       load();
-    }, [load]),
+    }, [load, loadAdminUsers]),
   );
 
   const onDateRangeChange = (start: Date | null, end: Date | null) => {
@@ -119,7 +141,12 @@ export default function ReportsScreen() {
   };
 
   const handleExportCsv = async () => {
-    const csvRes = await reportsApi.exportCsv(startDateIso, endDateIso);
+    if (!isAdmin) {
+      Alert.alert('CSV Export', 'Export is available to admin users only.');
+      return;
+    }
+
+    const csvRes = await reportsApi.exportCsv(startDateIso, endDateIso, targetUserId);
     if (!csvRes.success || !csvRes.data) {
       Alert.alert('CSV Export', csvRes.error || 'Unable to export CSV');
       return;
@@ -171,17 +198,6 @@ export default function ReportsScreen() {
       maximumFractionDigits: 2,
     }).format(amount);
 
-  const formatDurationSeconds = (seconds: number | null | undefined) => {
-    if (seconds === null || seconds === undefined || Number.isNaN(seconds)) return '—';
-    const s = Math.max(0, Math.floor(seconds));
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    if (h > 0) return `${h}h ${m}m`;
-    if (m > 0) return `${m}m ${sec}s`;
-    return `${sec}s`;
-  };
-
   return (
     <SafeAreaView
       style={[
@@ -206,7 +222,9 @@ export default function ReportsScreen() {
         <View style={styles.headerText}>
           <Text style={[styles.title, { color: theme.primaryText }]}>Reports</Text>
           <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
-            {isAdmin ? 'Company-wide reporting' : 'Your performance reporting'}
+            {isAdmin
+              ? `Reporting scope: ${selectedRepId ? selectedRepName : 'Company-wide'}`
+              : 'Your performance reporting'}
           </Text>
         </View>
       </View>
@@ -243,15 +261,58 @@ export default function ReportsScreen() {
           placeholder="Select reporting range"
         />
 
+        {isAdmin ? (
+          <View style={[styles.sectionCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Rep filter</Text>
+            <Text style={[styles.dealsCaption, { color: theme.secondaryText }]}>
+              Select a rep to run appointments, sat appointments, quote/sold, conversion and value reporting.
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.repFilterRow}>
+              <TouchableOpacity
+                style={[
+                  styles.repChip,
+                  {
+                    backgroundColor: !selectedRepId ? theme.primaryButton : theme.inputBackground,
+                    borderColor: theme.cardBorder,
+                  },
+                ]}
+                onPress={() => setSelectedRepId(null)}
+              >
+                <Text style={[styles.repChipText, { color: !selectedRepId ? '#fff' : theme.primaryText }]}>All reps</Text>
+              </TouchableOpacity>
+              {adminUsers.map((rep) => {
+                const active = selectedRepId === rep.id;
+                return (
+                  <TouchableOpacity
+                    key={rep.id}
+                    style={[
+                      styles.repChip,
+                      {
+                        backgroundColor: active ? theme.primaryButton : theme.inputBackground,
+                        borderColor: theme.cardBorder,
+                      },
+                    ]}
+                    onPress={() => setSelectedRepId(rep.id)}
+                  >
+                    <Text style={[styles.repChipText, { color: active ? '#fff' : theme.primaryText }]}>{rep.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        ) : null}
+
         <View style={styles.actions}>
           <TouchableOpacity style={[styles.actionButton, { backgroundColor: theme.primaryButton }]} onPress={load}>
             <Feather name="refresh-cw" size={16} color="#fff" />
             <Text style={styles.actionButtonText}>{loading ? 'Loading...' : 'Refresh'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionButton, { backgroundColor: theme.successButton }]} onPress={handleExportCsv}>
-            <Feather name="download" size={16} color="#fff" />
-            <Text style={styles.actionButtonText}>Export CSV</Text>
-          </TouchableOpacity>
+          {isAdmin ? (
+            <TouchableOpacity style={[styles.actionButton, { backgroundColor: theme.successButton }]} onPress={handleExportCsv}>
+              <Feather name="download" size={16} color="#fff" />
+              <Text style={styles.actionButtonText}>Export CSV</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         <View style={styles.grid}>
@@ -341,9 +402,41 @@ export default function ReportsScreen() {
         </View>
 
         <View style={[styles.sectionCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+          <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
+            {isAdmin ? 'Appointment customers by rep' : 'Your appointment customers'}
+          </Text>
+          <Text style={[styles.dealsCaption, { color: theme.secondaryText }]}>
+            Shows customer names for each appointment used in the appointment count.
+          </Text>
+          {(summary?.byUser || []).length === 0 ? (
+            <Text style={[styles.emptyText, { color: theme.secondaryText }]}>No appointment customer data in this range.</Text>
+          ) : (
+            (isAdmin ? summary?.byUser || [] : (summary?.byUser || []).slice(0, 1)).map((row) => (
+              <View key={`appt-customers-${row.userId}`} style={styles.userRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.dealName, { color: theme.primaryText }]}>{row.userName}</Text>
+                  <Text style={[styles.userMeta, { color: theme.secondaryText }]}>
+                    {row.appointmentsCount} appointments
+                  </Text>
+                  {row.appointmentCustomers && row.appointmentCustomers.length > 0 ? (
+                    <Text style={[styles.userMeta, { color: theme.secondaryText }]}>
+                      Customers: {row.appointmentCustomers.join(', ')}
+                    </Text>
+                  ) : (
+                    <Text style={[styles.userMeta, { color: theme.secondaryText }]}>Customers: —</Text>
+                  )}
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+
+        <View style={[styles.sectionCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
           <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Your sold customers</Text>
           <Text style={[styles.dealsCaption, { color: theme.secondaryText }]}>
-            This list is always based on your own sold deals and customer names.
+            {isAdmin && selectedRepId
+              ? `This list is based on sold deals for ${selectedRepName}.`
+              : 'This list is always based on your own sold deals and customer names.'}
           </Text>
           {myDeals.length > myTopDeals.length ? (
             <Text style={[styles.dealsCaption, { color: theme.secondaryText }]}>
@@ -397,58 +490,6 @@ export default function ReportsScreen() {
           </View>
         )}
 
-        {isAdmin && summary?.cycleTiming && (
-          <View style={[styles.sectionCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-            <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Appointment cycle time</Text>
-            <Text style={[styles.chartHint, { color: theme.secondaryText }]}>
-              Internal reporting only. Clock starts when survey page 2 is first saved; ends at contract signed (won), quote
-              (lost), or 2 hours maximum. Not shown to field reps.
-            </Text>
-            {summary.cycleTiming.completedCount === 0 ? (
-              <Text style={[styles.emptyText, { color: theme.secondaryText }]}>
-                No completed cycles in this date range (by end time).
-              </Text>
-            ) : (
-              <>
-                <View style={styles.cycleRow}>
-                  <Text style={[styles.dealName, { color: theme.secondaryText }]}>Completed cycles</Text>
-                  <Text style={[styles.dealValue, { color: theme.primaryText }]}>{summary.cycleTiming.completedCount}</Text>
-                </View>
-                <View style={styles.cycleRow}>
-                  <Text style={[styles.dealName, { color: theme.secondaryText }]}>Average duration</Text>
-                  <Text style={[styles.dealValue, { color: theme.primaryText }]}>
-                    {formatDurationSeconds(summary.cycleTiming.avgDurationSeconds)}
-                  </Text>
-                </View>
-                <View style={styles.cycleRow}>
-                  <Text style={[styles.dealName, { color: theme.secondaryText }]}>Median duration</Text>
-                  <Text style={[styles.dealValue, { color: theme.primaryText }]}>
-                    {formatDurationSeconds(summary.cycleTiming.medianDurationSeconds)}
-                  </Text>
-                </View>
-                <Text style={[styles.dealsCaption, { color: theme.secondaryText, marginTop: 6 }]}>By end reason</Text>
-                <View style={styles.cycleRow}>
-                  <Text style={[styles.dealName, { color: theme.secondaryText }]}>Contract signed</Text>
-                  <Text style={[styles.dealValue, { color: theme.primaryText }]}>
-                    {summary.cycleTiming.byEndReason?.WON_CONTRACT_SIGNED ?? 0}
-                  </Text>
-                </View>
-                <View style={styles.cycleRow}>
-                  <Text style={[styles.dealName, { color: theme.secondaryText }]}>Quoted</Text>
-                  <Text style={[styles.dealValue, { color: theme.primaryText }]}>
-                    {summary.cycleTiming.byEndReason?.LOST_QUOTED ?? 0}
-                  </Text>
-                </View>
-                <View style={styles.cycleRow}>
-                  <Text style={[styles.dealName, { color: theme.secondaryText }]}>2h cap</Text>
-                  <Text style={[styles.dealValue, { color: theme.primaryText }]}>
-                    {summary.cycleTiming.byEndReason?.TIMEOUT_2H ?? 0}
-                  </Text>
-                </View>
-              </>
-            )}
-          </View>
-        )}
       </ScrollView>
       {/* Root must close SafeAreaView (not View) — matches opening tag above */}
     </SafeAreaView>
@@ -537,5 +578,12 @@ const styles = StyleSheet.create({
   dealValue: { fontSize: 14, fontWeight: '700' },
   userRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   userMeta: { fontSize: 12, marginTop: 2 },
-  cycleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  repFilterRow: { flexDirection: 'row', gap: 8 },
+  repChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  repChipText: { fontSize: 12, fontWeight: '600' },
 });

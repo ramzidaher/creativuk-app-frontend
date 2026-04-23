@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   FlatList,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -381,7 +382,21 @@ const AdminWinLossDashboard: React.FC<AdminWinLossDashboardProps> = ({
 
   return (
     <ScrollView
-      style={[styles.container, { backgroundColor: theme.primaryBackground }]}
+      style={[
+        styles.container,
+        { backgroundColor: theme.primaryBackground },
+        Platform.OS === 'web' && {
+          height: '100%',
+          maxHeight: '100%',
+        },
+      ]}
+      contentContainerStyle={[
+        styles.scrollContent,
+        Platform.OS === 'web' && {
+          minHeight: '100vh',
+          paddingBottom: 120,
+        },
+      ]}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -389,6 +404,13 @@ const AdminWinLossDashboard: React.FC<AdminWinLossDashboardProps> = ({
           tintColor={theme.primaryButton}
         />
       }
+      showsVerticalScrollIndicator={Platform.OS === 'web'}
+      nestedScrollEnabled
+      scrollEnabled
+      bounces={Platform.OS !== 'web'}
+      alwaysBounceVertical={Platform.OS !== 'web'}
+      keyboardShouldPersistTaps="handled"
+      removeClippedSubviews={Platform.OS !== 'web'}
     >
       {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.cardBackground }]}>
@@ -517,6 +539,10 @@ const AdminWinLossDashboard: React.FC<AdminWinLossDashboardProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    minHeight: 0,
+  },
+  scrollContent: {
+    paddingBottom: 80,
   },
   loadingContainer: {
     flex: 1,
