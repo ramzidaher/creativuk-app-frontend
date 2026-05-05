@@ -13,6 +13,7 @@ import {
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
@@ -21,6 +22,7 @@ import { useTheme } from '../context/ThemeContext';
 import { api, opportunitiesApi, opportunityOutcomesApi, systemSettingsApi, workflowApi } from '../utils/api';
 import { OpportunityOutcomeType } from '../types';
 import BottomNavigation from '../components/BottomNavigation';
+import CalculatorProgressService, { PricingOverrideOption } from '../services/CalculatorProgressService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -45,6 +47,12 @@ export default function SolarWorkflowScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showStepModal, setShowStepModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
+  const [showToolsModal, setShowToolsModal] = useState(false);
+  const [pricingOverrideOptions, setPricingOverrideOptions] = useState<PricingOverrideOption[]>([]);
+  const [loadingPricingOverrides, setLoadingPricingOverrides] = useState(false);
+  const [selectedCalculatorType, setSelectedCalculatorType] = useState<'off-peak' | 'flux' | 'epvs' | null>(null);
+  const [overridePriceInput, setOverridePriceInput] = useState('');
+  const [isApplyingOverride, setIsApplyingOverride] = useState(false);
   
   // Welcome Email state removed - now using dedicated WelcomeEmailScreen
   
@@ -915,6 +923,61 @@ export default function SolarWorkflowScreen() {
     }
   };
 
+  const openToolsModal = async () => {
+    setShowToolsModal(true);
+    setLoadingPricingOverrides(true);
+    setSelectedCalculatorType(null);
+    setOverridePriceInput('');
+    try {
+      const options = await CalculatorProgressService.getPricingOverrideOptions(opportunityId);
+      setPricingOverrideOptions(options);
+      if (options.length > 0) {
+        setSelectedCalculatorType(options[0].calculatorType);
+        setOverridePriceInput(options[0].currentPrice || '');
+      }
+    } catch (error) {
+      console.error('Error loading pricing override options:', error);
+      Alert.alert('Error', 'Failed to load calculator pricing data');
+    } finally {
+      setLoadingPricingOverrides(false);
+    }
+  };
+
+  const applyPriceOverride = async () => {
+    if (!selectedCalculatorType) {
+      Alert.alert('Select Calculator', 'Please select a calculator first.');
+      return;
+    }
+    const parsed = Number(overridePriceInput);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      Alert.alert('Invalid Price', 'Please enter a valid non-negative number.');
+      return;
+    }
+    setIsApplyingOverride(true);
+    try {
+      const result = await CalculatorProgressService.overrideCalculatorPrice(
+        opportunityId,
+        selectedCalculatorType,
+        parsed
+      );
+      if (!result.success) {
+        Alert.alert('Failed', result.message || 'Could not override price.');
+        return;
+      }
+      if (result.warning) {
+        Alert.alert('Updated with warning', `${result.message}\n\n${result.warning}`);
+      } else {
+        Alert.alert('Success', result.message || 'Price overridden successfully.');
+      }
+      await openToolsModal();
+    } catch (error) {
+      console.error('Error applying price override:', error);
+      Alert.alert('Error', 'Failed to override price.');
+    } finally {
+      setIsApplyingOverride(false);
+    }
+  };
+
   // Handle outcome selection (same logic as FinishAppointmentScreen)
   const handleOutcomeSelect = async (outcome: 'won' | 'lost') => {
     try {
@@ -1644,6 +1707,16 @@ export default function SolarWorkflowScreen() {
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.iconButton, { backgroundColor: isDark ? '#1e293b' : '#f8fafc' }]} 
+              onPress={openToolsModal}
+            >
+              <Feather 
+                name="tool" 
+                size={20} 
+                color={theme.secondaryText} 
+              />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.iconButton, { backgroundColor: isDark ? '#1e293b' : '#f8fafc' }]} 
               onPress={() => setShowResetModal(true)}
             >
               <Feather 
@@ -1892,6 +1965,79 @@ export default function SolarWorkflowScreen() {
                   <Text style={[styles.secondaryButtonText, { color: theme.secondaryText }]}>Cancel</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showToolsModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowToolsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.primaryText }]}>Tools</Text>
+              <TouchableOpacity onPress={() => setShowToolsModal(false)} style={styles.closeButton}>
+                <Feather name="x" size={24} color={theme.secondaryText} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalBody}>
+              <Text style={[styles.modalDescription, { color: theme.secondaryText }]}>
+                Override a Price
+              </Text>
+              {loadingPricingOverrides ? (
+                <ActivityIndicator size="small" color={theme.primaryButton} />
+              ) : pricingOverrideOptions.length === 0 ? (
+                <Text style={{ color: theme.secondaryText }}>No calculators with pricing found for this opportunity.</Text>
+              ) : (
+                <View style={{ gap: 10 }}>
+                  {pricingOverrideOptions.map((opt) => (
+                    <TouchableOpacity
+                      key={opt.calculatorType}
+                      style={[
+                        styles.secondaryButton,
+                        {
+                          backgroundColor: theme.cardBackground,
+                          borderColor: selectedCalculatorType === opt.calculatorType ? theme.primaryButton : theme.cardBorder,
+                        },
+                      ]}
+                      onPress={() => {
+                        setSelectedCalculatorType(opt.calculatorType);
+                        setOverridePriceInput(opt.currentPrice || '');
+                      }}
+                    >
+                      <Text style={[styles.secondaryButtonText, { color: theme.primaryText }]}>
+                        {opt.calculatorType} - current: {opt.currentPrice ?? 'N/A'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                  <TextInput
+                    value={overridePriceInput}
+                    onChangeText={setOverridePriceInput}
+                    placeholder="Enter new price"
+                    keyboardType="numeric"
+                    style={[
+                      styles.formInput,
+                      { borderColor: theme.cardBorder, color: theme.primaryText, backgroundColor: theme.primaryBackground },
+                    ]}
+                    placeholderTextColor={theme.tertiaryText}
+                  />
+                  <TouchableOpacity
+                    style={[styles.actionButton, { backgroundColor: theme.primaryButton }]}
+                    onPress={applyPriceOverride}
+                    disabled={isApplyingOverride}
+                  >
+                    {isApplyingOverride ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={[styles.actionButtonText, { color: '#fff' }]}>Apply Override</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           </View>
         </View>

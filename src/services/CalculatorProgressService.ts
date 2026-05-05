@@ -78,6 +78,13 @@ export interface ChangeDetectionResult {
   newHash: string;
 }
 
+export interface PricingOverrideOption {
+  calculatorType: 'off-peak' | 'flux' | 'epvs';
+  currentPrice: string | null;
+  hasPricingData: boolean;
+  lastSavedAt?: string;
+}
+
 class CalculatorProgressService {
   /**
    * Get current user ID from stored user data
@@ -513,6 +520,57 @@ class CalculatorProgressService {
       return {
         success: false,
         message: `Error submitting calculator: ${error.message}`,
+      };
+    }
+  }
+
+  async getPricingOverrideOptions(opportunityId: string): Promise<PricingOverrideOption[]> {
+    try {
+      const userId = await this.getUserId();
+      const response = await api.get(
+        `/calculator-progress/tools/pricing-overrides?userId=${encodeURIComponent(userId)}&opportunityId=${encodeURIComponent(opportunityId)}`
+      );
+      const responseData = response.data as any;
+      if (response.success && responseData?.success && Array.isArray(responseData.data)) {
+        return responseData.data as PricingOverrideOption[];
+      }
+      return [];
+    } catch (error) {
+      console.error('Error getting pricing override options:', error);
+      return [];
+    }
+  }
+
+  async overrideCalculatorPrice(
+    opportunityId: string,
+    calculatorType: 'off-peak' | 'flux' | 'epvs',
+    price: number
+  ): Promise<{ success: boolean; message: string; warning?: string }> {
+    try {
+      const userId = await this.getUserId();
+      const response = await api.put('/calculator-progress/tools/pricing-overrides', {
+        userId,
+        opportunityId,
+        calculatorType,
+        price,
+      });
+      const responseData = response.data as any;
+      if (response.success && responseData) {
+        return {
+          success: !!responseData.success,
+          message: responseData.message || 'Request processed',
+          warning: responseData.warning,
+        };
+      }
+      return {
+        success: false,
+        message: response.error || 'Failed to override price',
+      };
+    } catch (error: any) {
+      console.error('Error overriding calculator price:', error);
+      return {
+        success: false,
+        message: error?.message || 'Failed to override price',
       };
     }
   }
