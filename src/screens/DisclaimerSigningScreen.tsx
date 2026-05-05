@@ -52,8 +52,8 @@ export default function DisclaimerSigningScreen() {
     dividerColor: '#e9ecef',
   };
   
-  // Step flow: loading -> confirmation -> sending -> status
-  const [step, setStep] = useState<'loading' | 'confirmation' | 'sending' | 'status'>('loading');
+  // Step flow: loading -> confirmation -> sending -> verification -> status
+  const [step, setStep] = useState<'loading' | 'confirmation' | 'sending' | 'verification' | 'status'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   
@@ -62,6 +62,9 @@ export default function DisclaimerSigningScreen() {
   
   // DocuSeal state
   const [templateId, setTemplateId] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [embeddedFormUrl, setEmbeddedFormUrl] = useState<string | null>(null);
+  const [formBuilderToken, setFormBuilderToken] = useState<string | null>(null);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [signingUrl, setSigningUrl] = useState<string | null>(null);
   const [signingStatus, setSigningStatus] = useState<'pending' | 'sent' | 'opened' | 'completed' | 'declined'>('pending');
@@ -70,11 +73,27 @@ export default function DisclaimerSigningScreen() {
   const [isSending, setIsSending] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [isLoadingCustomerDetails, setIsLoadingCustomerDetails] = useState(true);
+  const [sendPhase, setSendPhase] = useState<'creating_template' | 'sending_submission'>('creating_template');
   
   // Customer details state
   const [customerName, setCustomerName] = useState<string>('Disclaimer Signer');
   const [customerEmail, setCustomerEmail] = useState<string>('');
   const [overrideCustomerEmail, setOverrideCustomerEmail] = useState<string>('');
+
+  const normalizeDocusealUrl = (url?: string | null): string | null => {
+    if (!url) return null;
+    const trimmed = url.trim();
+    if (!trimmed) return null;
+
+    // Handle malformed values returned by backend like "https:/.docuseal.eu/..."
+    if (trimmed.startsWith('https:/.')) {
+      return trimmed.replace('https:/.', 'https://');
+    }
+    if (trimmed.startsWith('http:/.')) {
+      return trimmed.replace('http:/.', 'http://');
+    }
+    return trimmed;
+  };
 
   useEffect(() => {
     // Load customer details and show confirmation screen
@@ -220,8 +239,8 @@ export default function DisclaimerSigningScreen() {
     }
   };
 
-  // Handle sending disclaimer from confirmation screen
-  const handleSendDisclaimer = async () => {
+  // Handle creating disclaimer template from confirmation screen
+  const handleCreateDisclaimerTemplate = async () => {
     // Use override email if provided, otherwise use loaded value
     const finalCustomerEmail = overrideCustomerEmail.trim() || customerEmail;
 
@@ -237,79 +256,122 @@ export default function DisclaimerSigningScreen() {
       return;
     }
 
-    await sendDisclaimer(customerName, finalCustomerEmail);
+    await createDisclaimerTemplate(customerName, finalCustomerEmail);
   };
 
-  // DocuSeal: Send disclaimer directly (creates template and submission in one call)
-  const sendDisclaimer = async (name: string, email: string) => {
+  // Step 1: Create disclaimer template for verification
+  const createDisclaimerTemplate = async (name: string, email: string) => {
     if (isSending) return;
 
     setIsSending(true);
+    setSendPhase('creating_template');
     setError(null);
     setStep('sending');
 
     try {
       const { api } = await import('../utils/api');
       
-      console.log('🔍 Sending DocuSeal disclaimer...');
+      console.log('🔍 Creating DocuSeal disclaimer template...');
       
-      // Prepare request body - use the /docuseal/disclaimer route that creates and sends in one go
+      // Prepare request body for template creation/verification
       const requestBody = {
         opportunityId,
-        customerData: {
-          name: name,
-          email: email
-        },
         customerName: name,
         installerName: 'Creativ Energy'
       };
       
-      console.log('🔍 Calling route: /docuseal/disclaimer');
+      console.log('🔍 Calling route: /docuseal/disclaimer/template');
       console.log('🔍 Request body:', JSON.stringify(requestBody, null, 2));
       
-      const response = await api.post('/docuseal/disclaimer', requestBody);
+      const response = await api.post('/docuseal/disclaimer/template', requestBody);
       const responseData = response.data as any;
 
       if (responseData.success) {
-        console.log('✅ DocuSeal disclaimer sent:', responseData.data);
+        console.log('✅ DocuSeal disclaimer template created:', responseData.data);
         
         const data = responseData.data || responseData;
         const receivedTemplateId = data.templateId || data.id || data.template_id;
-        const receivedSubmissionId = data.submissionId || data.submission_id;
-        const receivedSigningUrl = data.signingUrl || data.signing_url;
+        const receivedPreviewUrl = data.previewUrl || data.preview_url;
+        const receivedEmbeddedFormUrl = data.embeddedFormUrl || data.embedded_form_url;
+        const receivedFormBuilderToken = data.formBuilderToken || data.form_builder_token;
         
         if (receivedTemplateId) setTemplateId(receivedTemplateId);
-        if (receivedSubmissionId) setSubmissionId(receivedSubmissionId);
-        if (receivedSigningUrl) setSigningUrl(receivedSigningUrl);
-        
-        setSigningStatus('sent');
-        setStep('status');
-        
-        // Mark disclaimer step as sent in workflow
-        try {
-          const { workflowApi } = await import('../utils/api');
-          await workflowApi.completeStep(opportunityId, 9, {
-            templateId: receivedTemplateId,
-            submissionId: receivedSubmissionId,
-            sentAt: new Date().toISOString(),
-            status: 'sent'
-          });
-        } catch (workflowError) {
-          console.warn('Failed to update workflow step:', workflowError);
-        }
-        
-        // Start checking status
-        if (receivedSubmissionId && receivedSubmissionId !== 'unknown') {
-          setTimeout(() => checkSigningStatus(receivedSubmissionId), 2000);
-        }
+        const normalizedPreviewUrl = normalizeDocusealUrl(receivedPreviewUrl);
+        const normalizedEmbeddedFormUrl = normalizeDocusealUrl(receivedEmbeddedFormUrl);
+
+        if (normalizedPreviewUrl) setPreviewUrl(normalizedPreviewUrl);
+        if (normalizedEmbeddedFormUrl) setEmbeddedFormUrl(normalizedEmbeddedFormUrl);
+        if (receivedFormBuilderToken) setFormBuilderToken(receivedFormBuilderToken);
+
+        // Move to verification step so surveyor can review template first
+        setStep('verification');
       } else {
-        throw new Error(responseData.error || 'Failed to send disclaimer');
+        throw new Error(responseData.error || 'Failed to create disclaimer template');
       }
     } catch (error) {
-      console.error('🔍 Error sending DocuSeal disclaimer:', error);
+      console.error('🔍 Error creating DocuSeal disclaimer template:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create disclaimer template';
+      setError(errorMessage);
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // Step 2: Create submission from verified template and send to customer
+  const handleSendFromVerifiedTemplate = async () => {
+    if (!templateId || isSending) return;
+
+    const finalCustomerEmail = overrideCustomerEmail.trim() || customerEmail;
+    if (!finalCustomerEmail) {
+      Alert.alert('Error', 'Customer email is required. Please enter an email address.');
+      return;
+    }
+
+    setIsSending(true);
+    setSendPhase('sending_submission');
+    setError(null);
+    setStep('sending');
+
+    try {
+      const { api } = await import('../utils/api');
+      const requestBody = {
+        opportunityId,
+        customerData: {
+          name: customerName,
+          email: finalCustomerEmail,
+        },
+        customerName,
+        installerName: 'Creativ Energy',
+      };
+
+      console.log('🔍 Calling route:', `/docuseal/template/${templateId}/submit`);
+      const response = await api.post(`/docuseal/template/${templateId}/submit`, requestBody);
+      const responseData = response.data as any;
+
+      if (!responseData.success) {
+        throw new Error(responseData.error || 'Failed to send disclaimer from template');
+      }
+
+      const data = responseData.data || responseData;
+      const receivedSubmissionId = data.submissionId || data.submission_id;
+      const receivedSigningUrl = data.signingUrl || data.signing_url;
+
+      if (receivedSubmissionId) setSubmissionId(receivedSubmissionId);
+      if (receivedSigningUrl) setSigningUrl(receivedSigningUrl);
+
+      setSigningStatus('sent');
+      setStep('status');
+
+      if (receivedSubmissionId && receivedSubmissionId !== 'unknown') {
+        setTimeout(() => checkSigningStatus(receivedSubmissionId), 2000);
+      }
+    } catch (error) {
+      console.error('🔍 Error sending disclaimer from verified template:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to send disclaimer';
       setError(errorMessage);
       Alert.alert('Error', errorMessage);
+      setStep('verification');
     } finally {
       setIsSending(false);
     }
@@ -495,7 +557,7 @@ export default function DisclaimerSigningScreen() {
                 Send Disclaimer
               </Text>
               <Text style={[styles.headerSubtitle, { color: safeTheme.secondaryText }]}>
-                Confirm customer details before sending
+                Confirm customer details before template verification
               </Text>
             </View>
           </View>
@@ -574,7 +636,7 @@ export default function DisclaimerSigningScreen() {
               { backgroundColor: '#4CAF50', marginTop: 20 },
               (!overrideCustomerEmail.trim()) && { opacity: 0.6 }
             ]}
-            onPress={handleSendDisclaimer}
+            onPress={handleCreateDisclaimerTemplate}
             disabled={isSending || !overrideCustomerEmail.trim()}
           >
             {isSending ? (
@@ -583,7 +645,7 @@ export default function DisclaimerSigningScreen() {
               <Ionicons name="send-outline" size={24} color="white" />
             )}
             <Text style={[styles.completeButtonText, { marginLeft: 8 }]}>
-              {isSending ? 'Sending...' : 'Send Disclaimer for Signing'}
+              {isSending ? 'Preparing...' : 'Create & Verify Disclaimer Template'}
             </Text>
           </TouchableOpacity>
 
@@ -591,7 +653,7 @@ export default function DisclaimerSigningScreen() {
           <View style={[styles.infoMessage, { backgroundColor: safeTheme.tertiaryBackground, marginTop: 15 }]}>
             <Ionicons name="information-circle-outline" size={16} color={safeTheme.secondaryText} />
             <Text style={[styles.infoText, { color: safeTheme.secondaryText }]}>
-              The disclaimer will be sent to the customer's email for signing. You can track the signing status on the next screen.
+              You will verify the disclaimer template first, then send it to the customer for signing.
             </Text>
           </View>
         </View>
@@ -620,10 +682,10 @@ export default function DisclaimerSigningScreen() {
               </TouchableOpacity>
               <View style={styles.headerTextContainer}>
                 <Text style={[styles.headerTitle, { color: safeTheme.primaryText }]}>
-                  Sending Disclaimer
+                  Disclaimer Workflow
                 </Text>
                 <Text style={[styles.headerSubtitle, { color: safeTheme.secondaryText }]}>
-                  Creating signing workflow
+                  {sendPhase === 'creating_template' ? 'Creating template for verification' : 'Sending verified template to customer'}
                 </Text>
               </View>
             </View>
@@ -645,12 +707,118 @@ export default function DisclaimerSigningScreen() {
         <View style={[styles.stepContainer, { backgroundColor: safeTheme.primaryBackground }]}>
           <ActivityIndicator size="large" color="#4CAF50" />
           <Text style={[styles.stepTitle, { color: safeTheme.primaryText }]}>
-            Sending Disclaimer...
+            {sendPhase === 'creating_template' ? 'Creating Template...' : 'Sending Disclaimer...'}
           </Text>
           <Text style={[styles.stepDescription, { color: safeTheme.secondaryText }]}>
-            Creating the DocuSeal submission and sending to customer
+            {sendPhase === 'creating_template'
+              ? 'Preparing DocuSeal template so you can verify fields before sending'
+              : 'Creating the DocuSeal submission and sending to customer'}
           </Text>
         </View>
+    </SafeAreaView>
+  );
+
+  const renderVerificationStep = () => (
+    <SafeAreaView style={[
+      styles.container,
+      { backgroundColor: safeTheme.primaryBackground },
+      Platform.OS === 'web' && {
+        height: '100vh' as any,
+        maxHeight: '100vh' as any,
+        overflow: 'hidden',
+      }
+    ]}>
+      <View style={[styles.header, { backgroundColor: safeTheme.cardBackground, borderBottomColor: safeTheme.cardBorder }]}>
+        <View style={styles.headerTop}>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity
+              style={[styles.backButton, { backgroundColor: isDark ? '#1e293b' : '#f8fafc' }]}
+              onPress={() => setStep('confirmation')}
+            >
+              <Feather name="arrow-left" size={20} color={safeTheme.secondaryText} />
+            </TouchableOpacity>
+            <View style={styles.headerTextContainer}>
+              <Text style={[styles.headerTitle, { color: safeTheme.primaryText }]}>
+                Verify Disclaimer Template
+              </Text>
+              <Text style={[styles.headerSubtitle, { color: safeTheme.secondaryText }]}>
+                Review template before sending to customer
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      <ScrollView style={styles.scrollView} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+        <View style={[styles.card, { backgroundColor: safeTheme.cardBackground }]}>
+          <Text style={[styles.cardDescription, { color: safeTheme.secondaryText, marginBottom: 12 }]}>
+            Confirm field positions, then send the verified template to {overrideCustomerEmail || customerEmail}.
+          </Text>
+          {formBuilderToken && (
+            <View style={[styles.infoMessage, { backgroundColor: safeTheme.tertiaryBackground, marginBottom: 12 }]}>
+              <Ionicons name="construct-outline" size={16} color={safeTheme.secondaryText} />
+              <Text style={[styles.infoText, { color: safeTheme.secondaryText }]}>
+                Builder token received from backend; preview is ready for verification.
+              </Text>
+            </View>
+          )}
+
+          {Platform.OS === 'web' && previewUrl ? (
+            <View style={{ width: '100%', minHeight: 520, marginBottom: 16 }}>
+              <iframe
+                src={normalizeDocusealUrl(previewUrl) || previewUrl}
+                style={{
+                  width: '100%',
+                  height: 520,
+                  border: `1px solid ${safeTheme.cardBorder}`,
+                  borderRadius: 8,
+                  backgroundColor: isDark ? '#1e293b' : '#ffffff',
+                }}
+                title="Disclaimer Template Preview"
+              />
+            </View>
+          ) : (
+            <View style={[styles.infoMessage, { backgroundColor: safeTheme.tertiaryBackground, marginBottom: 16 }]}>
+              <Ionicons name="information-circle-outline" size={16} color={safeTheme.secondaryText} />
+              <Text style={[styles.infoText, { color: safeTheme.secondaryText }]}>
+                Template preview is available via external link on this device.
+              </Text>
+            </View>
+          )}
+
+          {(previewUrl || embeddedFormUrl) && (
+            <TouchableOpacity
+              style={[styles.refreshButton, { backgroundColor: isDark ? '#1e293b' : '#f1f5f9' }]}
+              onPress={() => {
+                const resolvedUrl = normalizeDocusealUrl(previewUrl || embeddedFormUrl);
+                if (resolvedUrl) {
+                  Linking.openURL(resolvedUrl);
+                }
+              }}
+            >
+              <Ionicons name="open-outline" size={20} color={safeTheme.primaryText} />
+              <Text style={[styles.refreshButtonText, { color: safeTheme.primaryText }]}>
+                Open Full Template Preview
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={[styles.completeButton, { backgroundColor: '#4CAF50', marginTop: 12 }]}
+            onPress={handleSendFromVerifiedTemplate}
+            disabled={isSending || !templateId}
+          >
+            {isSending ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Ionicons name="send-outline" size={24} color="white" />
+            )}
+            <Text style={[styles.completeButtonText, { marginLeft: 8 }]}>
+              {isSending ? 'Sending...' : 'Send Verified Template'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 
@@ -872,6 +1040,8 @@ export default function DisclaimerSigningScreen() {
       return renderConfirmationStep();
     case 'sending':
       return renderSendingStep();
+    case 'verification':
+      return renderVerificationStep();
     case 'status':
       return renderStatusStep();
     default:
