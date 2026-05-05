@@ -59,12 +59,16 @@ export default function DisclaimerSigningScreen() {
   
   // ScrollView ref for consistent scrolling behavior
   const scrollViewRef = useRef<ScrollView>(null);
+  const builderRef = useRef<HTMLElement | null>(null);
   
   // DocuSeal state
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [embeddedFormUrl, setEmbeddedFormUrl] = useState<string | null>(null);
   const [formBuilderToken, setFormBuilderToken] = useState<string | null>(null);
+  const [isFormLoading, setIsFormLoading] = useState(false);
+  const [isFormVerified, setIsFormVerified] = useState(false);
+  const [formLoadError, setFormLoadError] = useState<string | null>(null);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [signingUrl, setSigningUrl] = useState<string | null>(null);
   const [signingStatus, setSigningStatus] = useState<'pending' | 'sent' | 'opened' | 'completed' | 'declined'>('pending');
@@ -99,6 +103,159 @@ export default function DisclaimerSigningScreen() {
     // Load customer details and show confirmation screen
     loadCustomerDetails();
   }, []);
+
+  // Set up DocuSeal Form Builder when formBuilderToken is available (mirrors contract flow)
+  useEffect(() => {
+    if (Platform.OS === 'web' && formBuilderToken && templateId && step === 'verification' && typeof window !== 'undefined' && typeof document !== 'undefined') {
+      let timeoutId: NodeJS.Timeout | null = null;
+      let builderElement: HTMLElement | null = null;
+      let handleLoad: ((e: any) => void) | null = null;
+      let handleSave: ((e: any) => void) | null = null;
+      let isCleanedUp = false;
+      let retryCount = 0;
+      const MAX_RETRIES = 10;
+
+      setIsFormLoading(true);
+      setFormLoadError(null);
+      setIsFormVerified(false);
+
+      const ensureBuilderScriptLoaded = (): Promise<void> => {
+        return new Promise((resolve, reject) => {
+          if (isCleanedUp) return resolve();
+
+          if (customElements.get('docuseal-builder') || customElements.get('docuseal-form-builder')) {
+            resolve();
+            return;
+          }
+
+          const existingScript = document.querySelector('script[src*="docuseal"][src*="/js/builder"]');
+          if (existingScript) {
+            let attempts = 0;
+            const checkInterval = setInterval(() => {
+              if (isCleanedUp) {
+                clearInterval(checkInterval);
+                resolve();
+                return;
+              }
+              attempts++;
+              if (customElements.get('docuseal-builder') || customElements.get('docuseal-form-builder')) {
+                clearInterval(checkInterval);
+                resolve();
+              } else if (attempts > 20) {
+                clearInterval(checkInterval);
+                resolve();
+              }
+            }, 100);
+            return;
+          }
+
+          const script = document.createElement('script');
+          script.src = 'https://cdn.docuseal.eu/js/builder.js';
+          script.async = true;
+          script.onload = () => {
+            if (isCleanedUp) return resolve();
+            setTimeout(() => resolve(), 500);
+          };
+          script.onerror = () => reject(new Error('Failed to load DocuSeal builder script'));
+          document.head.appendChild(script);
+        });
+      };
+
+      const createBuilderElement = async () => {
+        if (isCleanedUp) return;
+
+        const container = document.getElementById('docusealDisclaimerBuilderContainer');
+        if (!container) {
+          retryCount++;
+          if (retryCount < MAX_RETRIES && !isCleanedUp) {
+            timeoutId = setTimeout(createBuilderElement, 500);
+          } else if (!isCleanedUp) {
+            setIsFormLoading(false);
+            setFormLoadError('Template container not found. Use preview link.');
+          }
+          return;
+        }
+
+        try {
+          await ensureBuilderScriptLoaded();
+        } catch {
+          if (!isCleanedUp) {
+            setFormLoadError('Failed to load DocuSeal builder. Use preview link.');
+            setIsFormLoading(false);
+          }
+          return;
+        }
+
+        if (isCleanedUp) return;
+
+        const builderTagName = customElements.get('docuseal-builder') ? 'docuseal-builder' : 'docuseal-form-builder';
+        if (container.querySelector(builderTagName)) {
+          setIsFormLoading(false);
+          return;
+        }
+
+        container.innerHTML = '';
+        builderElement = document.createElement(builderTagName);
+        builderElement.setAttribute('id', 'docusealDisclaimerBuilder');
+        builderElement.setAttribute('data-token', formBuilderToken);
+        builderElement.setAttribute('data-email', (overrideCustomerEmail.trim() || customerEmail || '').trim());
+        builderElement.setAttribute('host', 'docuseal.eu');
+        builderElement.setAttribute('data-host', 'docuseal.eu');
+        builderElement.setAttribute('data-preview', 'false');
+        builderElement.setAttribute('data-with-send-button', 'false');
+        builderElement.setAttribute('data-with-upload-button', 'false');
+        builderElement.setAttribute('data-with-sign-yourself-button', 'false');
+        builderElement.setAttribute('data-autosave', 'true');
+        builderElement.setAttribute('data-with-documents-list', 'true');
+        builderElement.setAttribute('data-with-fields-list', 'true');
+
+        if (isDark) {
+          builderElement.setAttribute('data-background-color', '#1a1a2e');
+          builderElement.setAttribute('data-custom-css', '.bg-white { background-color: #1e293b !important; } .text-black { color: #f8fafc !important; }');
+        } else {
+          builderElement.setAttribute('data-background-color', '#ffffff');
+          builderElement.setAttribute('data-custom-css', '.bg-gray-50 { background-color: #f8fafc !important; }');
+        }
+
+        builderElement.style.width = '100%';
+        builderElement.style.minHeight = '700px';
+        builderElement.style.display = 'block';
+        builderElement.style.borderRadius = '8px';
+        builderElement.style.overflow = 'hidden';
+        container.appendChild(builderElement);
+        builderRef.current = builderElement;
+
+        handleLoad = () => {
+          if (!isCleanedUp) setIsFormLoading(false);
+        };
+        handleSave = () => {
+          if (!isCleanedUp) setIsFormVerified(true);
+        };
+
+        builderElement.addEventListener('load', handleLoad);
+        builderElement.addEventListener('save', handleSave);
+        builderElement.addEventListener('onLoad', handleLoad);
+        builderElement.addEventListener('onSave', handleSave);
+
+        setTimeout(() => {
+          if (!isCleanedUp) setIsFormLoading(false);
+        }, 3000);
+      };
+
+      timeoutId = setTimeout(createBuilderElement, 300);
+
+      return () => {
+        isCleanedUp = true;
+        if (timeoutId) clearTimeout(timeoutId);
+        if (builderElement && handleLoad && handleSave) {
+          builderElement.removeEventListener('load', handleLoad);
+          builderElement.removeEventListener('save', handleSave);
+          builderElement.removeEventListener('onLoad', handleLoad);
+          builderElement.removeEventListener('onSave', handleSave);
+        }
+      };
+    }
+  }, [formBuilderToken, templateId, isDark, step, customerEmail, overrideCustomerEmail]);
 
   // Auto-poll status every 5 seconds when on status step
   useEffect(() => {
@@ -356,6 +513,10 @@ export default function DisclaimerSigningScreen() {
       const data = responseData.data || responseData;
       const receivedSubmissionId = data.submissionId || data.submission_id;
       const receivedSigningUrl = data.signingUrl || data.signing_url;
+
+      // Keep UI in sync with the actual email used for submission
+      setCustomerEmail(finalCustomerEmail);
+      setOverrideCustomerEmail(finalCustomerEmail);
 
       if (receivedSubmissionId) setSubmissionId(receivedSubmissionId);
       if (receivedSigningUrl) setSigningUrl(receivedSigningUrl);
@@ -754,34 +915,49 @@ export default function DisclaimerSigningScreen() {
           <Text style={[styles.cardDescription, { color: safeTheme.secondaryText, marginBottom: 12 }]}>
             Confirm field positions, then send the verified template to {overrideCustomerEmail || customerEmail}.
           </Text>
-          {formBuilderToken && (
-            <View style={[styles.infoMessage, { backgroundColor: safeTheme.tertiaryBackground, marginBottom: 12 }]}>
-              <Ionicons name="construct-outline" size={16} color={safeTheme.secondaryText} />
-              <Text style={[styles.infoText, { color: safeTheme.secondaryText }]}>
-                Builder token received from backend; preview is ready for verification.
-              </Text>
+          {Platform.OS === 'web' && formBuilderToken && templateId && (
+            <View style={[styles.card, { backgroundColor: safeTheme.cardBackground, marginBottom: 16 }]}>
+              {isFormLoading && (
+                <View style={[styles.infoMessage, { backgroundColor: safeTheme.tertiaryBackground, marginBottom: 12 }]}>
+                  <ActivityIndicator size="small" color={safeTheme.primaryButton} />
+                  <Text style={[styles.infoText, { color: safeTheme.secondaryText }]}>
+                    Loading Form Builder...
+                  </Text>
+                </View>
+              )}
+              <View style={{ width: '100%', minHeight: 700 }}>
+                <div
+                  id="docusealDisclaimerBuilderContainer"
+                  ref={(node) => {
+                    builderRef.current = node as any;
+                  }}
+                  style={{
+                    width: '100%',
+                    minHeight: 700,
+                    display: 'block',
+                    border: `1px solid ${isDark ? '#475569' : '#e0e0e0'}`,
+                    borderRadius: 8,
+                    overflow: 'hidden',
+                    backgroundColor: isDark ? '#1e293b' : '#ffffff',
+                  }}
+                />
+              </View>
+              {!!formLoadError && (
+                <View style={[styles.infoMessage, { backgroundColor: safeTheme.tertiaryBackground, marginTop: 12 }]}>
+                  <Ionicons name="warning-outline" size={16} color={safeTheme.secondaryText} />
+                  <Text style={[styles.infoText, { color: safeTheme.secondaryText }]}>
+                    {formLoadError}
+                  </Text>
+                </View>
+              )}
             </View>
           )}
 
-          {Platform.OS === 'web' && previewUrl ? (
-            <View style={{ width: '100%', minHeight: 520, marginBottom: 16 }}>
-              <iframe
-                src={normalizeDocusealUrl(previewUrl) || previewUrl}
-                style={{
-                  width: '100%',
-                  height: 520,
-                  border: `1px solid ${safeTheme.cardBorder}`,
-                  borderRadius: 8,
-                  backgroundColor: isDark ? '#1e293b' : '#ffffff',
-                }}
-                title="Disclaimer Template Preview"
-              />
-            </View>
-          ) : (
+          {(!formBuilderToken || Platform.OS !== 'web') && (
             <View style={[styles.infoMessage, { backgroundColor: safeTheme.tertiaryBackground, marginBottom: 16 }]}>
               <Ionicons name="information-circle-outline" size={16} color={safeTheme.secondaryText} />
               <Text style={[styles.infoText, { color: safeTheme.secondaryText }]}>
-                Template preview is available via external link on this device.
+                Builder is unavailable on this device/session. Use preview link to verify in a new tab.
               </Text>
             </View>
           )}
@@ -803,10 +979,29 @@ export default function DisclaimerSigningScreen() {
             </TouchableOpacity>
           )}
 
+          {/* Email Input Section (same pattern as contract verification step) */}
+          <View style={[styles.contractInfo, { backgroundColor: safeTheme.cardBackground, borderColor: safeTheme.cardBorder, marginTop: 12 }]}>
+            <Text style={[styles.inputLabel, { color: safeTheme.secondaryText }]}>CUSTOMER EMAIL:</Text>
+            <TextInput
+              style={[styles.inputField, {
+                backgroundColor: safeTheme.tertiaryBackground,
+                color: safeTheme.primaryText,
+                borderColor: safeTheme.cardBorder
+              }]}
+              value={overrideCustomerEmail}
+              onChangeText={setOverrideCustomerEmail}
+              placeholder="Enter email address"
+              placeholderTextColor={safeTheme.tertiaryText}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={!isSending}
+            />
+          </View>
+
           <TouchableOpacity
             style={[styles.completeButton, { backgroundColor: '#4CAF50', marginTop: 12 }]}
             onPress={handleSendFromVerifiedTemplate}
-            disabled={isSending || !templateId}
+            disabled={isSending || !templateId || (Platform.OS === 'web' && !isFormVerified)}
           >
             {isSending ? (
               <ActivityIndicator size="small" color="white" />
@@ -814,7 +1009,11 @@ export default function DisclaimerSigningScreen() {
               <Ionicons name="send-outline" size={24} color="white" />
             )}
             <Text style={[styles.completeButtonText, { marginLeft: 8 }]}>
-              {isSending ? 'Sending...' : 'Send Verified Template'}
+              {isSending
+                ? 'Sending...'
+                : Platform.OS === 'web' && !isFormVerified
+                ? 'Verify Fields In Builder First'
+                : 'Send Verified Template'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -942,7 +1141,7 @@ export default function DisclaimerSigningScreen() {
                   Customer: {customerName}
                 </Text>
                 <Text style={[styles.customerInfoText, { color: safeTheme.secondaryText }]}>
-                  Email: {customerEmail}
+                  Email: {overrideCustomerEmail.trim() || customerEmail}
                 </Text>
                 {submissionId && (
                   <Text style={[styles.customerInfoText, { color: safeTheme.secondaryText }]}>
