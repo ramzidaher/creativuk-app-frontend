@@ -50,6 +50,7 @@ export default function OpportunityDetailsScreen() {
   const { theme, isDark, toggleTheme } = useTheme();
   
   const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showWorkflowModal, setShowWorkflowModal] = useState(false);
   const [workflowProgress, setWorkflowProgress] = useState<any>(null);
@@ -98,8 +99,22 @@ export default function OpportunityDetailsScreen() {
     }
   }, []);
 
+  const normalizeOpportunityPayload = (raw: unknown, fallbackId?: string): Opportunity | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const obj = raw as Record<string, unknown>;
+    const nested = obj.data;
+    const candidate =
+      typeof nested === 'object' && nested !== null && !Array.isArray(nested)
+        ? (nested as Record<string, unknown>)
+        : obj;
+    const id = typeof candidate.id === 'string' ? candidate.id : fallbackId;
+    if (!id) return null;
+    return { ...(candidate as Opportunity), id };
+  };
+
   const loadOpportunityDetails = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       // Resolve opportunity: use param if valid, otherwise fetch by opportunityId (clean URLs use only ID)
       let passedOpportunity: Opportunity;
@@ -108,12 +123,21 @@ export default function OpportunityDetailsScreen() {
       } else if (opportunityId) {
         const res = await api.get<Opportunity>(`/opportunities/${opportunityId}`);
         if (!res.success || res.data == null) {
-          console.error('❌ Failed to load opportunity:', res.error ?? 'Unknown error');
+          const message = res.error ?? 'Unknown error';
+          console.error('❌ Failed to load opportunity:', message);
+          setLoadError(message);
           setOpportunity(null);
           setLoading(false);
           return;
         }
-        passedOpportunity = res.data;
+        const normalized = normalizeOpportunityPayload(res.data, opportunityId);
+        if (!normalized) {
+          setLoadError('API returned data without an opportunity id');
+          setOpportunity(null);
+          setLoading(false);
+          return;
+        }
+        passedOpportunity = normalized;
       } else {
         Alert.alert('Error', 'Missing opportunity. Please open this page from the opportunities list.');
         setLoading(false);
@@ -263,6 +287,16 @@ export default function OpportunityDetailsScreen() {
     return (
       <View style={[styles.errorContainer, { backgroundColor: theme.primaryBackground }]}>
         <Text style={[styles.errorText, { color: theme.dangerButton }]}>Opportunity not found</Text>
+        {loadError ? (
+          <Text style={[styles.errorHint, { color: theme.secondaryText, marginTop: 12 }]}>
+            {loadError}
+          </Text>
+        ) : null}
+        {opportunityId ? (
+          <Text style={[styles.errorHint, { color: theme.secondaryText, marginTop: 8 }]}>
+            ID: {opportunityId}
+          </Text>
+        ) : null}
       </View>
     );
   }
@@ -850,6 +884,12 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  errorHint: {
+    fontSize: 13,
+    textAlign: 'center',
+    paddingHorizontal: 24,
+    maxWidth: 480,
   },
   heroSection: {
     alignItems: 'center',
