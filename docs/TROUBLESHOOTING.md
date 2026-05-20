@@ -94,3 +94,16 @@ npm run test-with-backend
 
 (This serves `dist/` locally and targets the production backend.)
 
+## “Opportunity not found” but the deal exists in GHL
+
+The frontend `.env` file normally only sets **`API_BASE_URL`**. GoHighLevel tokens and location IDs live in **`creativuk-app-backend/.env`**, not in the Expo app env.
+
+To see whether GHL returns the opportunity for the same credentials the backend uses, run this from the **backend** repo (uses backend `.env`):
+
+```bash
+cd ../creativuk-app-backend   # or your path to creativuk-app-backend
+npm run test:ghl-opportunity -- YOUR_GHL_OPPORTUNITY_ID
+```
+
+If v1 and v2 both fail, the ID is wrong for that token/location, the opportunity is in another sub-account, or pipeline configuration does not match where the deal was created.
+
