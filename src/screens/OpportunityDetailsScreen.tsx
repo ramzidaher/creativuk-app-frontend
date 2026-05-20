@@ -123,7 +123,14 @@ export default function OpportunityDetailsScreen() {
       } else if (opportunityId) {
         const res = await api.get<Opportunity>(`/opportunities/${opportunityId}`);
         if (!res.success || res.data == null) {
-          const message = res.error ?? 'Unknown error';
+          let message = res.error ?? 'Unknown error';
+          if (message.includes('503') || message.toLowerCase().includes('temporarily busy')) {
+            message =
+              'GoHighLevel is temporarily busy. Please wait a few seconds and tap refresh.';
+          } else if (message.includes('500')) {
+            message =
+              'Server error while loading this opportunity. Please try again in a moment.';
+          }
           console.error('❌ Failed to load opportunity:', message);
           setLoadError(message);
           setOpportunity(null);
