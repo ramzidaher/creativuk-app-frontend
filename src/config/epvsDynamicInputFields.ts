@@ -61,7 +61,7 @@ export const EPVS_DYNAMIC_INPUT_FIELDS: EPVSInputFieldDefinition[] = [
     type: 'number',
     required: false,
     cellReference: 'H21',
-    dropdownOptions: rangeOptions(5, 20), // 5p to 20p
+    dropdownOptions: rangeOptions(5, 35), // 5p to 35p
     allowOverride: true,
     enabledByRadioButton: [
       { groupTitle: '⚡ Energy Use', enabledFor: ['DualRate'] }

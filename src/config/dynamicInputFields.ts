@@ -203,7 +203,7 @@ export const DYNAMIC_INPUT_FIELDS: InputFieldDefinition[] = [
     type: 'number',
     required: false,
     cellReference: 'C51',
-    dropdownOptions: rangeOptions(5, 20), // 5p to 20p
+    dropdownOptions: rangeOptions(5, 35), // 5p to 35p
     allowOverride: true,
     enabledByRadio: { '⚡ Energy Use': ['DualRate'] },
   },
@@ -235,7 +235,7 @@ export const DYNAMIC_INPUT_FIELDS: InputFieldDefinition[] = [
     type: 'number',
     required: false,
     cellReference: 'C54',
-    dropdownOptions: rangeOptions(5, 20), // 5p to 20p
+    dropdownOptions: rangeOptions(5, 35), // 5p to 35p
     allowOverride: true,
     enabledByRadio: { '🔋 Battery Type': ['BatteryOC'] },
   },
@@ -345,14 +345,14 @@ export const DYNAMIC_INPUT_FIELDS: InputFieldDefinition[] = [
     },
   },
 
-  // OFF-PEAK: EXPORT TARIFF — dropdown 10p–15p, note: use current rates
+  // OFF-PEAK: EXPORT TARIFF — dropdown 10p–35p, note: use current rates
   {
     id: 'export_tariff_rate',
     label: 'Import/Export Tariff Rate (p/kWh)',
     type: 'number',
     required: false,
     cellReference: 'C63',
-    dropdownOptions: rangeOptions(10, 15),
+    dropdownOptions: rangeOptions(10, 35),
     allowOverride: true,
     helperText: 'Use current rates',
     enabledByRadio: { '⚡ Import/Export Tariff': ['ExportYes'] },

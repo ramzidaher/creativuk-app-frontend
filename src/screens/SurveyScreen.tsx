@@ -4782,7 +4782,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
                 style={modernStyles.infoIcon}
               />
               <Text style={[modernStyles.infoText, { color: theme.dangerButton }]}>
-                If you don't have an energy bill, you will need to sign a disclaimer form to proceed with the solar assessment.
+                If you don't have an energy bill, you will need to sign a disclaimer form to proceed with the solar assessment. If you do have any bill available, please still upload it below.
               </Text>
             </View>
           </View>
@@ -4941,32 +4941,34 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         <Text style={[styles.helperText, { color: theme.secondaryText }]}>Found on the energy bill, if no bill calculate from energy spend</Text>
       </View>
 
-      {formData.page4.hasEnergyBill === 'Yes' && (
-        <View style={[styles.section, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-          <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Energy Bill</Text>
-          <ModernFileUpload
-            label="Picture of Energy Bill"
-            fieldName="energyBill"
-            onPress={() => handleFileUpload('energyBill')}
-            files={(() => {
-              const files = uploadedFiles.energyBill || [];
-              console.log('📷 Energy Bill files for UI:', files);
-              console.log('📷 Energy Bill files detailed:', files.map(file => ({
-                hasUri: !!file.uri,
-                hasBase64: !!file.base64,
-                uri: file.uri,
-                name: file.name,
-                type: file.type,
-                size: file.size
-              })));
-              return files;
-            })()}
-            onRemove={(index: number) => removeFile('energyBill', index)}
-            required={true}
-          />
-          <Text style={[styles.helperText, { color: theme.secondaryText }]}>Full name and address, energy usage and tariff must show</Text>
-        </View>
-      )}
+      <View style={[styles.section, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+        <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Energy Bill</Text>
+        <ModernFileUpload
+          label="Picture of Energy Bill"
+          fieldName="energyBill"
+          onPress={() => handleFileUpload('energyBill')}
+          files={(() => {
+            const files = uploadedFiles.energyBill || [];
+            console.log('📷 Energy Bill files for UI:', files);
+            console.log('📷 Energy Bill files detailed:', files.map(file => ({
+              hasUri: !!file.uri,
+              hasBase64: !!file.base64,
+              uri: file.uri,
+              name: file.name,
+              type: file.type,
+              size: file.size
+            })));
+            return files;
+          })()}
+          onRemove={(index: number) => removeFile('energyBill', index)}
+          required={formData.page4.hasEnergyBill === 'Yes'}
+        />
+        <Text style={[styles.helperText, { color: theme.secondaryText }]}>
+          {formData.page4.hasEnergyBill === 'No'
+            ? 'If you selected No, still upload any bill you do have so we can use it.'
+            : 'Full name and address, energy usage and tariff must show'}
+        </Text>
+      </View>
     </View>
   );
 

@@ -107,6 +107,12 @@ export default function OpportunityDetailsScreen() {
         passedOpportunity = paramOpportunity;
       } else if (opportunityId) {
         const res = await api.get<Opportunity>(`/opportunities/${opportunityId}`);
+        if (!res.success || res.data == null) {
+          console.error('❌ Failed to load opportunity:', res.error ?? 'Unknown error');
+          setOpportunity(null);
+          setLoading(false);
+          return;
+        }
         passedOpportunity = res.data;
       } else {
         Alert.alert('Error', 'Missing opportunity. Please open this page from the opportunities list.');
