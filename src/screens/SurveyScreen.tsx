@@ -41,7 +41,11 @@ import {
 } from '../types';
 import { surveyApi } from '../utils/api';
 import { filesFromWebFileList } from '../utils/surveyWebImageFiles';
-import { getPageForSurveyImageField } from '../utils/surveyImageFields';
+import {
+  ALL_SURVEY_IMAGE_FIELDS,
+  getImageFieldsForSurveyPage,
+  getPageForSurveyImageField,
+} from '../utils/surveyImageFields';
 import { fetchSurveyImagesByField } from '../utils/syncSurveyImages';
 import { filterImagesForSubmission } from '../utils/batchImageUpload';
 import { compressImageAuto } from '../utils/imageCompression';
@@ -1065,10 +1069,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
 
         // Load images from URLs and convert to display format - optimized
         const loadImagesFromUrls = (pageData: any) => {
-          const imageFields = ['energyBill', 'epcCertificate', 'frontDoor', 'frontProperty', 'targetRoofs', 'propertySides', 
-                              'roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'electricMeter', 
-                              'garage', 'fuseBoard', 'batteryInverterLocation', 'evLocation', 'evCharger', 
-                              'shadingIssues', 'scaffolding', 'customerSignature', 'renewableExecutiveSignature'];
+          const imageFields = ALL_SURVEY_IMAGE_FIELDS;
           
           const loadedImages: any = {};
           
@@ -2196,29 +2197,6 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         console.log('📷 Photo captured for auto-fill:', asset.uri);
 
         // Define all the actual image fields from the survey
-        const imageFields = [
-          'energyBill',
-          'epcCertificate',
-          'frontDoor',
-          'frontProperty',
-          'targetRoofs',
-          'propertySides',
-          'roofAngle',
-          'otherRoofPictures',
-          'roofTileCloseup',
-          'internalCeilingPictures',
-          'otherBuildings',
-          'electricMeter',
-          'garage',
-          'fuseBoard',
-          'batteryInverterLocation',
-          'evLocation',
-          'evCharger',
-          'shadingIssues',
-          'scaffolding'
-        ];
-
-        // Create file object for the captured photo
         const photoFile = {
           uri: asset.uri,
           name: `auto_fill_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`,
@@ -2228,11 +2206,13 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           base64: asset.base64,
         };
 
-        // Add the same photo to all image fields (2 copies each to meet minimum requirement)
-        imageFields.forEach(fieldName => {
-          const newFiles = [photoFile, photoFile]; // 2 copies
-          addFilesToField(fieldName, newFiles);
-        });
+        for (const fieldName of ALL_SURVEY_IMAGE_FIELDS) {
+          const copies = fieldName === 'internalCeilingPictures' ? 4 : 2;
+          addFilesToField(
+            fieldName,
+            Array.from({ length: copies }, () => ({ ...photoFile }))
+          );
+        }
 
         console.log('✅ Auto-fill completed: Added photo to all image fields');
         
@@ -2312,53 +2292,16 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
     if (webCameraFieldName === 'quickFill') {
       console.log('🚀 Quick fill: distributing photo to all image fields and filling all form data...');
       
-      // Define all the actual image fields from the survey
-      const imageFields = [
-        'energyBill',
-        'epcCertificate',
-        'frontDoor',
-        'frontProperty',
-        'targetRoofs',
-        'propertySides',
-        'roofAngle',
-        'otherRoofPictures',
-        'roofTileCloseup',
-        'internalCeilingPictures',
-        'otherBuildings',
-        'electricMeter',
-        'garage',
-        'fuseBoard',
-        'batteryInverterLocation',
-        'evLocation',
-        'evCharger',
-        'shadingIssues',
-        'scaffolding',
-        'customerSignature',
-        'renewableExecutiveSignature'
-      ];
-
-      // Add the photo 2 times to all image fields
-      imageFields.forEach(fieldName => {
-        console.log(`📷 Adding photo 2 times to field: ${fieldName}`);
-        // Create 2 copies of the same file with slightly different names
-        // Ensure base64 data is preserved in copies
-        const file1 = { 
-          ...newFile, 
-          name: `${newFile.name}_copy1`,
-          base64: newFile.base64, // Explicitly preserve base64
-          base64Data: newFile.base64Data, // Explicitly preserve base64Data
-          uri: newFile.uri // Explicitly preserve uri
-        };
-        const file2 = { 
-          ...newFile, 
-          name: `${newFile.name}_copy2`,
-          base64: newFile.base64, // Explicitly preserve base64
-          base64Data: newFile.base64Data, // Explicitly preserve base64Data
-          uri: newFile.uri // Explicitly preserve uri
-        };
-        
-        console.log(`📷 File1 base64 length: ${file1.base64.length}, File2 base64 length: ${file2.base64.length}`);
-        addFilesToField(fieldName, [file1, file2]);
+      ALL_SURVEY_IMAGE_FIELDS.forEach((fieldName) => {
+        const copies = fieldName === 'internalCeilingPictures' ? 4 : 2;
+        const files = Array.from({ length: copies }, (_, i) => ({
+          ...newFile,
+          name: `${newFile.name}_copy${i + 1}`,
+          base64: newFile.base64,
+          base64Data: newFile.base64Data,
+          uri: newFile.uri,
+        }));
+        addFilesToField(fieldName, files);
       });
 
       // Fill all form fields with sample data
@@ -2433,7 +2376,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       // Show success message
       showAlert(
         'Quick Fill Complete',
-        `✅ Photos added to all ${imageFields.length} image fields\n✅ All form fields filled with sample data\n✅ Survey is now complete and ready for submission!`,
+        `✅ Photos added to all ${ALL_SURVEY_IMAGE_FIELDS.length} image fields\n✅ All form fields filled with sample data\n✅ Survey is now complete and ready for submission!`,
         [{ text: 'OK' }]
       );
     } else {
@@ -2715,27 +2658,10 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
     uploadedFilesRef.current = newState; // Update ref immediately BEFORE setState
     setUploadedFiles(newState);
 
-    // Update form data - determine correct page based on field name
-    let targetPage: 'page1' | 'page2' | 'page3' | 'page4' | 'page5' | 'page6' | 'page7' | 'page8' = 'page7'; // Default to page 7 for most image fields
-    
-    // Map field names to correct pages
-    if (['energyBill'].includes(fieldName)) {
-      targetPage = 'page4'; // energyBill is on page 4
-    } else if (['epcCertificate'].includes(fieldName)) {
-      targetPage = 'page5'; // epcCertificate is on page 5
-    } else if (['frontDoor', 'frontProperty', 'targetRoofs', 'propertySides'].includes(fieldName)) {
-      targetPage = 'page6';
-    } else if (['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'electricMeter', 'garage', 'fuseBoard', 'batteryInverterLocation'].includes(fieldName)) {
-      targetPage = 'page7';
-    } else if (['evLocation', 'evCharger', 'shadingIssues', 'scaffolding', 'customerSignature', 'renewableExecutiveSignature'].includes(fieldName)) {
-      targetPage = 'page8';
-    }
-    
-    // Update form data with remaining URLs
-    const remainingUrls = updatedFiles.map(file => file.uri).filter(url => url);
-    
-    updateFormData(targetPage, { 
-      [`${fieldName}Files`]: remainingUrls
+    const targetPage = getPageForSurveyImageField(fieldName);
+    const remainingUrls = updatedFiles.map((file) => file.uri).filter((url) => url);
+    updateFormData(targetPage, {
+      [`${fieldName}Files`]: remainingUrls,
     });
 
     // Note: We don't delete from server immediately as it's complex to track individual files
@@ -5790,29 +5716,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
   };
 
   // Helper function to get image fields for a specific page
-  const getImageFieldsForPage = (pageNumber: number): string[] => {
-    const imageFieldsByPage: { [key: number]: string[] } = {
-      1: [], // Page 1 has no image fields
-      2: [], // Page 2 has no image fields
-      3: [], // Page 3 has no image fields
-      4: ['energyBill'], // Page 4 image fields
-      5: ['epcCertificate'], // Page 5 image fields
-      6: ['frontDoor', 'frontProperty', 'targetRoofs', 'propertySides'], // Page 6 image fields
-      7: ['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'fuseBoard', 'electricMeter', 'garage', 'batteryInverterLocation'], // Page 7 image fields
-      8: ['shadingIssues', 'scaffolding', 'customerSignature', 'renewableExecutiveSignature'] // Page 8 image fields (EV images conditional)
-    };
-    
-    // For page 8, conditionally include EV images only if customer has EV charger
-    if (pageNumber === 8) {
-      const baseFields = imageFieldsByPage[8] || [];
-      if (formData.page8?.evChargerRequired === 'Yes') {
-        return [...baseFields, 'evLocation', 'evCharger'];
-      }
-      return baseFields;
-    }
-    
-    return imageFieldsByPage[pageNumber] || [];
-  };
+  const getImageFieldsForPage = (pageNumber: number): string[] =>
+    getImageFieldsForSurveyPage(pageNumber, formData);
 
   // Function to find the last page with saved data (where user left off)
   const findLastSavedPage = (): number => {

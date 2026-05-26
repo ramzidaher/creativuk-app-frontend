@@ -1,5 +1,5 @@
 import { surveyApi } from './api';
-import { ALL_SURVEY_IMAGE_FIELDS, getPageForSurveyImageField } from './surveyImageFields';
+import { SURVEY_IMAGE_UPLOAD_FIELDS, getPageForSurveyImageField } from './surveyImageFields';
 
 export type SurveyImageFile = {
   uri: string;
@@ -42,7 +42,7 @@ export function mapApiImagesToUploadedFiles(images: any[]): Record<string, Surve
 export function buildPageFilesPatch(byField: Record<string, SurveyImageFile[]>): Record<string, Record<string, string[]>> {
   const pages: Record<string, Record<string, string[]>> = {};
 
-  for (const fieldName of ALL_SURVEY_IMAGE_FIELDS) {
+  for (const { field: fieldName } of SURVEY_IMAGE_UPLOAD_FIELDS) {
     const files = byField[fieldName];
     if (!files?.length) continue;
 

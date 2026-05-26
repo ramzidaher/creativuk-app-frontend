@@ -1,9 +1,7 @@
 import { Platform } from 'react-native';
 import { surveyApi } from './api';
-import { SURVEY_REQUIRED_IMAGE_FIELDS } from './surveyImageFields';
+import { getPlaceholderFillFields } from './surveyImageFields';
 import { fetchSurveyImagesByField } from './syncSurveyImages';
-
-export { SURVEY_REQUIRED_IMAGE_FIELDS as SURVEY_PLACEHOLDER_IMAGE_FIELDS };
 
 const FALLBACK_JPEG_BASE64 =
   '/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxISEhUSEhIVFhUVFRUYFxgXGBgXGBgYGBgYGBgYGBgYGBggHSolHR0lHxUtLy0tKy4vFx8+ODMtNygtLisBCgoKDg0OGxAQGy0lHyUtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAAEAAQMBIgACEQEDEQH/xAAXAAEBAQEAAAAAAAAAAAAAAAAAAQID/8QAFhEBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAGwAP/Z';
@@ -66,6 +64,7 @@ export function createPlaceholderImageFile(fieldName: string, index: number) {
 
 export type FillSurveyPlaceholdersOptions = {
   skipEnergyBill?: boolean;
+  includeEvFields?: boolean;
   onProgress?: (message: string, current: number, total: number) => void;
 };
 
@@ -73,6 +72,7 @@ export type FillSurveyPlaceholdersResult = {
   success: boolean;
   opportunityId: string;
   uploadedCount: number;
+  fieldsFilled: string[];
   errors: string[];
 };
 
@@ -94,15 +94,23 @@ export async function fillSurveyWithPlaceholderImages(
 ): Promise<FillSurveyPlaceholdersResult> {
   const opportunityId = rawOpportunityId.trim();
   if (!opportunityId) {
-    return { success: false, opportunityId: '', uploadedCount: 0, errors: ['Opportunity ID is required'] };
+    return {
+      success: false,
+      opportunityId: '',
+      uploadedCount: 0,
+      fieldsFilled: [],
+      errors: ['Opportunity ID is required'],
+    };
   }
 
-  const errors: string[] = [];
-  let uploadedCount = 0;
+  const fieldsToFill = getPlaceholderFillFields({
+    skipEnergyBill: options.skipEnergyBill,
+    includeEvFields: options.includeEvFields !== false,
+  });
 
-  const fieldsToFill = SURVEY_REQUIRED_IMAGE_FIELDS.filter(
-    ({ field }) => !(options.skipEnergyBill && field === 'energyBill')
-  );
+  const errors: string[] = [];
+  const fieldsFilled: string[] = [];
+  let uploadedCount = 0;
 
   const totalUploads = fieldsToFill.reduce((sum, { minRequired }) => sum + minRequired, 0);
   let current = 0;
@@ -128,6 +136,7 @@ export async function fillSurveyWithPlaceholderImages(
         errors.push(`${field}: ${response?.error || 'Upload failed'}`);
       } else {
         uploadedCount += urls.length;
+        fieldsFilled.push(field);
         current += placeholders.length;
         options.onProgress?.(`Uploaded ${field}`, current, totalUploads);
       }
@@ -136,19 +145,21 @@ export async function fillSurveyWithPlaceholderImages(
     }
   }
 
-  // Backend now merges URLs into page JSON on each upload; refresh to verify
   const synced = await fetchSurveyImagesByField(opportunityId);
-  const syncedFieldCount = Object.keys(synced).length;
-  if (syncedFieldCount < fieldsToFill.length && errors.length === 0) {
-    errors.push(
-      `Only ${syncedFieldCount}/${fieldsToFill.length} fields have images after sync. Reload the survey.`
-    );
+  const syncedFields = Object.keys(synced);
+  const missingAfterSync = fieldsToFill
+    .map((f) => f.field)
+    .filter((field) => !syncedFields.includes(field));
+
+  if (missingAfterSync.length > 0 && errors.length === 0) {
+    errors.push(`Missing after sync: ${missingAfterSync.join(', ')}`);
   }
 
   return {
     success: errors.length === 0,
     opportunityId,
     uploadedCount,
+    fieldsFilled,
     errors,
   };
 }

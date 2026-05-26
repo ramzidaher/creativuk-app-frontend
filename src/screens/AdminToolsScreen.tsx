@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { fillSurveyWithPlaceholderImages } from '../utils/surveyPlaceholderImages';
-import { SURVEY_REQUIRED_IMAGE_FIELDS } from '../utils/surveyImageFields';
+import { getPlaceholderFillFields, SURVEY_IMAGE_UPLOAD_FIELDS } from '../utils/surveyImageFields';
 
 export default function AdminToolsScreen() {
   const { user } = useAuth();
@@ -72,7 +72,7 @@ export default function AdminToolsScreen() {
       });
 
       if (result.success) {
-        const msg = `Uploaded ${result.uploadedCount} placeholder image(s) for ${result.opportunityId}.`;
+        const msg = `Uploaded ${result.uploadedCount} placeholder(s) across ${result.fieldsFilled.length} fields for ${result.opportunityId}.`;
         setLastResult(msg);
         Alert.alert('Done', msg);
       } else {
@@ -104,9 +104,8 @@ export default function AdminToolsScreen() {
     );
   }
 
-  const totalImages = SURVEY_REQUIRED_IMAGE_FIELDS.filter(
-    (f) => !(skipEnergyBill && f.field === 'energyBill')
-  ).reduce((sum, f) => sum + f.minRequired, 0);
+  const placeholderFields = getPlaceholderFillFields({ skipEnergyBill, includeEvFields: true });
+  const totalImages = placeholderFields.reduce((sum, f) => sum + f.minRequired, 0);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.primaryBackground }]}>
@@ -130,9 +129,9 @@ export default function AdminToolsScreen() {
             <Text style={[styles.cardTitle, { color: theme.primaryText }]}>Survey placeholder images</Text>
           </View>
           <Text style={[styles.cardDescription, { color: theme.secondaryText }]}>
-            Enter a GHL opportunity ID or manual opportunity ID. Placeholder JPEGs are uploaded to each required
-            survey photo field ({totalImages} images total) so you can test submission and contract generation
-            without taking real photos.
+            Enter a GHL opportunity ID or manual opportunity ID. Placeholder JPEGs are uploaded to every survey
+            photo field in the app ({placeholderFields.length} fields, {totalImages} images total), matching the
+            live survey screens.
           </Text>
 
           <Text style={[styles.label, { color: theme.primaryText }]}>Opportunity ID</Text>
@@ -202,13 +201,19 @@ export default function AdminToolsScreen() {
         </View>
 
         <View style={[styles.card, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-          <Text style={[styles.cardTitle, { color: theme.primaryText, marginBottom: 8 }]}>Fields filled</Text>
-          {SURVEY_REQUIRED_IMAGE_FIELDS.map(({ field, minRequired }) => (
-            <Text key={field} style={[styles.fieldRow, { color: theme.secondaryText }]}>
-              • {field}: {minRequired} placeholder{minRequired !== 1 ? 's' : ''}
-              {skipEnergyBill && field === 'energyBill' ? ' (skipped)' : ''}
-            </Text>
-          ))}
+          <Text style={[styles.cardTitle, { color: theme.primaryText, marginBottom: 8 }]}>
+            All survey photo fields ({SURVEY_IMAGE_UPLOAD_FIELDS.length})
+          </Text>
+          {SURVEY_IMAGE_UPLOAD_FIELDS.map(({ field, minRequired, page, evChargerOnly }) => {
+            const skipped = skipEnergyBill && field === 'energyBill';
+            return (
+              <Text key={field} style={[styles.fieldRow, { color: theme.secondaryText }]}>
+                • {field} ({page}): {minRequired} image{minRequired !== 1 ? 's' : ''}
+                {skipped ? ' — skipped' : ''}
+                {evChargerOnly ? ' — EV section' : ''}
+              </Text>
+            );
+          })}
         </View>
       </ScrollView>
     </SafeAreaView>
