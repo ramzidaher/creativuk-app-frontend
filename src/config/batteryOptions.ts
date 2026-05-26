@@ -12,6 +12,7 @@ export const BATTERY_MODELS: Record<string, string[]> = {
     'PowerOcean LFP - 5.1 kWh',
     'PowerOcean LFP - 10.2 kWh',
     'PowerOcean LFP - 15.3 kWh',
+    'PowerOcean LFP - 30.6 kWh',
   ],
 };
 
