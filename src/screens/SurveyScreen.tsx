@@ -41,6 +41,8 @@ import {
 } from '../types';
 import { surveyApi } from '../utils/api';
 import { filesFromWebFileList } from '../utils/surveyWebImageFiles';
+import { getPageForSurveyImageField } from '../utils/surveyImageFields';
+import { fetchSurveyImagesByField } from '../utils/syncSurveyImages';
 import { filterImagesForSubmission } from '../utils/batchImageUpload';
 import { compressImageAuto } from '../utils/imageCompression';
 
@@ -145,6 +147,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
   const [loadingImages, setLoadingImages] = useState<{ [key: string]: boolean }>({});
   const [imageCache, setImageCache] = useState<{ [key: string]: any }>({});
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pageSaveTimeoutRef = useRef<Partial<Record<string, ReturnType<typeof setTimeout>>>>({});
   
   // Keep ref in sync with state - optimized to prevent unnecessary re-renders
   useEffect(() => {
@@ -315,6 +318,36 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
     }
   }, [opportunityId]);
 
+  const syncImagesFromServer = useCallback(async () => {
+    if (!opportunityId) {
+      return {};
+    }
+    try {
+      const byField = await fetchSurveyImagesByField(opportunityId);
+      if (Object.keys(byField).length === 0) {
+        return byField;
+      }
+
+      uploadedFilesRef.current = { ...uploadedFilesRef.current, ...byField };
+      setUploadedFiles((prev) => ({ ...prev, ...byField }));
+
+      setFormData((prev) => {
+        const next = { ...prev };
+        for (const [fieldName, files] of Object.entries(byField)) {
+          const pageKey = getPageForSurveyImageField(fieldName);
+          const urls = files.map((f) => f.uri);
+          next[pageKey] = { ...(next[pageKey] as object), [`${fieldName}Files`]: urls };
+        }
+        return next;
+      });
+
+      return byField;
+    } catch (error) {
+      console.error('❌ Failed to sync survey images from server:', error);
+      return {};
+    }
+  }, [opportunityId]);
+
   // Optimized form data update with server-side saving
   const updateFormData = useCallback((pageName: keyof typeof formData, updateData: any) => {
     setFormData(prev => {
@@ -344,11 +377,14 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         [pageName]: newPageData
       };
       
-      // Save to server after a short delay to debounce rapid changes
-      setTimeout(() => {
+      // Debounced save — cancel prior pending save for this page to avoid overwriting sibling fields
+      if (pageSaveTimeoutRef.current[pageName]) {
+        clearTimeout(pageSaveTimeoutRef.current[pageName]);
+      }
+      pageSaveTimeoutRef.current[pageName] = setTimeout(() => {
         saveToServer(pageName, newPageData);
-      }, 1000);
-      
+      }, 800);
+
       return newData;
     });
   }, [saveToServer]);
@@ -1064,32 +1100,33 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           Object.assign(allLoadedImages, pageImages);
         });
 
-        // Update uploaded files state with loaded images - merge with existing images
+        // Load images from page JSON first, then overlay authoritative SurveyImage API records
         if (Object.keys(allLoadedImages).length > 0) {
-          console.log('📷 Loading images from server URLs:', Object.keys(allLoadedImages));
-          setUploadedFiles(prev => {
-            const updated = { ...prev };
-            Object.keys(allLoadedImages).forEach(fieldName => {
-              // Merge new images with existing ones, avoiding duplicates
-              const existingImages = updated[fieldName] || [];
-              const newImages = allLoadedImages[fieldName] || [];
-              
-              // Create a map to track existing image URLs to avoid duplicates
-              const existingUrls = new Set(existingImages.map((img: any) => img.uri || img.url));
-              
-              // Add new images that don't already exist
-              const uniqueNewImages = newImages.filter((img: any) => 
-                !existingUrls.has(img.uri || img.url)
-              );
-              
-              updated[fieldName] = [...existingImages, ...uniqueNewImages];
+          console.log('📷 Loading images from page JSON:', Object.keys(allLoadedImages));
+          setUploadedFiles((prev) => ({ ...prev, ...allLoadedImages }));
+          uploadedFilesRef.current = { ...uploadedFilesRef.current, ...allLoadedImages };
+        }
+
+        try {
+          const apiImages = await fetchSurveyImagesByField(opportunityId);
+          if (Object.keys(apiImages).length > 0) {
+            console.log('📷 Loading images from SurveyImage API:', Object.keys(apiImages));
+            setUploadedFiles((prev) => ({ ...prev, ...apiImages }));
+            uploadedFilesRef.current = { ...uploadedFilesRef.current, ...apiImages };
+            setFormData((prev) => {
+              const next = { ...prev };
+              for (const [fieldName, files] of Object.entries(apiImages)) {
+                const pageKey = getPageForSurveyImageField(fieldName);
+                next[pageKey] = {
+                  ...(next[pageKey] as object),
+                  [`${fieldName}Files`]: files.map((f) => f.uri),
+                };
+              }
+              return next;
             });
-            return updated;
-          });
-          uploadedFilesRef.current = {
-            ...uploadedFilesRef.current,
-            ...allLoadedImages
-          };
+          }
+        } catch (imageLoadError) {
+          console.warn('📷 Could not load images from API (non-fatal):', imageLoadError);
         }
 
         // Load survey data directly
@@ -2626,52 +2663,10 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           return;
         }
 
-        const uploadedImageFiles = urls.map((url: string, index: number) => ({
-          uri: url,
-          name: validFiles[index]?.name || `image_${Date.now()}_${index}.jpg`,
-          mimeType: validFiles[index]?.mimeType || 'image/jpeg',
-          type: validFiles[index]?.mimeType || 'image/jpeg',
-          size: validFiles[index]?.size || 0,
-          isNew: false,
-          timestamp: Date.now(),
-          isFromServer: true,
-        }));
+        // Reconcile UI from server (source of truth) — avoids page JSON overwrite wiping sibling fields
+        await syncImagesFromServer();
 
-        const latestFieldFiles = uploadedFilesRef.current[fieldName] || [];
-        const latestValid = latestFieldFiles.filter((file: any) => {
-          const isFromAPI = file.uri && typeof file.uri === 'string' && file.uri.startsWith('http');
-          return isFromAPI || file.isNew || file.timestamp || file.base64 || file.base64Data;
-        });
-        const updatedFiles = [...latestValid, ...uploadedImageFiles];
-
-        uploadedFilesRef.current = {
-          ...uploadedFilesRef.current,
-          [fieldName]: updatedFiles,
-        };
-        setUploadedFiles((prev) => ({
-          ...prev,
-          [fieldName]: updatedFiles,
-        }));
-
-        let targetPage: 'page1' | 'page2' | 'page3' | 'page4' | 'page5' | 'page6' | 'page7' | 'page8' = 'page7';
-        if (['energyBill'].includes(fieldName)) {
-          targetPage = 'page4';
-        } else if (['epcCertificate'].includes(fieldName)) {
-          targetPage = 'page5';
-        } else if (['frontDoor', 'frontProperty', 'targetRoofs', 'propertySides'].includes(fieldName)) {
-          targetPage = 'page6';
-        } else if (
-          ['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'electricMeter', 'garage', 'fuseBoard', 'batteryInverterLocation'].includes(fieldName)
-        ) {
-          targetPage = 'page7';
-        } else if (['evLocation', 'evCharger', 'shadingIssues', 'scaffolding', 'customerSignature', 'renewableExecutiveSignature'].includes(fieldName)) {
-          targetPage = 'page8';
-        }
-
-        const allImageUrls = updatedFiles.map((file) => file.uri);
-        updateFormData(targetPage, { [`${fieldName}Files`]: allImageUrls });
-
-        console.log(`✅ Uploaded ${uploadedImageFiles.length} image(s) to ${fieldName}`);
+        console.log(`✅ Uploaded ${urls.length} image(s) to ${fieldName}`);
       } catch (error) {
         console.error(`❌ Error adding files to ${fieldName}:`, error);
         showAlert('Error', `Failed to upload images for ${fieldName}. Please try again.`, 'error');
@@ -2687,7 +2682,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
     const queued = uploadQueueRef.current.then(runUpload, runUpload);
     uploadQueueRef.current = queued.catch(() => undefined) as Promise<void>;
     return queued;
-  }, [opportunityId, updateFormData]);
+  }, [opportunityId, syncImagesFromServer]);
 
   const handleWebFilesDrop = useCallback(
     async (fieldName: string, fileList: FileList | File[]) => {

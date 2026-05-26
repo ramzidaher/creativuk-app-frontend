@@ -16,10 +16,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import {
-  fillSurveyWithPlaceholderImages,
-  SURVEY_PLACEHOLDER_IMAGE_FIELDS,
-} from '../utils/surveyPlaceholderImages';
+import { fillSurveyWithPlaceholderImages } from '../utils/surveyPlaceholderImages';
+import { SURVEY_REQUIRED_IMAGE_FIELDS } from '../utils/surveyImageFields';
 
 export default function AdminToolsScreen() {
   const { user } = useAuth();
@@ -106,7 +104,7 @@ export default function AdminToolsScreen() {
     );
   }
 
-  const totalImages = SURVEY_PLACEHOLDER_IMAGE_FIELDS.filter(
+  const totalImages = SURVEY_REQUIRED_IMAGE_FIELDS.filter(
     (f) => !(skipEnergyBill && f.field === 'energyBill')
   ).reduce((sum, f) => sum + f.minRequired, 0);
 
@@ -205,7 +203,7 @@ export default function AdminToolsScreen() {
 
         <View style={[styles.card, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
           <Text style={[styles.cardTitle, { color: theme.primaryText, marginBottom: 8 }]}>Fields filled</Text>
-          {SURVEY_PLACEHOLDER_IMAGE_FIELDS.map(({ field, minRequired }) => (
+          {SURVEY_REQUIRED_IMAGE_FIELDS.map(({ field, minRequired }) => (
             <Text key={field} style={[styles.fieldRow, { color: theme.secondaryText }]}>
               • {field}: {minRequired} placeholder{minRequired !== 1 ? 's' : ''}
               {skipEnergyBill && field === 'energyBill' ? ' (skipped)' : ''}

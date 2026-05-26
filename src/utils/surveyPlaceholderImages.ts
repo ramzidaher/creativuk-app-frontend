@@ -1,19 +1,9 @@
 import { Platform } from 'react-native';
 import { surveyApi } from './api';
+import { SURVEY_REQUIRED_IMAGE_FIELDS } from './surveyImageFields';
+import { fetchSurveyImagesByField } from './syncSurveyImages';
 
-/** Image fields required for survey submit / contract generation (per-field minimum). */
-export const SURVEY_PLACEHOLDER_IMAGE_FIELDS: { field: string; minRequired: number; page: string }[] = [
-  { field: 'energyBill', minRequired: 2, page: 'page4' },
-  { field: 'frontDoor', minRequired: 2, page: 'page6' },
-  { field: 'frontProperty', minRequired: 2, page: 'page6' },
-  { field: 'targetRoofs', minRequired: 2, page: 'page6' },
-  { field: 'roofAngle', minRequired: 2, page: 'page7' },
-  { field: 'roofTileCloseup', minRequired: 2, page: 'page7' },
-  { field: 'internalCeilingPictures', minRequired: 4, page: 'page7' },
-  { field: 'electricMeter', minRequired: 2, page: 'page7' },
-  { field: 'fuseBoard', minRequired: 2, page: 'page7' },
-  { field: 'batteryInverterLocation', minRequired: 2, page: 'page7' },
-];
+export { SURVEY_REQUIRED_IMAGE_FIELDS as SURVEY_PLACEHOLDER_IMAGE_FIELDS };
 
 const FALLBACK_JPEG_BASE64 =
   '/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxISEhUSEhIVFhUVFRUYFxgXGBgXGBgYGBgYGBgYGBgYGBggHSolHR0lHxUtLy0tKy4vFx8+ODMtNygtLisBCgoKDg0OGxAQGy0lHyUtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAAEAAQMBIgACEQEDEQH/xAAXAAEBAQEAAAAAAAAAAAAAAAAAAQID/8QAFhEBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAGwAP/Z';
@@ -44,8 +34,7 @@ function createCanvasPlaceholder(fieldLabel: string, index: number): string | nu
     ctx.fillText(`#${index + 1}`, canvas.width / 2, canvas.height / 2 + 48);
 
     const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-    const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-    return base64;
+    return dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
   } catch {
     return null;
   }
@@ -111,7 +100,7 @@ export async function fillSurveyWithPlaceholderImages(
   const errors: string[] = [];
   let uploadedCount = 0;
 
-  const fieldsToFill = SURVEY_PLACEHOLDER_IMAGE_FIELDS.filter(
+  const fieldsToFill = SURVEY_REQUIRED_IMAGE_FIELDS.filter(
     ({ field }) => !(options.skipEnergyBill && field === 'energyBill')
   );
 
@@ -141,17 +130,19 @@ export async function fillSurveyWithPlaceholderImages(
         uploadedCount += urls.length;
         current += placeholders.length;
         options.onProgress?.(`Uploaded ${field}`, current, totalUploads);
-
-        const pageKey =
-          field === 'energyBill' ? 'page4' : ['frontDoor', 'frontProperty', 'targetRoofs'].includes(field) ? 'page6' : 'page7';
-
-        await surveyApi.saveSurveyPage(opportunityId, {
-          [pageKey]: { [`${field}Files`]: urls },
-        });
       }
     } catch (err) {
       errors.push(`${field}: ${err instanceof Error ? err.message : 'Upload error'}`);
     }
+  }
+
+  // Backend now merges URLs into page JSON on each upload; refresh to verify
+  const synced = await fetchSurveyImagesByField(opportunityId);
+  const syncedFieldCount = Object.keys(synced).length;
+  if (syncedFieldCount < fieldsToFill.length && errors.length === 0) {
+    errors.push(
+      `Only ${syncedFieldCount}/${fieldsToFill.length} fields have images after sync. Reload the survey.`
+    );
   }
 
   return {
