@@ -1005,12 +1005,18 @@ export const surveyApi = {
       }))
     });
 
+    const normalizeBase64Data = (img: { base64?: string; base64Data?: string }) => {
+      const raw = img.base64Data || img.base64 || '';
+      if (!raw) return '';
+      return raw.includes(',') ? raw.split(',')[1] : raw;
+    };
+
     const payload = {
       fieldName,
       images: images.map(img => ({
         name: img.name || `image_${Date.now()}.jpg`,
         mimeType: img.mimeType || 'image/jpeg',
-        base64Data: img.base64 || img.base64Data,
+        base64Data: normalizeBase64Data(img),
         size: img.size || 0
       }))
     };

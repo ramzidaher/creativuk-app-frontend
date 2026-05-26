@@ -115,6 +115,7 @@ import PricingScreen from './src/screens/PricingScreen';
 import SolarArraysInputsScreen from './src/screens/SolarArraysInputsScreen';
 import SolarProjectionScreen from './src/screens/SolarProjectionScreen';
 import WelcomeEmailScreen from './src/screens/WelcomeEmailScreen';
+import AdminToolsScreen from './src/screens/AdminToolsScreen';
 
 export type RootStackParamList = {
   Loading: undefined;
@@ -291,6 +292,7 @@ export type RootStackParamList = {
   FinishAppointment: { opportunityId: string; opportunity?: any };
   Reports: undefined;
   AppointmentCycleTime: undefined;
+  AdminTools: undefined;
 };
 
 export type TabParamList = {
@@ -729,6 +731,26 @@ function ProfileScreen() {
               </TouchableOpacity>
             )}
 
+            {isAdmin && (
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: theme.primaryButton }]}
+                onPress={() => navigation.navigate('AdminTools')}
+              >
+                <View style={styles.actionButtonContent}>
+                  <View style={[styles.actionIcon, { backgroundColor: theme.primaryButton + '20' }]}>
+                    <Ionicons name="construct" size={20} color={theme.primaryButton} />
+                  </View>
+                  <View style={styles.actionText}>
+                    <Text style={styles.actionTitle}>Tools</Text>
+                    <Text style={[styles.actionSubtitle, { color: theme.secondaryText }]}>
+                      Fill survey placeholder images by opportunity ID
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={theme.secondaryText} />
+                </View>
+              </TouchableOpacity>
+            )}
+
             {/* Logout Button */}
             <TouchableOpacity
               style={[styles.logoutButton, { backgroundColor: theme.dangerButton }]}
@@ -1145,6 +1167,13 @@ function AppNavigator() {
           <Stack.Screen
             name="AppointmentCycleTime"
             component={AppointmentCycleTimeScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="AdminTools"
+            component={AdminToolsScreen}
             options={{
               headerShown: false,
             }}

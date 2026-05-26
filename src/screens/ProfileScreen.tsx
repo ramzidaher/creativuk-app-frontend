@@ -122,6 +122,15 @@ const ProfileScreen: React.FC = () => {
       badgeText: 'ADMIN',
     },
     {
+      id: 'tools',
+      title: 'Tools',
+      subtitle: 'Fill survey placeholder images by opportunity ID',
+      icon: 'tool',
+      iconType: 'feather',
+      onPress: () => navigation.navigate('AdminTools'),
+      isAdminOnly: true,
+    },
+    {
       id: 'support',
       title: 'Support & Help',
       subtitle: 'Get help and contact support',

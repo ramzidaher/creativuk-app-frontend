@@ -40,6 +40,7 @@ import {
     SurveyPage8
 } from '../types';
 import { surveyApi } from '../utils/api';
+import { filesFromWebFileList } from '../utils/surveyWebImageFiles';
 import { filterImagesForSubmission } from '../utils/batchImageUpload';
 import { compressImageAuto } from '../utils/imageCompression';
 
@@ -137,6 +138,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
   const [showScaffoldingThroughHouseDropdown, setShowScaffoldingThroughHouseDropdown] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<{ [key: string]: any[] }>({});
   const uploadedFilesRef = useRef<{ [key: string]: any[] }>({});
+  const uploadQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const [uploadingFields, setUploadingFields] = useState<Record<string, boolean>>({});
   const [imagePreviews, setImagePreviews] = useState<{ [key: string]: any[] }>({});
   const [loadedPages, setLoadedPages] = useState<Set<number>>(new Set());
   const [loadingImages, setLoadingImages] = useState<{ [key: string]: boolean }>({});
@@ -742,7 +745,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
     );
   });
 
-  const ModernFileUpload = React.memo(({ 
+  const ModernFileUpload = ({ 
     label, 
     onPress, 
     files = [], 
@@ -751,11 +754,45 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
     fieldName,
     minRequired = 2,
     maxFiles = 10,
+    onWebDrop,
     ...props 
   }: any) => {
     const currentCount = files.length;
     const isComplete = required ? currentCount >= minRequired : true;
-    
+    const [isDragOver, setIsDragOver] = React.useState(false);
+    const isWeb = Platform.OS === 'web';
+    const isUploading = fieldName ? !!uploadingFields[fieldName] : false;
+    const isDisabled = isUploading;
+
+    const webDragHandlers = isWeb && onWebDrop && fieldName
+      ? {
+          onDragEnter: (e: any) => {
+            e.preventDefault?.();
+            e.stopPropagation?.();
+            setIsDragOver(true);
+          },
+          onDragLeave: (e: any) => {
+            e.preventDefault?.();
+            e.stopPropagation?.();
+            setIsDragOver(false);
+          },
+          onDragOver: (e: any) => {
+            e.preventDefault?.();
+            e.stopPropagation?.();
+            setIsDragOver(true);
+          },
+          onDrop: async (e: any) => {
+            e.preventDefault?.();
+            e.stopPropagation?.();
+            setIsDragOver(false);
+            const fileList = e.dataTransfer?.files ?? e.nativeEvent?.dataTransfer?.files;
+            if (fileList?.length) {
+              await onWebDrop(fieldName, fileList);
+            }
+          },
+        }
+      : {};
+
     return (
       <View style={modernStyles.inputContainer}>
         {/* Show image previews if available */}
@@ -780,29 +817,38 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           style={[
             modernStyles.fileUploadWrapper,
             { 
-              backgroundColor: theme.inputBackground,
-              borderColor: isComplete ? '#10b981' : theme.cardBorder,
+              backgroundColor: isDragOver ? theme.primaryButton + '15' : theme.inputBackground,
+              borderColor: isDragOver ? theme.primaryButton : isComplete ? '#10b981' : theme.cardBorder,
+              borderStyle: isDragOver ? 'dashed' : 'solid',
+              opacity: isDisabled ? 0.65 : 1,
             }
           ]}
           onPress={() => {
-            // console.log('ModernFileUpload onPress called for:', label);
+            if (isDisabled) return;
             onPress();
           }}
+          disabled={isDisabled}
           accessibilityRole="button"
           accessibilityLabel={`Upload ${label}`}
-          accessibilityHint="Tap to select files"
+          accessibilityHint="Tap to select files or drag and drop images"
+          {...(isDisabled ? {} : webDragHandlers)}
           {...props}
         >
           <View style={modernStyles.fileUploadContent}>
-            <Ionicons name="camera-outline" size={32} color={theme.primaryButton} />
+            {isUploading ? (
+              <ActivityIndicator size="small" color={theme.primaryButton} />
+            ) : (
+              <Ionicons name={isDragOver ? 'cloud-upload-outline' : 'camera-outline'} size={32} color={theme.primaryButton} />
+            )}
             <Text style={[modernStyles.fileUploadTitle, { color: theme.primaryText }]}>
-              Add Photos
+              {isUploading ? 'Uploading…' : isDragOver ? 'Drop images here' : 'Add Photos'}
             </Text>
             <Text style={[modernStyles.fileUploadSubtitle, { color: theme.secondaryText }]}>
-              Tap to take photos or select from gallery
+              {isWeb ? 'Tap to select or drag and drop images here' : 'Tap to take photos or select from gallery'}
             </Text>
             <Text style={[modernStyles.fileUploadHint, { color: theme.secondaryText }]}>
               {required ? `Minimum ${minRequired} images required` : 'Optional'} • Camera • Gallery • Files
+              {isWeb ? ' • Drag & drop' : ''}
             </Text>
           </View>
         </Pressable>
@@ -850,7 +896,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         )}
       </View>
     );
-  });
+  };
 
   useEffect(() => {
     // console.log('useEffect triggered - opportunityId:', opportunityId);
@@ -2479,32 +2525,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           const files = (event.target as HTMLInputElement).files;
           console.log('📁 Files selected:', files?.length || 0);
           
-          if (files) {
-            const newFiles = await Promise.all(Array.from(files).map(async (file) => {
-              console.log('📁 Processing file:', file.name);
-              
-              // Convert file to base64 for backend processing
-              const base64 = await new Promise<string>((resolve) => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                  const result = reader.result as string;
-                  resolve(result);
-                };
-                reader.readAsDataURL(file);
-              });
-
-              return {
-                uri: URL.createObjectURL(file), // Keep for display
-                name: file.name,
-                size: file.size,
-                mimeType: file.type,
-                base64: base64, // Add base64 data for backend
-                base64Data: base64.split(',')[1], // Add base64Data for consistency (remove data URL prefix)
-                isNew: true, // Mark as new file
-                timestamp: Date.now(), // Add timestamp for uniqueness
-              };
-            }));
-
+          if (files?.length) {
+            const newFiles = await filesFromWebFileList(files);
             console.log('📁 Processed', newFiles.length, 'files for web');
             addFilesToField(fieldName, newFiles);
           }
@@ -2545,168 +2567,144 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
     }
   };
 
-  const addFilesToField = useCallback(async (fieldName: string, newFiles: any[]) => {
-    try {
-      console.log(`📷 Adding ${newFiles.length} files to field: ${fieldName}`);
-      
-      // Validate files before processing
-      const validFiles = newFiles.filter(file => {
-        if (!file) {
-          console.warn('📷 Skipping null/undefined file');
-          return false;
-        }
-        if (!file.uri && !file.base64 && !file.base64Data) {
-          console.warn('📷 Skipping file without valid data:', file.name);
-          return false;
-        }
-        return true;
-      });
+  const addFilesToField = useCallback((fieldName: string, newFiles: any[]) => {
+    const runUpload = async () => {
+      try {
+        console.log(`📷 Adding ${newFiles.length} files to field: ${fieldName}`);
 
-      if (validFiles.length === 0) {
-        console.warn('📷 No valid files to add');
-        return;
-      }
-      
-      // Get the current state synchronously to avoid race conditions using ref
-      const currentFiles = uploadedFilesRef.current[fieldName] || [];
-    
-      // Filter out any old files that might be causing issues
-      // Keep only files that are either from API (have http URLs) or are newly uploaded (have valid data)
-      const validCurrentFiles = currentFiles.filter((file: any) => {
-        const isFromAPI = file.uri && typeof file.uri === 'string' && file.uri.startsWith('http');
-        const hasBase64Data = file.base64Data || file.base64;
-        const hasDataUrl = file.uri && typeof file.uri === 'string' && file.uri.startsWith('data:') && file.uri.length > 10;
-        const hasValidData = hasBase64Data || hasDataUrl;
-        const isNewlyUploaded = file.isNew || file.timestamp || hasValidData;
-        const isValid = isFromAPI || isNewlyUploaded;
-        
-        return isValid;
-      });
-      
-      const totalFiles = validCurrentFiles.length + validFiles.length;
-      
-      // Check if we're exceeding a reasonable limit (e.g., 10 images per field)
-      if (totalFiles > 10) {
-        showAlert('Too Many Images', 'You can upload a maximum of 10 images per category.', 'warning');
-        return;
-      }
-      
-      // Upload new images to server and get URLs
-      console.log(`📤 Uploading ${validFiles.length} images to server...`);
-      console.log('📤 Upload request details:', {
-        opportunityId: opportunityId || '',
-        fieldName,
-        validFilesCount: validFiles.length,
-        validFilesDetails: validFiles.map((file, index) => ({
-          index,
-          name: file.name,
-          mimeType: file.mimeType,
-          size: file.size,
-          hasBase64Data: !!file.base64Data,
-          hasBase64: !!file.base64,
-          base64Length: file.base64Data?.length || file.base64?.length || 0
-        }))
-      });
-      
-      const uploadResponse = await surveyApi.uploadImagesAndGetUrls(opportunityId || '', fieldName, validFiles);
-      
-      console.log('📤 ===== UPLOAD RESPONSE DEBUG =====');
-      console.log('📤 Full upload response object:', uploadResponse);
-      console.log('📤 Upload response type:', typeof uploadResponse);
-      console.log('📤 Upload response keys:', Object.keys(uploadResponse || {}));
-      console.log('📤 Upload response success:', uploadResponse?.success);
-      console.log('📤 Upload response success type:', typeof uploadResponse?.success);
-      console.log('📤 Upload response data:', uploadResponse?.data);
-      console.log('📤 Upload response data type:', typeof uploadResponse?.data);
-      console.log('📤 Upload response data keys:', uploadResponse?.data ? Object.keys(uploadResponse.data) : 'No data');
-      console.log('📤 Upload response data urls:', uploadResponse?.data?.urls);
-      console.log('📤 Upload response data urls type:', typeof uploadResponse?.data?.urls);
-      console.log('📤 Upload response data urls length:', uploadResponse?.data?.urls?.length);
-      console.log('📤 Upload response data.data urls:', (uploadResponse?.data as any)?.data?.urls);
-      console.log('📤 Upload response data.data urls type:', typeof (uploadResponse?.data as any)?.data?.urls);
-      console.log('📤 Upload response data.data urls length:', (uploadResponse?.data as any)?.data?.urls?.length);
-      console.log('📤 Upload response error:', uploadResponse?.error);
-      console.log('📤 ===== END UPLOAD RESPONSE DEBUG =====');
-      
-      // Check if response is successful
-      const isSuccess = uploadResponse?.success === true;
-      // The URLs are nested: response.data.data.urls (due to backend structure)
-      const urls = (uploadResponse?.data as any)?.data?.urls || uploadResponse?.data?.urls;
-      const hasUrls = urls && Array.isArray(urls) && urls.length > 0;
-      
-      console.log('📤 Success check:', { isSuccess, hasUrls, urls });
-      
-      if (!isSuccess || !hasUrls) {
-        console.error('❌ Upload failed - Details:', {
-          success: uploadResponse?.success,
-          hasData: !!uploadResponse?.data,
-          hasUrls: !!urls,
-          urlsLength: urls?.length,
-          error: uploadResponse?.error,
-          fullResponse: uploadResponse
+        setUploadingFields((prev) => ({ ...prev, [fieldName]: true }));
+
+        const validFiles = newFiles
+          .filter((file) => {
+            if (!file) return false;
+            if (!file.uri && !file.base64 && !file.base64Data) {
+              console.warn('📷 Skipping file without valid data:', file.name);
+              return false;
+            }
+            return true;
+          })
+          .map((file) => {
+            const raw = file.base64Data || file.base64 || '';
+            const base64Data = raw.includes(',') ? raw.split(',')[1] : raw;
+            return { ...file, base64Data, base64: file.base64 || (base64Data ? `data:${file.mimeType || 'image/jpeg'};base64,${base64Data}` : undefined) };
+          });
+
+        if (validFiles.length === 0) {
+          console.warn('📷 No valid files to add');
+          return;
+        }
+
+        const currentFiles = uploadedFilesRef.current[fieldName] || [];
+        const validCurrentFiles = currentFiles.filter((file: any) => {
+          const isFromAPI = file.uri && typeof file.uri === 'string' && file.uri.startsWith('http');
+          const hasBase64Data = file.base64Data || file.base64;
+          const hasDataUrl = file.uri && typeof file.uri === 'string' && file.uri.startsWith('data:') && file.uri.length > 10;
+          const hasValidData = hasBase64Data || hasDataUrl;
+          const isNewlyUploaded = file.isNew || file.timestamp || hasValidData;
+          return isFromAPI || isNewlyUploaded;
         });
-        showAlert('Error', `Failed to upload images to server. ${uploadResponse?.error || 'Unknown error'}`, 'error');
-        return;
-      }
-      
-      // Convert URLs to file objects for display
-      const uploadedImageFiles = urls.map((url, index) => ({
-        uri: url,
-        name: validFiles[index]?.name || `image_${Date.now()}_${index}.jpg`,
-        mimeType: validFiles[index]?.mimeType || 'image/jpeg',
-        size: validFiles[index]?.size || 0,
-        isNew: false, // Now it's uploaded to server
-        timestamp: Date.now(),
-        isFromServer: true // Mark as from server
-      }));
-      
-      console.log(`✅ Successfully uploaded ${uploadedImageFiles.length} images, got URLs:`, urls);
-      
-      // Combine existing files with new uploaded files
-      const updatedFiles = [...validCurrentFiles, ...uploadedImageFiles];
-      
-      // Update state
-      const newState = {
-        ...uploadedFilesRef.current,
-        [fieldName]: updatedFiles
-      };
-      uploadedFilesRef.current = newState;
-      setUploadedFiles(newState);
-      
-      // Determine correct page based on field name
-      let targetPage: 'page1' | 'page2' | 'page3' | 'page4' | 'page5' | 'page6' | 'page7' | 'page8' = 'page7';
-      
-      if (['energyBill'].includes(fieldName)) {
-        targetPage = 'page4';
-      } else if (['epcCertificate'].includes(fieldName)) {
-        targetPage = 'page5';
-      } else if (['frontDoor', 'frontProperty', 'targetRoofs', 'propertySides'].includes(fieldName)) {
-        targetPage = 'page6';
-      } else if (['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'electricMeter', 'garage', 'fuseBoard', 'batteryInverterLocation'].includes(fieldName)) {
-        targetPage = 'page7';
-      } else if (['evLocation', 'evCharger', 'shadingIssues', 'scaffolding', 'customerSignature', 'renewableExecutiveSignature'].includes(fieldName)) {
-        targetPage = 'page8';
-      }
-      
-      // Store ALL URLs in form data (existing + new)
-      const allImageUrls = updatedFiles.map(file => file.uri);
-      
-      // Update form data with ALL image URLs - debounced to prevent excessive updates
-      setTimeout(() => {
-        updateFormData(targetPage, { [`${fieldName}Files`]: allImageUrls });
-      }, 100);
 
-      // Show success message
-      showAlert(
-        'Success', 
-        `${validFiles.length} image(s) uploaded successfully!\n\nNote: At least 2 images are required for each category.`,
-        'success'
-      );
-    } catch (error) {
-      console.error('❌ Error adding files to field:', error);
-      showAlert('Error', 'Failed to add files. Please try again.', 'error');
-    }
+        if (validCurrentFiles.length + validFiles.length > 10) {
+          showAlert('Too Many Images', 'You can upload a maximum of 10 images per category.', 'warning');
+          return;
+        }
+
+        console.log(`📤 Uploading ${validFiles.length} image(s) for ${fieldName}...`);
+        const uploadResponse = await surveyApi.uploadImagesAndGetUrls(opportunityId || '', fieldName, validFiles);
+
+        const isSuccess = uploadResponse?.success === true;
+        const urls = (uploadResponse?.data as any)?.data?.urls || uploadResponse?.data?.urls;
+        const hasUrls = urls && Array.isArray(urls) && urls.length > 0;
+
+        if (!isSuccess || !hasUrls) {
+          console.error('❌ Upload failed for', fieldName, uploadResponse);
+          showAlert(
+            'Upload failed',
+            `Could not upload to "${fieldName}". ${uploadResponse?.error || 'Please try again.'}`,
+            'error'
+          );
+          return;
+        }
+
+        const uploadedImageFiles = urls.map((url: string, index: number) => ({
+          uri: url,
+          name: validFiles[index]?.name || `image_${Date.now()}_${index}.jpg`,
+          mimeType: validFiles[index]?.mimeType || 'image/jpeg',
+          type: validFiles[index]?.mimeType || 'image/jpeg',
+          size: validFiles[index]?.size || 0,
+          isNew: false,
+          timestamp: Date.now(),
+          isFromServer: true,
+        }));
+
+        const latestFieldFiles = uploadedFilesRef.current[fieldName] || [];
+        const latestValid = latestFieldFiles.filter((file: any) => {
+          const isFromAPI = file.uri && typeof file.uri === 'string' && file.uri.startsWith('http');
+          return isFromAPI || file.isNew || file.timestamp || file.base64 || file.base64Data;
+        });
+        const updatedFiles = [...latestValid, ...uploadedImageFiles];
+
+        uploadedFilesRef.current = {
+          ...uploadedFilesRef.current,
+          [fieldName]: updatedFiles,
+        };
+        setUploadedFiles((prev) => ({
+          ...prev,
+          [fieldName]: updatedFiles,
+        }));
+
+        let targetPage: 'page1' | 'page2' | 'page3' | 'page4' | 'page5' | 'page6' | 'page7' | 'page8' = 'page7';
+        if (['energyBill'].includes(fieldName)) {
+          targetPage = 'page4';
+        } else if (['epcCertificate'].includes(fieldName)) {
+          targetPage = 'page5';
+        } else if (['frontDoor', 'frontProperty', 'targetRoofs', 'propertySides'].includes(fieldName)) {
+          targetPage = 'page6';
+        } else if (
+          ['roofAngle', 'otherRoofPictures', 'roofTileCloseup', 'internalCeilingPictures', 'otherBuildings', 'electricMeter', 'garage', 'fuseBoard', 'batteryInverterLocation'].includes(fieldName)
+        ) {
+          targetPage = 'page7';
+        } else if (['evLocation', 'evCharger', 'shadingIssues', 'scaffolding', 'customerSignature', 'renewableExecutiveSignature'].includes(fieldName)) {
+          targetPage = 'page8';
+        }
+
+        const allImageUrls = updatedFiles.map((file) => file.uri);
+        updateFormData(targetPage, { [`${fieldName}Files`]: allImageUrls });
+
+        console.log(`✅ Uploaded ${uploadedImageFiles.length} image(s) to ${fieldName}`);
+      } catch (error) {
+        console.error(`❌ Error adding files to ${fieldName}:`, error);
+        showAlert('Error', `Failed to upload images for ${fieldName}. Please try again.`, 'error');
+      } finally {
+        setUploadingFields((prev) => {
+          const next = { ...prev };
+          delete next[fieldName];
+          return next;
+        });
+      }
+    };
+
+    const queued = uploadQueueRef.current.then(runUpload, runUpload);
+    uploadQueueRef.current = queued.catch(() => undefined) as Promise<void>;
+    return queued;
   }, [opportunityId, updateFormData]);
+
+  const handleWebFilesDrop = useCallback(
+    async (fieldName: string, fileList: FileList | File[]) => {
+      try {
+        const newFiles = await filesFromWebFileList(fileList);
+        if (newFiles.length === 0) {
+          showAlert('No images', 'Please drop image files (JPEG, PNG, etc.).', 'warning');
+          return;
+        }
+        await addFilesToField(fieldName, newFiles);
+      } catch (error) {
+        console.error('❌ Error handling dropped files:', error);
+        showAlert('Error', 'Failed to add dropped images. Please try again.', 'error');
+      }
+    },
+    [addFilesToField]
+  );
 
   const removeFile = async (fieldName: string, index: number) => {
     const fileToRemove = uploadedFiles[fieldName]?.[index];
@@ -3516,41 +3514,43 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         </TouchableOpacity>
       </View>
       
-        {/* Enhanced Page Navigation */}
-      <View style={styles.pageStatusContainer}>
-        {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-            <TouchableOpacity 
-              key={pageNum} 
+        {/* Page navigation dots (non-admin only; admins use global stepper) */}
+      {!isAdminUser && (
+        <View style={styles.pageStatusContainer}>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+            <TouchableOpacity
+              key={pageNum}
               style={styles.pageStatusItem}
               onPress={() => navigateToPage(pageNum)}
               activeOpacity={0.7}
             >
-            <View 
-              style={[
-                styles.pageStatusDot,
-                { 
-                  backgroundColor: isPageComplete(pageNum) 
-                    ? '#10B981' // Green for complete
-                    : pageNum === currentPage 
-                      ? theme.primaryButton || '#007AFF' // Blue for current
-                      : '#E5E7EB' // Gray for incomplete
-                }
-              ]} 
-            />
-            <Text style={[
-              styles.pageStatusText,
-              { 
-                color: pageNum === currentPage 
-                  ? theme.primaryText 
-                  : theme.secondaryText,
-                fontWeight: pageNum === currentPage ? '600' : '400'
-              }
-            ]}>
-              {pageNum}
-            </Text>
+              <View
+                style={[
+                  styles.pageStatusDot,
+                  {
+                    backgroundColor: isPageComplete(pageNum)
+                      ? '#10B981'
+                      : pageNum === currentPage
+                        ? theme.primaryButton || '#007AFF'
+                        : '#E5E7EB',
+                  },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.pageStatusText,
+                  {
+                    color: pageNum === currentPage ? theme.primaryText : theme.secondaryText,
+                    fontWeight: pageNum === currentPage ? '600' : '400',
+                  },
+                ]}
+              >
+                {pageNum}
+              </Text>
             </TouchableOpacity>
-        ))}
-      </View>
+          ))}
+        </View>
+      )}
       
       {/* Auto-fill Notification */}
       {autoFilledDetails && (
@@ -4946,6 +4946,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         <ModernFileUpload
           label="Picture of Energy Bill"
           fieldName="energyBill"
+          onWebDrop={handleWebFilesDrop}
           onPress={() => handleFileUpload('energyBill')}
           files={(() => {
             const files = uploadedFiles.energyBill || [];
@@ -5012,6 +5013,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
 
         <ModernFileUpload
           label="Picture of EPC certificate"
+          fieldName="epcCertificate"
+          onWebDrop={handleWebFilesDrop}
           onPress={() => handleFileUpload('epcCertificate')}
           files={(() => {
             const files = uploadedFiles.epcCertificate || [];
@@ -5152,6 +5155,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           <View style={styles.column}>
             <ModernFileUpload
               label="Picture of front door"
+              fieldName="frontDoor"
+              onWebDrop={handleWebFilesDrop}
               onPress={() => handleFileUpload('frontDoor')}
               files={uploadedFiles.frontDoor || []}
               onRemove={(index: number) => removeFile('frontDoor', index)}
@@ -5163,6 +5168,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           <View style={styles.column}>
             <ModernFileUpload
               label="Picture of the front of the property"
+              fieldName="frontProperty"
+              onWebDrop={handleWebFilesDrop}
               onPress={() => handleFileUpload('frontProperty')}
               files={uploadedFiles.frontProperty || []}
               onRemove={(index: number) => removeFile('frontProperty', index)}
@@ -5180,6 +5187,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           <View style={styles.column}>
             <ModernFileUpload
               label="Picture of the Target roofs"
+              fieldName="targetRoofs"
+              onWebDrop={handleWebFilesDrop}
               onPress={() => handleFileUpload('targetRoofs')}
               files={uploadedFiles.targetRoofs || []}
               onRemove={(index: number) => removeFile('targetRoofs', index)}
@@ -5191,6 +5200,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           <View style={styles.column}>
             <ModernFileUpload
               label="Front back and sides of house"
+              fieldName="propertySides"
+              onWebDrop={handleWebFilesDrop}
               onPress={() => handleFileUpload('propertySides')}
               files={uploadedFiles.propertySides || []}
               onRemove={(index: number) => removeFile('propertySides', index)}
@@ -5208,6 +5219,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           <View style={styles.column}>
             <ModernFileUpload
               label="Picture of the Angle of the roof"
+              fieldName="roofAngle"
+              onWebDrop={handleWebFilesDrop}
               onPress={() => handleFileUpload('roofAngle')}
               files={uploadedFiles.roofAngle || []}
               onRemove={(index: number) => removeFile('roofAngle', index)}
@@ -5219,6 +5232,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           <View style={styles.column}>
             <ModernFileUpload
               label="Other roof Pictures"
+              fieldName="otherRoofPictures"
+              onWebDrop={handleWebFilesDrop}
               onPress={() => handleFileUpload('otherRoofPictures')}
               files={uploadedFiles.otherRoofPictures || []}
               onRemove={(index: number) => removeFile('otherRoofPictures', index)}
@@ -5255,6 +5270,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           <View style={styles.column}>
             <ModernFileUpload
               label="Close up image of roof tile"
+              fieldName="roofTileCloseup"
+              onWebDrop={handleWebFilesDrop}
               onPress={() => handleFileUpload('roofTileCloseup')}
               files={uploadedFiles.roofTileCloseup || []}
               onRemove={(index: number) => removeFile('roofTileCloseup', index)}
@@ -5270,6 +5287,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           <View style={styles.column}>
             <ModernFileUpload
               label="Internal Ceiling Pictures"
+              fieldName="internalCeilingPictures"
+              onWebDrop={handleWebFilesDrop}
               onPress={() => handleFileUpload('internalCeilingPictures')}
               files={uploadedFiles.internalCeilingPictures || []}
               onRemove={(index: number) => removeFile('internalCeilingPictures', index)}
@@ -5289,6 +5308,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           <View style={styles.column}>
             <ModernFileUpload
               label="Fuse board"
+              fieldName="fuseBoard"
+              onWebDrop={handleWebFilesDrop}
               onPress={() => handleFileUpload('fuseBoard')}
               files={uploadedFiles.fuseBoard || []}
               onRemove={(index: number) => removeFile('fuseBoard', index)}
@@ -5300,6 +5321,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           <View style={styles.column}>
             <ModernFileUpload
               label="Electric meter"
+              fieldName="electricMeter"
+              onWebDrop={handleWebFilesDrop}
               onPress={() => handleFileUpload('electricMeter')}
               files={uploadedFiles.electricMeter || []}
               onRemove={(index: number) => removeFile('electricMeter', index)}
@@ -5317,6 +5340,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           <View style={styles.column}>
             <ModernFileUpload
               label="Picture of garage(if applicable)"
+              fieldName="garage"
+              onWebDrop={handleWebFilesDrop}
               onPress={() => handleFileUpload('garage')}
               files={uploadedFiles.garage || []}
               onRemove={(index: number) => removeFile('garage', index)}
@@ -5328,6 +5353,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           <View style={styles.column}>
             <ModernFileUpload
               label="Other buildings being used (if applicable)"
+              fieldName="otherBuildings"
+              onWebDrop={handleWebFilesDrop}
               onPress={() => handleFileUpload('otherBuildings')}
               files={uploadedFiles.otherBuildings || []}
               onRemove={(index: number) => removeFile('otherBuildings', index)}
@@ -5345,6 +5372,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           <View style={styles.column}>
             <ModernFileUpload
               label="Battery & inverter location (Outside)"
+              fieldName="batteryInverterLocation"
+              onWebDrop={handleWebFilesDrop}
               onPress={() => handleFileUpload('batteryInverterLocation')}
               files={uploadedFiles.batteryInverterLocation || []}
               onRemove={(index: number) => removeFile('batteryInverterLocation', index)}
@@ -5391,6 +5420,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           <View style={styles.singleColumn}>
             <ModernFileUpload
               label="EV Location"
+              fieldName="evLocation"
+              onWebDrop={handleWebFilesDrop}
               onPress={() => handleFileUpload('evLocation')}
               files={uploadedFiles.evLocation || []}
               onRemove={(index: number) => removeFile('evLocation', index)}
@@ -5486,6 +5517,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           <View style={styles.singleColumn}>
             <ModernFileUpload
               label="EV Charger Location"
+              fieldName="evCharger"
+              onWebDrop={handleWebFilesDrop}
               onPress={() => handleFileUpload('evCharger')}
               files={uploadedFiles.evCharger || []}
               onRemove={(index: number) => removeFile('evCharger', index)}
@@ -5502,6 +5535,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         <View style={styles.singleColumn}>
           <ModernFileUpload
             label="Shading issues"
+            fieldName="shadingIssues"
+            onWebDrop={handleWebFilesDrop}
             onPress={() => handleFileUpload('shadingIssues')}
             files={uploadedFiles.shadingIssues || []}
             onRemove={(index: number) => removeFile('shadingIssues', index)}
@@ -5566,6 +5601,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         <View style={styles.singleColumn}>
           <ModernFileUpload
             label="Scaffolding"
+            fieldName="scaffolding"
+            onWebDrop={handleWebFilesDrop}
             onPress={() => handleFileUpload('scaffolding')}
             files={uploadedFiles.scaffolding || []}
             onRemove={(index: number) => removeFile('scaffolding', index)}
@@ -5890,7 +5927,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
   const handleNext = async () => {
     // Only validate if not on the last page (submitting)
     // The submitSurvey function has comprehensive validation for all pages
-    if (currentPage < totalPages && !validateCurrentPage()) {
+    // Admins can skip step validation and move freely between pages
+    if (currentPage < totalPages && !isAdminUser && !validateCurrentPage()) {
       return;
     }
     
@@ -6080,6 +6118,9 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
   };
 
   const validateCurrentPage = () => {
+    if (isAdminUser) {
+      return true;
+    }
     const validation = validatePage(currentPage, formData, uploadedFiles, surveyValidationOptions);
     
     // Filter out image field errors - images are optional and can be uploaded later
@@ -6157,15 +6198,74 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       return;
     }
 
-
-    // Navigate to target page
+    setHasManuallyNavigated(true);
     setCurrentPage(pageNumber);
 
-    // Scroll to top
     setTimeout(() => {
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
     }, 100);
+  }, [totalPages]);
+
+  const handleAdminSkipStep = useCallback(async () => {
+    if (currentPage >= totalPages) {
+      return;
+    }
+    setHasManuallyNavigated(true);
+    const nextPage = currentPage + 1;
+    setCurrentPage(nextPage);
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    }, 50);
   }, [currentPage, totalPages]);
+
+  const renderAdminPageStepper = () => (
+    <View style={[styles.adminStepperCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+      <View style={styles.adminStepperHeader}>
+        <Ionicons name="shield-checkmark" size={18} color={theme.primaryButton} />
+        <Text style={[styles.adminStepperTitle, { color: theme.primaryText }]}>Admin: jump to any step</Text>
+      </View>
+      <Text style={[styles.adminStepperHint, { color: theme.secondaryText }]}>
+        Validation is skipped when moving between steps. Use Tools in Profile to fill placeholder images before submit.
+      </Text>
+      <View style={styles.pageStatusContainer}>
+        {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+          <TouchableOpacity
+            key={pageNum}
+            style={styles.pageStatusItem}
+            onPress={() => navigateToPage(pageNum)}
+            activeOpacity={0.7}
+          >
+            <View
+              style={[
+                styles.pageStatusDot,
+                {
+                  backgroundColor:
+                    pageNum === currentPage
+                      ? theme.primaryButton || '#007AFF'
+                      : isPageComplete(pageNum)
+                        ? '#10B981'
+                        : '#E5E7EB',
+                  width: pageNum === currentPage ? 14 : 12,
+                  height: pageNum === currentPage ? 14 : 12,
+                },
+              ]}
+            />
+            <Text
+              style={[
+                styles.pageStatusText,
+                {
+                  color: pageNum === currentPage ? theme.primaryText : theme.secondaryText,
+                  fontWeight: pageNum === currentPage ? '700' : '400',
+                },
+              ]}
+            >
+              {pageNum}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
 
   if (loading) {
     return (
@@ -7384,6 +7484,8 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           </View>
         </View>
 
+        {isAdminUser && renderAdminPageStepper()}
+
         {renderCurrentPage()}
       </ScrollView>
 
@@ -7424,6 +7526,17 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           <Feather name="save" size={16} color="#ffffff" />
           <Text style={[styles.saveButtonText, { color: '#ffffff' }]}>Save</Text>
         </TouchableOpacity>
+
+        {isAdminUser && currentPage < totalPages && (
+          <TouchableOpacity
+            style={[styles.skipStepButton, { backgroundColor: theme.warningButton || '#f59e0b', borderColor: theme.cardBorder }]}
+            onPress={handleAdminSkipStep}
+            disabled={submitting || resetting || nextButtonLoading}
+          >
+            <Feather name="skip-forward" size={16} color="#ffffff" />
+            <Text style={[styles.skipStepButtonText, { color: '#ffffff' }]}>Skip</Text>
+          </TouchableOpacity>
+        )}
 
          <TouchableOpacity
            style={[
@@ -8345,6 +8458,42 @@ const styles = StyleSheet.create({
   pageStatusText: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  adminStepperCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 16,
+  },
+  adminStepperHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  adminStepperTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  adminStepperHint: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  skipStepButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    minWidth: 64,
+  },
+  skipStepButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   quickAutoFillButton: {
     flexDirection: 'row',
