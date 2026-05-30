@@ -1137,12 +1137,23 @@ export const surveyApi = {
     return api.post<any>(`/surveys/${ghlOpportunityId}/send-email`, { recipientEmail });
   },
 
-  async getSurveyImages(ghlOpportunityId: string): Promise<ApiResponse<any[]>> {
-    return api.get<any[]>(`/surveys/${ghlOpportunityId}/images`);
+  async getSurveyImages(
+    ghlOpportunityId: string,
+    options?: { skipCache?: boolean },
+  ): Promise<ApiResponse<any[]>> {
+    const cacheSuffix = options?.skipCache ? `?_t=${Date.now()}` : '';
+    return api.get<any[]>(`/surveys/${ghlOpportunityId}/images${cacheSuffix}`);
   },
 
-  async getSurveyImagesByField(ghlOpportunityId: string, fieldName: string): Promise<ApiResponse<any[]>> {
-    return api.get<any[]>(`/surveys/${ghlOpportunityId}/images/${fieldName}`);
+  async getSurveyImagesByField(
+    ghlOpportunityId: string,
+    fieldName: string,
+    options?: { skipCache?: boolean },
+  ): Promise<ApiResponse<any[]>> {
+    const cacheSuffix = options?.skipCache ? `?_t=${Date.now()}` : '';
+    return api.get<any[]>(
+      `/surveys/${ghlOpportunityId}/images/${encodeURIComponent(fieldName)}${cacheSuffix}`,
+    );
   },
 };
 
@@ -2794,4 +2805,40 @@ export const adminOpportunityDetailsApi = {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
+};
+
+/** Admin workflow override: mark steps complete, survey status, image overview */
+export const adminWorkflowOverrideApi = {
+  getOverview: (opportunityId: string) =>
+    api.get<any>(`/admin/workflow-override/${encodeURIComponent(opportunityId.trim())}`),
+
+  ensureWorkflow: (opportunityId: string) =>
+    api.post<any>(
+      `/admin/workflow-override/${encodeURIComponent(opportunityId.trim())}/ensure-workflow`,
+      {},
+    ),
+
+  completeStep: (opportunityId: string, stepNumber: number, data?: Record<string, unknown>) =>
+    api.post<any>(
+      `/admin/workflow-override/${encodeURIComponent(opportunityId.trim())}/complete-step`,
+      { stepNumber, data },
+    ),
+
+  setSurveyStatus: (opportunityId: string, status: string) =>
+    api.put<any>(
+      `/admin/workflow-override/${encodeURIComponent(opportunityId.trim())}/survey-status`,
+      { status },
+    ),
+
+  markSurveyComplete: (opportunityId: string) =>
+    api.post<any>(
+      `/admin/workflow-override/${encodeURIComponent(opportunityId.trim())}/mark-survey-complete`,
+      {},
+    ),
+
+  markCalculatorComplete: (opportunityId: string, calculatorType?: string) =>
+    api.post<any>(
+      `/admin/workflow-override/${encodeURIComponent(opportunityId.trim())}/mark-calculator-complete`,
+      { calculatorType },
+    ),
 };

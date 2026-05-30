@@ -88,6 +88,39 @@ export async function ensureSurveyExists(opportunityId: string): Promise<void> {
   }
 }
 
+export async function fillSingleFieldPlaceholderImages(
+  opportunityId: string,
+  fieldName: string,
+  minRequired: number,
+): Promise<{ success: boolean; uploadedCount: number; error?: string }> {
+  const trimmed = opportunityId.trim();
+  await ensureSurveyExists(trimmed);
+  const placeholders = Array.from({ length: minRequired }, (_, i) =>
+    createPlaceholderImageFile(fieldName, i),
+  );
+  try {
+    const response = await surveyApi.uploadImagesAndGetUrls(trimmed, fieldName, placeholders);
+    const urls =
+      (response?.data as { data?: { urls?: string[] } })?.data?.urls ||
+      (response?.data as { urls?: string[] })?.urls;
+    if (response?.success && urls?.length) {
+      await fetchSurveyImagesByField(trimmed);
+      return { success: true, uploadedCount: urls.length };
+    }
+    return {
+      success: false,
+      uploadedCount: 0,
+      error: response?.error || 'Upload failed',
+    };
+  } catch (err) {
+    return {
+      success: false,
+      uploadedCount: 0,
+      error: err instanceof Error ? err.message : 'Upload error',
+    };
+  }
+}
+
 export async function fillSurveyWithPlaceholderImages(
   rawOpportunityId: string,
   options: FillSurveyPlaceholdersOptions = {}

@@ -46,7 +46,11 @@ import {
   getImageFieldsForSurveyPage,
   getPageForSurveyImageField,
 } from '../utils/surveyImageFields';
-import { fetchSurveyImagesByField } from '../utils/syncSurveyImages';
+import {
+  fetchSurveyImagesByField,
+  fetchSurveyImagesForField,
+  urlsToSurveyImageFiles,
+} from '../utils/syncSurveyImages';
 import { filterImagesForSubmission } from '../utils/batchImageUpload';
 import { compressImageAuto } from '../utils/imageCompression';
 
@@ -322,36 +326,6 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
     }
   }, [opportunityId]);
 
-  const syncImagesFromServer = useCallback(async () => {
-    if (!opportunityId) {
-      return {};
-    }
-    try {
-      const byField = await fetchSurveyImagesByField(opportunityId);
-      if (Object.keys(byField).length === 0) {
-        return byField;
-      }
-
-      uploadedFilesRef.current = { ...uploadedFilesRef.current, ...byField };
-      setUploadedFiles((prev) => ({ ...prev, ...byField }));
-
-      setFormData((prev) => {
-        const next = { ...prev };
-        for (const [fieldName, files] of Object.entries(byField)) {
-          const pageKey = getPageForSurveyImageField(fieldName);
-          const urls = files.map((f) => f.uri);
-          next[pageKey] = { ...(next[pageKey] as object), [`${fieldName}Files`]: urls };
-        }
-        return next;
-      });
-
-      return byField;
-    } catch (error) {
-      console.error('❌ Failed to sync survey images from server:', error);
-      return {};
-    }
-  }, [opportunityId]);
-
   // Optimized form data update with server-side saving
   const updateFormData = useCallback((pageName: keyof typeof formData, updateData: any) => {
     setFormData(prev => {
@@ -392,6 +366,64 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       return newData;
     });
   }, [saveToServer]);
+
+  const applyFieldImagesToState = useCallback(
+    (fieldName: string, files: any[]) => {
+      if (!files.length) return;
+
+      const nextRef = { ...uploadedFilesRef.current, [fieldName]: files };
+      uploadedFilesRef.current = nextRef;
+      setUploadedFiles((prev) => ({ ...prev, [fieldName]: files }));
+
+      const urls = files.map((f) => f.uri).filter(Boolean);
+      const pageKey = getPageForSurveyImageField(fieldName);
+      updateFormData(pageKey, { [`${fieldName}Files`]: urls });
+    },
+    [updateFormData],
+  );
+
+  const syncImagesFromServer = useCallback(
+    async (focusField?: string) => {
+      if (!opportunityId) {
+        return {};
+      }
+      try {
+        if (focusField) {
+          const fieldFiles = await fetchSurveyImagesForField(opportunityId, focusField, {
+            skipCache: true,
+          });
+          if (fieldFiles.length > 0) {
+            applyFieldImagesToState(focusField, fieldFiles);
+            return { [focusField]: fieldFiles };
+          }
+        }
+
+        const byField = await fetchSurveyImagesByField(opportunityId, { skipCache: true });
+        if (Object.keys(byField).length === 0) {
+          return byField;
+        }
+
+        uploadedFilesRef.current = { ...uploadedFilesRef.current, ...byField };
+        setUploadedFiles((prev) => ({ ...prev, ...byField }));
+
+        setFormData((prev) => {
+          const next = { ...prev };
+          for (const [fieldName, files] of Object.entries(byField)) {
+            const pageKey = getPageForSurveyImageField(fieldName);
+            const urls = files.map((f) => f.uri);
+            next[pageKey] = { ...(next[pageKey] as object), [`${fieldName}Files`]: urls };
+          }
+          return next;
+        });
+
+        return byField;
+      } catch (error) {
+        console.error('❌ Failed to sync survey images from server:', error);
+        return {};
+      }
+    },
+    [opportunityId, applyFieldImagesToState],
+  );
 
   // Helper function to update entire page data with server-side saving
   const updatePageData = useCallback((pageName: keyof typeof formData, pageData: any) => {
@@ -708,7 +740,6 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
   // Optimized Image Preview Component - memoized to prevent unnecessary re-renders
   const ImagePreview = React.memo(({ fieldName, images, onPress }: { fieldName: string, images: any[], onPress: () => void }) => {
     const previewImages = imagePreviews[fieldName] || [];
-    const fullImages = uploadedFiles[fieldName] || [];
     const isLoading = loadingImages[`page${currentPage}`];
 
     if (isLoading) {
@@ -722,7 +753,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
       );
     }
 
-    const displayImages = previewImages.length > 0 ? previewImages : fullImages;
+    const displayImages = images?.length > 0 ? images : previewImages;
     
     if (displayImages.length === 0) {
       return null;
@@ -736,7 +767,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
           {displayImages.map((image, index) => (
             <TouchableOpacity
-              key={index}
+              key={image.uri || `${fieldName}-preview-${index}`}
               onPress={() => {
                 // Load full image if it's a preview
                 if (image.isPreview) {
@@ -753,6 +784,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
               }}
             >
               <Image
+                key={image.uri}
                 source={{ uri: image.uri }}
                 style={{
                   width: 80,
@@ -899,13 +931,14 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
             { backgroundColor: theme.tertiaryBackground }
           ]}>
             {files.map((file: any, index: number) => (
-              <View key={index} style={[
+              <View key={file.uri || file.timestamp || `${fieldName}-${index}`} style={[
                 modernStyles.uploadedFileItem,
                 { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }
               ]}>
                 <View style={modernStyles.uploadedFileInfo}>
                   {file.uri && (file.type?.includes('image') || file.mimeType?.includes('image')) ? (
                     <Image 
+                      key={file.uri}
                       source={{ uri: file.uri }} 
                       style={{ width: 40, height: 40, borderRadius: 8 }}
                       resizeMode="cover"
@@ -2593,7 +2626,10 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         const uploadResponse = await surveyApi.uploadImagesAndGetUrls(opportunityId || '', fieldName, validFiles);
 
         const isSuccess = uploadResponse?.success === true;
-        const urls = (uploadResponse?.data as any)?.data?.urls || uploadResponse?.data?.urls;
+        const responseBody = uploadResponse?.data as Record<string, unknown> | undefined;
+        const urls =
+          (responseBody?.data as { urls?: string[] } | undefined)?.urls ||
+          (responseBody?.urls as string[] | undefined);
         const hasUrls = urls && Array.isArray(urls) && urls.length > 0;
 
         if (!isSuccess || !hasUrls) {
@@ -2606,8 +2642,24 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           return;
         }
 
-        // Reconcile UI from server (source of truth) — avoids page JSON overwrite wiping sibling fields
-        await syncImagesFromServer();
+        // Show uploaded images immediately (no refresh required)
+        const optimisticFiles = urlsToSurveyImageFiles(fieldName, urls, validFiles);
+        const existingHttp = validCurrentFiles.filter(
+          (file: { uri?: string }) =>
+            typeof file.uri === 'string' && file.uri.startsWith('http'),
+        );
+        const mergedByUri = new Map<string, (typeof optimisticFiles)[0]>();
+        for (const file of [...existingHttp, ...optimisticFiles]) {
+          if (file.uri) mergedByUri.set(file.uri, file);
+        }
+        applyFieldImagesToState(fieldName, Array.from(mergedByUri.values()));
+
+        // Reconcile from server (cache-busted); retry once if DB read lags behind upload
+        let synced = await syncImagesFromServer(fieldName);
+        if (!synced[fieldName]?.length) {
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          synced = await syncImagesFromServer(fieldName);
+        }
 
         console.log(`✅ Uploaded ${urls.length} image(s) to ${fieldName}`);
       } catch (error) {
@@ -2625,7 +2677,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
     const queued = uploadQueueRef.current.then(runUpload, runUpload);
     uploadQueueRef.current = queued.catch(() => undefined) as Promise<void>;
     return queued;
-  }, [opportunityId, syncImagesFromServer]);
+  }, [opportunityId, syncImagesFromServer, applyFieldImagesToState]);
 
   const handleWebFilesDrop = useCallback(
     async (fieldName: string, fileList: FileList | File[]) => {

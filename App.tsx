@@ -116,6 +116,7 @@ import SolarArraysInputsScreen from './src/screens/SolarArraysInputsScreen';
 import SolarProjectionScreen from './src/screens/SolarProjectionScreen';
 import WelcomeEmailScreen from './src/screens/WelcomeEmailScreen';
 import AdminToolsScreen from './src/screens/AdminToolsScreen';
+import WorkflowOverrideAdminScreen from './src/screens/WorkflowOverrideAdminScreen';
 
 export type RootStackParamList = {
   Loading: undefined;
@@ -293,6 +294,7 @@ export type RootStackParamList = {
   Reports: undefined;
   AppointmentCycleTime: undefined;
   AdminTools: undefined;
+  WorkflowOverrideAdmin: undefined;
 };
 
 export type TabParamList = {
@@ -391,6 +393,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       AdminUsersList: 'admin/users',
       AdminUserOpportunities: 'admin/users/:userId/opportunities',
       AdminOpportunityDetails: 'admin/opportunities/:opportunityId',
+      WorkflowOverrideAdmin: 'admin/workflow-override',
       Debug: 'debug',
       DebugAuth: 'debug/auth',
       DebugSign: 'debug/sign',
@@ -744,6 +747,26 @@ function ProfileScreen() {
                     <Text style={styles.actionTitle}>Tools</Text>
                     <Text style={[styles.actionSubtitle, { color: theme.secondaryText }]}>
                       Fill survey placeholder images by opportunity ID
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={theme.secondaryText} />
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {isAdmin && (
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: theme.primaryButton }]}
+                onPress={() => navigation.navigate('WorkflowOverrideAdmin')}
+              >
+                <View style={styles.actionButtonContent}>
+                  <View style={[styles.actionIcon, { backgroundColor: theme.primaryButton + '20' }]}>
+                    <Ionicons name="sliders" size={20} color={theme.primaryButton} />
+                  </View>
+                  <View style={styles.actionText}>
+                    <Text style={styles.actionTitle}>Workflow Override</Text>
+                    <Text style={[styles.actionSubtitle, { color: theme.secondaryText }]}>
+                      Mark steps complete, fix survey images, override status
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={theme.secondaryText} />
@@ -1174,6 +1197,13 @@ function AppNavigator() {
           <Stack.Screen
             name="AdminTools"
             component={AdminToolsScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="WorkflowOverrideAdmin"
+            component={WorkflowOverrideAdminScreen}
             options={{
               headerShown: false,
             }}
