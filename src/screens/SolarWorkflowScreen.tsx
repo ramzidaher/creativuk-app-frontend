@@ -205,31 +205,13 @@ export default function SolarWorkflowScreen() {
     }
   };
 
-  // Helper function to check if disclaimer step is needed
   const checkIfDisclaimerNeeded = async (): Promise<boolean> => {
     try {
       console.log('🔍 SolarWorkflowScreen: Checking if disclaimer is needed for opportunity:', opportunityId);
-      
-      // Check survey data to see if user has energy bill (skipCache so we always get latest after Yes→No change)
-      const { surveyApi } = await import('../utils/api');
-      const surveyResponse = await surveyApi.getSurvey(opportunityId, { skipCache: true });
-      
-      if (surveyResponse.success && surveyResponse.data) {
-        const surveyData = surveyResponse.data;
-        const hasEnergyBill = surveyData.page4?.hasEnergyBill;
-        
-        console.log('🔍 SolarWorkflowScreen: Survey data hasEnergyBill:', hasEnergyBill);
-        
-        // Return true if user doesn't have energy bill (needs disclaimer)
-        return hasEnergyBill === 'No';
-      }
-      
-      // Default to showing disclaimer if we can't determine
-      console.log('🔍 SolarWorkflowScreen: Could not determine energy bill status, defaulting to show disclaimer');
-      return true;
+      const { resolveDisclaimerNeededForOpportunity } = await import('../utils/disclaimerDisplay');
+      return await resolveDisclaimerNeededForOpportunity(opportunityId);
     } catch (error) {
       console.error('🔍 SolarWorkflowScreen: Error checking disclaimer requirement:', error);
-      // Default to showing disclaimer on error
       return true;
     }
   };

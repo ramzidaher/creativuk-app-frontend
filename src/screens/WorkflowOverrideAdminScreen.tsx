@@ -22,12 +22,15 @@ import {
   fillSurveyWithPlaceholderImages,
 } from '../utils/surveyPlaceholderImages';
 
-type WorkflowStep = {
-  stepNumber: number;
+type WorkflowDisplayStep = {
+  displayStepNumber: number;
+  backendStepNumber: number | null;
   stepType: string;
   title: string;
+  description?: string;
   status: string;
   completedAt: string | null;
+  isVirtual: boolean;
 };
 
 type ImageFieldRow = {
@@ -39,17 +42,23 @@ type ImageFieldRow = {
   skipWhenNoEnergyBill?: boolean;
 };
 
+type DisclaimerDisplayMode = 'auto' | 'show' | 'hide';
+
 type Overview = {
   opportunityId: string;
   workflow: {
     currentStep: number;
     status: string;
+    needsDisclaimer?: boolean;
+    disclaimerDisplayOverride?: 'show' | 'hide' | null;
+    effectiveNeedsDisclaimer?: boolean;
     owner?: { name?: string; email?: string };
-    steps: WorkflowStep[];
+    displaySteps: WorkflowDisplayStep[];
   } | null;
   survey: {
     status: string;
     hasEnergyBill: boolean;
+    hasEnergyBillAnswer?: string | null;
     totalImages: number;
     allImagesSatisfied: boolean;
     missingImageFields: string[];
@@ -136,14 +145,32 @@ export default function WorkflowOverrideAdminScreen() {
       setOverview(res.data as Overview);
     });
 
-  const handleCompleteStep = async (stepNumber: number, title: string) => {
+  const handleCompleteStep = async (step: WorkflowDisplayStep) => {
+    const label = step.displayStepNumber;
     const ok = await confirmAction(
-      `Mark step ${stepNumber} complete?`,
-      `This will mark "${title}" as completed for opportunity ${opportunityId.trim()}.`,
+      `Mark step ${label} complete?`,
+      `This will mark "${step.title}" as completed for opportunity ${opportunityId.trim()}.`,
     );
     if (!ok) return;
-    await runAction(`step-${stepNumber}`, async () => {
-      const res = await adminWorkflowOverrideApi.completeStep(opportunityId.trim(), stepNumber);
+
+    if (step.stepType === 'DISCLAIMER_SIGNING') {
+      await runAction('disclaimer-step', async () => {
+        const res = await adminWorkflowOverrideApi.markDisclaimerComplete(opportunityId.trim());
+        if (!res.success) throw new Error(res.error);
+      });
+      return;
+    }
+
+    if (step.backendStepNumber == null) {
+      Alert.alert('Cannot complete', 'This step has no backend workflow mapping.');
+      return;
+    }
+
+    await runAction(`step-${step.backendStepNumber}`, async () => {
+      const res = await adminWorkflowOverrideApi.completeStep(
+        opportunityId.trim(),
+        step.backendStepNumber!,
+      );
       if (!res.success) throw new Error(res.error);
     });
   };
@@ -175,6 +202,33 @@ export default function WorkflowOverrideAdminScreen() {
       if (!res.success) throw new Error(res.error);
     });
   };
+
+  const handleSetDisclaimerDisplay = async (mode: DisclaimerDisplayMode) => {
+    const labels: Record<DisclaimerDisplayMode, string> = {
+      auto: 'follow the survey energy-bill answer',
+      show: 'always show the disclaimer step',
+      hide: 'always hide the disclaimer step',
+    };
+    const ok = await confirmAction(
+      'Change disclaimer step display?',
+      `This will ${labels[mode]} for opportunity ${opportunityId.trim()}, overriding normal rules.`,
+    );
+    if (!ok) return;
+    await runAction(`disclaimer-display-${mode}`, async () => {
+      const res = await adminWorkflowOverrideApi.setDisclaimerDisplay(
+        opportunityId.trim(),
+        mode,
+      );
+      if (!res.success) throw new Error(res.error);
+    });
+  };
+
+  const disclaimerMode: DisclaimerDisplayMode =
+    overview?.workflow?.disclaimerDisplayOverride === 'show'
+      ? 'show'
+      : overview?.workflow?.disclaimerDisplayOverride === 'hide'
+        ? 'hide'
+        : 'auto';
 
   const handleSetSurveyStatus = async (status: string) => {
     const ok = await confirmAction('Change survey status?', `Set survey status to ${status}.`);
@@ -227,7 +281,17 @@ export default function WorkflowOverrideAdminScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.primaryBackground }]}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        { backgroundColor: theme.primaryBackground },
+        Platform.OS === 'web' && {
+          height: '100vh' as const,
+          maxHeight: '100vh' as const,
+          overflow: 'hidden' as const,
+        },
+      ]}
+    >
       <View style={[styles.header, { backgroundColor: theme.cardBackground, borderBottomColor: theme.cardBorder }]}>
         <TouchableOpacity
           style={[styles.backButton, { backgroundColor: isDark ? '#1e293b' : '#f8fafc' }]}
@@ -243,7 +307,38 @@ export default function WorkflowOverrideAdminScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <View
+        style={[
+          styles.scrollHost,
+          Platform.OS === 'web' && {
+            height: 'calc(100vh - 72px)' as const,
+            overflow: 'hidden' as const,
+          },
+        ]}
+      >
+      <ScrollView
+        style={[
+          styles.scrollView,
+          Platform.OS === 'web' && {
+            height: '100%' as const,
+            maxHeight: '100%' as const,
+          },
+        ]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          Platform.OS === 'web' && {
+            flexGrow: 1,
+            paddingBottom: 100,
+          },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={Platform.OS === 'web'}
+        nestedScrollEnabled
+        scrollEnabled
+        bounces={Platform.OS !== 'web'}
+        alwaysBounceVertical={Platform.OS !== 'web'}
+        removeClippedSubviews={Platform.OS !== 'web'}
+      >
         <View style={[styles.card, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
           <Text style={[styles.label, { color: theme.primaryText }]}>Opportunity ID</Text>
           <TextInput
@@ -299,40 +394,117 @@ export default function WorkflowOverrideAdminScreen() {
             <Text style={[styles.hint, { color: theme.secondaryText, marginBottom: 12 }]}>
               Current step {overview.workflow.currentStep} · {overview.workflow.status}
               {overview.workflow.owner?.name ? ` · ${overview.workflow.owner.name}` : ''}
+              {disclaimerMode === 'show'
+                ? ' · Disclaimer forced ON (admin)'
+                : disclaimerMode === 'hide'
+                  ? ' · Disclaimer forced OFF (admin)'
+                  : overview.workflow.effectiveNeedsDisclaimer ??
+                      overview.workflow.needsDisclaimer
+                    ? ' · Disclaimer shown (survey: no energy bill)'
+                    : overview.survey?.hasEnergyBillAnswer === 'Yes'
+                      ? ' · Energy bill on file'
+                      : ' · Disclaimer hidden (survey)'}
             </Text>
-            {overview.workflow.steps.map((step) => {
+
+            <Text style={[styles.label, { color: theme.primaryText, marginBottom: 8 }]}>
+              Disclaimer step display (overrides all)
+            </Text>
+            <Text style={[styles.hint, { color: theme.secondaryText, marginBottom: 10 }]}>
+              Controls whether the Energy Bill Disclaimer appears in this workflow and in the
+              seller app — regardless of survey answers.
+            </Text>
+            <View style={styles.modeRow}>
+              {(
+                [
+                  { mode: 'auto' as const, label: 'Auto (survey)' },
+                  { mode: 'show' as const, label: 'Force show' },
+                  { mode: 'hide' as const, label: 'Force hide' },
+                ] as const
+              ).map(({ mode, label }) => {
+                const selected = disclaimerMode === mode;
+                return (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[
+                      styles.modeChip,
+                      {
+                        borderColor: selected ? theme.primaryButton : theme.cardBorder,
+                        backgroundColor: selected ? theme.primaryButton + '18' : 'transparent',
+                      },
+                    ]}
+                    onPress={() => handleSetDisclaimerDisplay(mode)}
+                    disabled={!!actionLoading || selected}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: selected ? '700' : '500',
+                        color: selected ? theme.primaryButton : theme.secondaryText,
+                      }}
+                    >
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {(overview.workflow.displaySteps ?? []).map((step) => {
               const isDone = step.status === 'COMPLETED';
-              const busy = actionLoading === `step-${step.stepNumber}`;
+              const busy =
+                actionLoading === `step-${step.backendStepNumber}` ||
+                actionLoading === 'disclaimer-step';
+              const isDisclaimer = step.stepType === 'DISCLAIMER_SIGNING';
               return (
                 <View
-                  key={step.stepNumber}
+                  key={`${step.stepType}-${step.displayStepNumber}`}
                   style={[styles.stepRow, { borderColor: theme.cardBorder }]}
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.stepTitle, { color: theme.primaryText }]}>
-                      {step.stepNumber}. {step.title}
+                      {step.displayStepNumber}. {step.title}
+                      {step.isVirtual ? ' (disclaimer)' : ''}
                     </Text>
                     <Text style={[styles.stepMeta, { color: theme.secondaryText }]}>
                       {step.status}
+                      {step.backendStepNumber != null
+                        ? ` · backend #${step.backendStepNumber}`
+                        : ''}
                       {step.completedAt
                         ? ` · ${new Date(step.completedAt).toLocaleDateString()}`
                         : ''}
                     </Text>
                   </View>
-                  {!isDone && (
-                    <TouchableOpacity
-                      style={[styles.smallButton, { backgroundColor: theme.primaryButton }]}
-                      onPress={() => handleCompleteStep(step.stepNumber, step.title)}
-                      disabled={!!actionLoading}
-                    >
-                      {busy ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <Text style={styles.smallButtonText}>Done</Text>
-                      )}
-                    </TouchableOpacity>
-                  )}
-                  {isDone && <Feather name="check-circle" size={22} color="#16a34a" />}
+                  <View style={styles.stepActions}>
+                    {isDisclaimer && (
+                      <TouchableOpacity
+                        style={[styles.smallButtonOutline, { borderColor: theme.primaryButton }]}
+                        onPress={() =>
+                          navigation.navigate('DisclaimerSigning', {
+                            opportunityId: opportunityId.trim(),
+                          })
+                        }
+                      >
+                        <Text style={[styles.smallButtonOutlineText, { color: theme.primaryButton }]}>
+                          Open
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    {!isDone && (
+                      <TouchableOpacity
+                        style={[styles.smallButton, { backgroundColor: theme.primaryButton }]}
+                        onPress={() => handleCompleteStep(step)}
+                        disabled={!!actionLoading}
+                      >
+                        {busy ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text style={styles.smallButtonText}>Done</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    {isDone && <Feather name="check-circle" size={22} color="#16a34a" />}
+                  </View>
                 </View>
               );
             })}
@@ -513,12 +685,15 @@ export default function WorkflowOverrideAdminScreen() {
           </View>
         )}
       </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  scrollHost: { flex: 1 },
+  scrollView: { flex: 1 },
   denied: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   backLink: { marginTop: 16 },
   header: {
@@ -579,6 +754,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 8,
   },
+  stepActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+  },
+  smallButtonOutline: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    minWidth: 52,
+    alignItems: 'center',
+  },
+  smallButtonOutlineText: { fontSize: 13, fontWeight: '600' },
   stepTitle: { fontSize: 15, fontWeight: '500' },
   stepMeta: { fontSize: 12, marginTop: 2 },
   smallButton: {
@@ -603,6 +793,18 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 6,
+  },
+  modeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  modeChip: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   switchRow: {
     flexDirection: 'row',

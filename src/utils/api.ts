@@ -2841,4 +2841,16 @@ export const adminWorkflowOverrideApi = {
       `/admin/workflow-override/${encodeURIComponent(opportunityId.trim())}/mark-calculator-complete`,
       { calculatorType },
     ),
+
+  markDisclaimerComplete: (opportunityId: string) =>
+    api.post<any>(
+      `/admin/workflow-override/${encodeURIComponent(opportunityId.trim())}/mark-disclaimer-complete`,
+      {},
+    ),
+
+  setDisclaimerDisplay: (opportunityId: string, mode: 'auto' | 'show' | 'hide') =>
+    api.put<any>(
+      `/admin/workflow-override/${encodeURIComponent(opportunityId.trim())}/disclaimer-display`,
+      { mode },
+    ),
 };
