@@ -22,6 +22,14 @@ import {
   fillSurveyWithPlaceholderImages,
 } from '../utils/surveyPlaceholderImages';
 
+type WorkflowStep = {
+  stepNumber: number;
+  stepType: string;
+  title: string;
+  status: string;
+  completedAt: string | null;
+};
+
 type WorkflowDisplayStep = {
   displayStepNumber: number;
   backendStepNumber: number | null;
@@ -53,7 +61,10 @@ type Overview = {
     disclaimerDisplayOverride?: 'show' | 'hide' | null;
     effectiveNeedsDisclaimer?: boolean;
     owner?: { name?: string; email?: string };
-    displaySteps: WorkflowDisplayStep[];
+    /** All persisted backend workflow steps (primary admin list). */
+    steps: WorkflowStep[];
+    /** Seller-app display order including virtual disclaimer when applicable. */
+    displaySteps?: WorkflowDisplayStep[];
   } | null;
   survey: {
     status: string;
@@ -78,6 +89,22 @@ function formatFieldName(field: string): string {
     .replace(/([A-Z])/g, ' $1')
     .replace(/^./, (s) => s.toUpperCase())
     .trim();
+}
+
+function normalizeWorkflowOverview(data: Overview): Overview {
+  const workflow = data?.workflow;
+  if (workflow && !workflow.steps?.length && workflow.displaySteps?.length) {
+    workflow.steps = workflow.displaySteps
+      .filter((s) => s.backendStepNumber != null)
+      .map((s) => ({
+        stepNumber: s.backendStepNumber as number,
+        stepType: s.stepType,
+        title: s.title,
+        status: s.status,
+        completedAt: s.completedAt,
+      }));
+  }
+  return data;
 }
 
 function confirmAction(title: string, message: string): Promise<boolean> {
@@ -116,7 +143,7 @@ export default function WorkflowOverrideAdminScreen() {
       if (!res.success) {
         throw new Error(res.error || 'Failed to load overview');
       }
-      setOverview(res.data as Overview);
+      setOverview(normalizeWorkflowOverview(res.data as Overview));
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Could not load opportunity');
       setOverview(null);
@@ -142,35 +169,29 @@ export default function WorkflowOverrideAdminScreen() {
       const id = opportunityId.trim();
       const res = await adminWorkflowOverrideApi.ensureWorkflow(id);
       if (!res.success) throw new Error(res.error);
-      setOverview(res.data as Overview);
+      setOverview(normalizeWorkflowOverview(res.data as Overview));
     });
 
-  const handleCompleteStep = async (step: WorkflowDisplayStep) => {
-    const label = step.displayStepNumber;
+  const handleMarkDisclaimerComplete = async () => {
     const ok = await confirmAction(
-      `Mark step ${label} complete?`,
-      `This will mark "${step.title}" as completed for opportunity ${opportunityId.trim()}.`,
+      'Mark disclaimer complete?',
+      'Marks the Energy Bill Disclaimer as completed for this opportunity.',
     );
     if (!ok) return;
+    await runAction('disclaimer-step', async () => {
+      const res = await adminWorkflowOverrideApi.markDisclaimerComplete(opportunityId.trim());
+      if (!res.success) throw new Error(res.error);
+    });
+  };
 
-    if (step.stepType === 'DISCLAIMER_SIGNING') {
-      await runAction('disclaimer-step', async () => {
-        const res = await adminWorkflowOverrideApi.markDisclaimerComplete(opportunityId.trim());
-        if (!res.success) throw new Error(res.error);
-      });
-      return;
-    }
-
-    if (step.backendStepNumber == null) {
-      Alert.alert('Cannot complete', 'This step has no backend workflow mapping.');
-      return;
-    }
-
-    await runAction(`step-${step.backendStepNumber}`, async () => {
-      const res = await adminWorkflowOverrideApi.completeStep(
-        opportunityId.trim(),
-        step.backendStepNumber!,
-      );
+  const handleCompleteBackendStep = async (stepNumber: number, title: string) => {
+    const ok = await confirmAction(
+      `Mark step ${stepNumber} complete?`,
+      `This will mark "${title}" as completed for opportunity ${opportunityId.trim()}.`,
+    );
+    if (!ok) return;
+    await runAction(`step-${stepNumber}`, async () => {
+      const res = await adminWorkflowOverrideApi.completeStep(opportunityId.trim(), stepNumber);
       if (!res.success) throw new Error(res.error);
     });
   };
@@ -229,6 +250,20 @@ export default function WorkflowOverrideAdminScreen() {
       : overview?.workflow?.disclaimerDisplayOverride === 'hide'
         ? 'hide'
         : 'auto';
+
+  const showDisclaimerInApp =
+    disclaimerMode === 'show' ||
+    (disclaimerMode === 'auto' &&
+      (overview?.workflow?.effectiveNeedsDisclaimer ??
+        overview?.workflow?.needsDisclaimer ??
+        false));
+
+  const virtualDisclaimerStep = overview?.workflow?.displaySteps?.find(
+    (s) => s.stepType === 'DISCLAIMER_SIGNING' && s.isVirtual,
+  );
+  const disclaimerInBackendSteps = overview?.workflow?.steps?.some(
+    (s) => s.stepType === 'DISCLAIMER_SIGNING',
+  );
 
   const handleSetSurveyStatus = async (status: string) => {
     const ok = await confirmAction('Change survey status?', `Set survey status to ${status}.`);
@@ -449,65 +484,102 @@ export default function WorkflowOverrideAdminScreen() {
               })}
             </View>
 
-            {(overview.workflow.displaySteps ?? []).map((step) => {
+            {showDisclaimerInApp && (
+              <View style={[styles.disclaimerActionsRow, { borderColor: theme.cardBorder }]}>
+                <TouchableOpacity
+                  style={[styles.smallButtonOutline, { borderColor: theme.primaryButton }]}
+                  onPress={() =>
+                    navigation.navigate('DisclaimerSigning', {
+                      opportunityId: opportunityId.trim(),
+                    })
+                  }
+                >
+                  <Text style={[styles.smallButtonOutlineText, { color: theme.primaryButton }]}>
+                    Open disclaimer
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.smallButton, { backgroundColor: theme.primaryButton }]}
+                  onPress={handleMarkDisclaimerComplete}
+                  disabled={actionLoading === 'disclaimer-step'}
+                >
+                  {actionLoading === 'disclaimer-step' ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.smallButtonText}>Mark disclaimer done</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {(overview.workflow.steps ?? []).map((step) => {
               const isDone = step.status === 'COMPLETED';
-              const busy =
-                actionLoading === `step-${step.backendStepNumber}` ||
-                actionLoading === 'disclaimer-step';
-              const isDisclaimer = step.stepType === 'DISCLAIMER_SIGNING';
+              const busy = actionLoading === `step-${step.stepNumber}`;
               return (
                 <View
-                  key={`${step.stepType}-${step.displayStepNumber}`}
+                  key={`backend-${step.stepNumber}-${step.stepType}`}
                   style={[styles.stepRow, { borderColor: theme.cardBorder }]}
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.stepTitle, { color: theme.primaryText }]}>
-                      {step.displayStepNumber}. {step.title}
-                      {step.isVirtual ? ' (disclaimer)' : ''}
+                      {step.stepNumber}. {step.title}
                     </Text>
                     <Text style={[styles.stepMeta, { color: theme.secondaryText }]}>
                       {step.status}
-                      {step.backendStepNumber != null
-                        ? ` · backend #${step.backendStepNumber}`
-                        : ''}
                       {step.completedAt
                         ? ` · ${new Date(step.completedAt).toLocaleDateString()}`
                         : ''}
                     </Text>
                   </View>
-                  <View style={styles.stepActions}>
-                    {isDisclaimer && (
-                      <TouchableOpacity
-                        style={[styles.smallButtonOutline, { borderColor: theme.primaryButton }]}
-                        onPress={() =>
-                          navigation.navigate('DisclaimerSigning', {
-                            opportunityId: opportunityId.trim(),
-                          })
-                        }
-                      >
-                        <Text style={[styles.smallButtonOutlineText, { color: theme.primaryButton }]}>
-                          Open
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                    {!isDone && (
-                      <TouchableOpacity
-                        style={[styles.smallButton, { backgroundColor: theme.primaryButton }]}
-                        onPress={() => handleCompleteStep(step)}
-                        disabled={!!actionLoading}
-                      >
-                        {busy ? (
-                          <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                          <Text style={styles.smallButtonText}>Done</Text>
-                        )}
-                      </TouchableOpacity>
-                    )}
-                    {isDone && <Feather name="check-circle" size={22} color="#16a34a" />}
-                  </View>
+                  {!isDone && (
+                    <TouchableOpacity
+                      style={[styles.smallButton, { backgroundColor: theme.primaryButton }]}
+                      onPress={() => handleCompleteBackendStep(step.stepNumber, step.title)}
+                      disabled={!!actionLoading}
+                    >
+                      {busy ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.smallButtonText}>Done</Text>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                  {isDone && <Feather name="check-circle" size={22} color="#16a34a" />}
                 </View>
               );
             })}
+
+            {showDisclaimerInApp && virtualDisclaimerStep && !disclaimerInBackendSteps && (
+              <View
+                key="virtual-disclaimer"
+                style={[styles.stepRow, { borderColor: theme.cardBorder }]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.stepTitle, { color: theme.primaryText }]}>
+                    {virtualDisclaimerStep.displayStepNumber}. {virtualDisclaimerStep.title}{' '}
+                    (disclaimer — seller app only)
+                  </Text>
+                  <Text style={[styles.stepMeta, { color: theme.secondaryText }]}>
+                    {virtualDisclaimerStep.status}
+                    {virtualDisclaimerStep.completedAt
+                      ? ` · ${new Date(virtualDisclaimerStep.completedAt).toLocaleDateString()}`
+                      : ''}
+                  </Text>
+                </View>
+                {virtualDisclaimerStep.status !== 'COMPLETED' && (
+                  <TouchableOpacity
+                    style={[styles.smallButton, { backgroundColor: theme.primaryButton }]}
+                    onPress={handleMarkDisclaimerComplete}
+                    disabled={actionLoading === 'disclaimer-step'}
+                  >
+                    <Text style={styles.smallButtonText}>Done</Text>
+                  </TouchableOpacity>
+                )}
+                {virtualDisclaimerStep.status === 'COMPLETED' && (
+                  <Feather name="check-circle" size={22} color="#16a34a" />
+                )}
+              </View>
+            )}
           </View>
         )}
 
@@ -805,6 +877,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  disclaimerActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   switchRow: {
     flexDirection: 'row',
