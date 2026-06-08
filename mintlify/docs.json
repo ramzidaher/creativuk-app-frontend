@@ -1,16 +1,16 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "name": "Creativ Energy",
-  "theme": "mint",
+  "name": "Creativ UK",
+  "theme": "maple",
   "colors": {
-    "primary": "#1a5632",
-    "light": "#f5f9f6",
-    "dark": "#0d2818"
+    "primary": "#10b981",
+    "light": "#f8f9fa",
+    "dark": "#121212"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "/favicon.png",
   "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
+    "light": "/logo/creativ.png",
+    "dark": "/logo/creativ.png"
   },
   "navbar": {
     "links": [
@@ -36,23 +36,7 @@
           "sales/in-app-tools",
           "sales/troubleshooting"
         ]
-      },
-      {
-        "group": "AI assistants",
-        "pages": ["mcp"]
       }
-    ]
-  },
-  "contextual": {
-    "options": [
-      "copy",
-      "view",
-      "chatgpt",
-      "claude",
-      "perplexity",
-      "mcp",
-      "cursor",
-      "vscode"
     ]
   },
   "footer": {

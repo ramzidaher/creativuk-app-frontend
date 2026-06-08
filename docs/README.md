@@ -10,11 +10,11 @@ These docs live in the repo so they stay accurate as the code and deployment evo
 - `docs/WEB-CONFIG.md`: how `public/web.config` works (SPA fallback + `/api` proxy)
 - `docs/API-URLS.md`: how the frontend decides `API_BASE_URL` (dev vs production)
 - `docs/TROUBLESHOOTING.md`: common failures + what to check
-- `docs/SALES-REPS.md`: sales rep knowledge base (Mintlify + MCP)
+- `docs/SALES-REPS.md`: sales rep knowledge base
 
-## Sales rep guides (Mintlify)
+## Sales rep guides
 
-User-facing documentation for field sales reps lives at [creativenergy.mintlify.app/sales](https://creativenergy.mintlify.app/sales). Source MDX is in `mintlify/`. Sync from the live site with `npm run sync:mintlify`.
+User-facing documentation for field sales reps lives at [creativenergy.mintlify.app/sales](https://creativenergy.mintlify.app/sales). Published from [github.com/ramzice/docs](https://github.com/ramzice/docs).
 
 ## Adding new docs (recommended)
 
