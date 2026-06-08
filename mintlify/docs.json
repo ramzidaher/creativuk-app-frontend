@@ -7,6 +7,11 @@
     "light": "#f5f9f6",
     "dark": "#0d2818"
   },
+  "favicon": "/favicon.svg",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
   "navbar": {
     "links": [
       {
@@ -26,10 +31,9 @@
         "pages": [
           "sales/index",
           "sales/getting-started",
-          "sales/appointment-workflow",
-          "sales/calculator-and-pricing",
-          "sales/survey-signing-contracts",
-          "sales/opportunities-and-dashboard",
+          "sales/step-by-step",
+          "sales/hometree",
+          "sales/in-app-tools",
           "sales/troubleshooting"
         ]
       },
@@ -37,6 +41,18 @@
         "group": "AI assistants",
         "pages": ["mcp"]
       }
+    ]
+  },
+  "contextual": {
+    "options": [
+      "copy",
+      "view",
+      "chatgpt",
+      "claude",
+      "perplexity",
+      "mcp",
+      "cursor",
+      "vscode"
     ]
   },
   "footer": {

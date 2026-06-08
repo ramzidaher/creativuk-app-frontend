@@ -1,68 +1,84 @@
 ---
 title: "Troubleshooting"
-description: "Common sales rep issues — login, photos, signing, API errors, and who to contact."
+description: "Fix common problems during appointments in the app."
 ---
 
 ## Cannot log in
 
-- Confirm you are on [app.creativuk.co.uk](https://app.creativuk.co.uk) (not a bookmarked old URL)
-- Try **Forgot password** and check spam for reset emails
-- If login succeeds but immediately logs you out, clear browser cache or try a private window
-- Contact your manager if the account is locked or inactive
+- Use [app.creativuk.co.uk](https://app.creativuk.co.uk) — not an old bookmark
+- Try **Forgot password** and check spam
+- Clear browser cache or use a private window if you log out immediately
+- Contact your team lead if the account is locked
 
-## App is slow or will not load
+## Appointment not in the list
 
-- Check Wi‑Fi or mobile data at the property
-- Refresh the page (web) or force-close and reopen the app
-- Avoid running heavy downloads on the same connection during photo uploads
+- Check the date filter on **Appointments** (today vs future vs past)
+- Pull down to refresh
+- Contact your team lead — do not create a second job unless trained to
+
+## Solar Progress step greyed out
+
+- Finish the previous step fully (submit, not just save)
+- On **OpenSolar**, link a project ID — the step counts complete when linked
+- If **Energy Bill Disclaimer** should appear, save the survey with "no energy bill" and refresh Solar Progress
+- Ask your team lead if a step stays blocked
 
 ## Survey photos will not upload
 
-- Grant camera and photo library permissions when prompted
-- Use good lighting and keep file size reasonable — very large images may timeout
-- Save the section and retry individual fields
-- On web, ensure the browser allows camera access (HTTPS required)
+- Allow camera and photo access in browser or device settings
+- Use good lighting; retry one photo at a time
+- Save the section before moving on
 
-## Workflow step stuck or missing
+## OpenSolar will not link
 
-- Pull to refresh on the Solar workflow screen
-- Complete the previous step fully (including submit, not just save)
-- If you changed survey answers (e.g. energy bill), go back to workflow — new steps may appear
-- Admins can reset steps — ask operations if you are blocked
+- Search by full address first
+- Or paste the **Project ID** from OpenSolar Manage tab
+- Open the design URL to confirm it is the right property
+- Tap **Complete Step** after linking
 
-## Signing link does not open
+## Wrong calculator or price
 
-- Tap **Open in browser** from the signing screen
-- Disable pop-up blockers for app.creativuk.co.uk
-- Verify customer email on the opportunity record
-- Wait 1–2 minutes and refresh status — webhooks can delay updates
+- **Calculate** → pick **Off Peak** or **Flux** using the rules in [Step-by-step](/sales/step-by-step#3-calculate--choose-calculator-type)
+- To change price: **Tools** (wrench) → **Override a Price** — see [In-app tools](/sales/in-app-tools)
+- To start over: **Reset Progress** (only if your team lead agrees)
 
-## Calculator or pricing errors
+## Signing stuck on pending
 
-- Fill all required fields (look for validation messages)
-- All appointments use the **Off-peak** calculator — if the calculator step does not load, refresh and try again
-- Note the opportunity ID and contact operations for override or template issues
+- Refresh Solar Progress and check status again
+- Use **Open in browser** if signing does not load in-app
+- Confirm customer email on Opportunity Details
+- Wait 1–2 minutes — status can lag briefly
 
-## API or network errors
+## Payment step
 
-Short network failures may show generic error messages. Retry once. If errors persist:
+- Take **£500** on **Lopay** first
+- Only then tap **Mark Payment Complete & Continue** in the app
+- If the button fails, note the opportunity and contact support
 
-1. Note the time and what you were doing
-2. Copy the opportunity ID from the URL or workflow screen
-3. Contact support or your team lead
+## Installation booking
 
-Developers: see the frontend repo `docs/TROUBLESHOOTING.md` for IIS, routing, and API URL issues.
+- Date must be **at least two weeks** ahead
+- You must select **09:00** in available times
+- Pick an installer from your list — if none show, contact your team lead
 
-## Who to contact
+## Hometree / HT issues
 
-| Issue | Contact |
-|-------|---------|
-| Account access | Your manager or IT |
-| Missing appointment in app | Operations / CRM admin |
-| Pricing override or template | Operations |
-| Signing stuck after 30+ minutes | Support with opportunity ID |
-| Bug or app crash | Support with steps to reproduce |
+- Follow [Hometree process](/sales/hometree) — post in Teams and wait for office approval
+- Do not skip contract generation before filling HT
+- Screenshot must show Panel, Inverter, Battery, and Generation boxes
+
+## App slow or frozen
+
+- Check Wi‑Fi or mobile data
+- Refresh the page (web) or close and reopen the app
+- Avoid large downloads on the same connection while uploading survey photos
 
 ## Still stuck?
 
-Open **Profile → Support & Help** to return to this knowledge base, or email [support@creativuk.co.uk](mailto:support@creativuk.co.uk).
+Contact your team lead with:
+
+- Customer name and address  
+- Which step you are on (exact label from Solar Progress)  
+- A screenshot if possible  
+
+Email [support@creativuk.co.uk](mailto:support@creativuk.co.uk) for app errors that block the appointment.
