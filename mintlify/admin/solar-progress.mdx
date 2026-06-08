@@ -1,0 +1,82 @@
+---
+title: "Solar Progress (admin)"
+description: "Admin-only controls on Solar Progress, Progress tab, Dashboard, and installation booking."
+---
+
+Admins use the same **Solar Progress** flow as reps but with extra header tools and a shorter signing path.
+
+## Price override (wrench icon)
+
+On **Solar Progress**, tap the **wrench** icon in the top right.
+
+1. Modal: **Tools** → **Override a Price**
+2. Select the calculator line (off-peak, flux, etc.) if more than one exists
+3. Enter the new price
+4. Tap **Apply Override**
+
+Use when ops or management has agreed a different price mid-appointment. Tell the rep to re-open **System Pricing** and confirm figures before presenting.
+
+Sales reps **do not** have this button — they must contact the team lead.
+
+## Reset progress (refresh icon)
+
+Next to the wrench, tap the **refresh** icon (not the small refresh on Won/Quote badge).
+
+1. Confirm **Reset Progress**
+2. Tap **Yes, Reset Progress**
+
+Clears workflow progress for this opportunity so steps can be run again from the start.
+
+<Warning>
+Only use when necessary — the rep may need to redo survey, calculator, and signing. Prefer [Workflow Override](/admin/workflow-override) for a single stuck step.
+</Warning>
+
+## Won / Quote reset (small refresh)
+
+When status shows **✓ Won** or **✗ Quote**, the small refresh next to the badge resets to **In Progress** only — it does not clear the whole workflow.
+
+## Signing steps — admin vs rep
+
+Admins running **Solar Progress** for a job **do not see**:
+
+- **Booking Confirmation Signing**
+- **Email Confirmation Signing** (booking confirmation path)
+
+Admins still see **Express Consent** and other core steps. Reps must complete booking confirmation signing on their account.
+
+If you test as admin, do not assume the rep's step list is identical — hand off signing steps to the rep where required.
+
+## Progress tab — All Progress
+
+**Progress** tab header shows **All Progress** (not **My Progress**).
+
+- See every active workflow across the team
+- Search by customer, address, postcode, step
+- **Won** / **Quote** outcome badges on cards where recorded
+- Rep name shown on cards
+
+Use to monitor the pipeline or jump into a rep's job.
+
+## Dashboard
+
+Admin **Dashboard** may show **Sat Appointments** (team-wide sat count) instead of only the logged-in user's appointment count. Win/loss cards can reflect broader data depending on configuration.
+
+Reps always see their own monthly stats only.
+
+## Installation booking — all installers
+
+On **Book Installation**, admins see **all installers** in the list (Philip, Darren, Nicholas, Owen, Richard, Antonio).
+
+Reps only see installers **mapped to their name** in the system.
+
+Admins may see an **Admin** badge on the booking screen. Same rules apply: date at least two weeks out, select **09:00**, follow installer notes for two-day installs.
+
+## When a rep asks for help
+
+| Request | Where to go |
+|---------|-------------|
+| Wrong price | Solar Progress → wrench → **Override a Price** |
+| Stuck on one step | **Profile** → **Workflow Override** |
+| Missing survey photos | **Workflow Override** or **Profile** → **Tools** |
+| Start job over | Solar Progress → reset progress (last resort) |
+| Job not in list | **Opportunity management** or ops — not rep self-service |

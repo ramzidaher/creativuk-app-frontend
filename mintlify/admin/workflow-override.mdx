@@ -1,0 +1,61 @@
+---
+title: "Workflow Override"
+description: "Admin screen to fix workflow steps, survey images, and disclaimer display for one opportunity."
+---
+
+**Profile** → **Workflow Override**
+
+Use when a rep is stuck, steps need marking complete, or survey images need placeholders — without asking the rep to reset the whole job.
+
+## Load an opportunity
+
+1. Enter the **opportunity ID** (CRM ID or manual opportunity ID)
+2. Load the overview — you see workflow steps, survey status, calculator type, and image field counts
+
+If no workflow exists yet, use **Ensure workflow** to create progress for that ID.
+
+## Workflow steps
+
+The overview lists all backend steps with status (pending, in progress, completed).
+
+For each step you can **mark complete** after confirming — use when the work was done outside the app or the step is stuck.
+
+Common actions:
+
+| Action | When to use |
+|--------|-------------|
+| **Mark survey complete** | Survey is done but step 1 did not close — sets survey approved and completes Survey step |
+| **Mark calculator complete** | Calculator finished but step 3 stuck — uses current calculator type (e.g. off-peak) |
+| **Mark disclaimer complete** | Energy bill disclaimer signed but step did not update |
+| **Complete step** (per step) | Any individual step needs forcing complete |
+
+## Survey images
+
+Overview shows each image field: count vs minimum required.
+
+- **Fill all placeholders** — upload placeholder images to every required field (optional skip energy bill fields)
+- **Fill one field** — target a single missing field
+
+After filling, reload the overview and confirm **all images satisfied** before marking survey complete.
+
+## Disclaimer display override
+
+When the customer has no energy bill, control whether the **Energy Bill Disclaimer** step appears:
+
+| Mode | Effect |
+|------|--------|
+| **Auto** | App decides from survey answer |
+| **Show** | Force disclaimer step visible |
+| **Hide** | Force disclaimer step hidden |
+
+Use carefully — hiding when a disclaimer is legally required can cause compliance issues.
+
+## Calculator overview
+
+Shows calculator type in progress (e.g. off-peak, flux) and current calculator step. Use **Mark calculator complete** when pricing is done but the workflow did not advance.
+
+## Safety
+
+- Confirm every destructive or complete action — changes affect the live opportunity
+- Prefer fixing the specific step over resetting the whole workflow (see [Solar Progress admin tools](/admin/solar-progress) for full reset)
+- Tell the rep when you override so they refresh **Solar Progress**

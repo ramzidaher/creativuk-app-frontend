@@ -1,0 +1,116 @@
+---
+title: "Profile menu (admin)"
+description: "Admin-only items on the Profile tab in the Creativ Solar app."
+---
+
+Open **Profile** in the app. If your role is **ADMIN**, you see the items below in addition to **Reports** and **Logout**.
+
+## Opportunity management
+
+**Profile** → **Opportunity management**
+
+- Lists **manual opportunities** created in the app
+- Tap a row to open opportunity details (admin view)
+- **Create opportunity** — add a manual job (address, customer, assign rep)
+- Edit or delete manual opportunities from the list
+
+Use this when ops needs a job in the app that did not appear from the normal appointment feed. Sales reps do not have this screen.
+
+## Statistics & Analytics
+
+**Profile** → **Statistics & Analytics**
+
+Monitor team activity across users:
+
+1. **Users** — pick a rep to see their opportunities, surveys, and calculators
+2. **Opportunities** — drill into a specific job
+3. **Details** — survey completion, calculator progress, last activity
+
+Useful for checking whether a rep has started or finished survey/calculator work on a job.
+
+## Reports
+
+**Profile** → **Reports**
+
+Admins can:
+
+- View KPIs across **all users** (not just your own)
+- Filter by **rep**
+- Export CSV
+- See sold appointments for all users, appointment customers by rep
+
+<Warning>
+**Reports is in beta** — numbers may not be accurate. Use for direction only, not official commission or HR decisions.
+</Warning>
+
+Sales reps see the same Reports screen but **only their own data**, with no rep filter.
+
+## Appointment cycle time
+
+**Profile** → **Appointment cycle time**
+
+- Filter by date range and **rep**
+- See average, median, and p90 appointment duration
+- Breakdown by end reason: contract signed (won), quoted, 2h timeout
+- Per-record list of completed appointment cycles
+
+Use this to review how long reps spend on site and whether jobs are finishing as Won or Quote.
+
+## Admin Panel
+
+**Profile** → **Admin Panel**
+
+Central admin hub with tabs:
+
+### Users
+
+- List, search, and filter app users
+- Create users (username, email, role, password)
+- Edit user details, role, status
+- Delete users (with confirmation)
+- Link users to CRM assignees where configured
+
+### CRM / GHL
+
+- See which users have a CRM user ID linked
+- Assign or update CRM user mapping for appointment routing
+
+### Settings
+
+- System settings (e.g. calculator toggles, step navigation, feature flags)
+- Change values that affect what reps see in the app
+
+### Win / loss
+
+- Admin win/loss dashboard across the team
+- Complements rep-level Dashboard stats
+
+## Tools
+
+**Profile** → **Tools**
+
+Fill **survey placeholder images** for testing or unblocking a job:
+
+1. Enter the **opportunity ID** (CRM or manual ID)
+2. Optional: **Skip energy bill** fields when filling placeholders
+3. Tap to fill — uploads placeholder photos to required survey image fields
+
+Does not replace a real survey. Use for QA, demos, or recovery when ops approves it.
+
+## Workflow Override
+
+**Profile** → **Workflow Override**
+
+See the dedicated guide: [Workflow Override](/admin/workflow-override)
+
+## Logout
+
+Same as sales reps — signs you out of the app.
+
+## What sales reps see instead
+
+| Area | Sales rep | Admin |
+|------|-----------|-------|
+| Profile buttons | Reports, Logout | All items above + Reports, Logout |
+| Progress tab title | **My Progress** | **All Progress** (everyone's jobs) |
+| Solar Progress header | Won / Quote only | + wrench (price) and reset (progress) icons |
