@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const MCP_URL = process.env.MCP_URL ?? 'https://creativenergy.mintlify.app/mcp';
-const DOCS_FS_TOOL = 'query_docs_filesystem_knowledge_base';
+const DOCS_FS_TOOL = 'query_docs_filesystem_creativ_energy';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = join(ROOT, 'mintlify');
 

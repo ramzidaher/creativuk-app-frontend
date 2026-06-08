@@ -36,7 +36,7 @@ After publishing on Mintlify, pull the latest content into the repo:
 npm run sync:mintlify
 ```
 
-This calls `query_docs_filesystem_knowledge_base` on the hosted MCP server and writes MDX under `mintlify/`. Override the endpoint with:
+This calls `query_docs_filesystem_creativ_energy` on the hosted MCP server and writes MDX under `mintlify/`. Override the endpoint with:
 
 ```bash
 MCP_URL=https://creativenergy.mintlify.app/mcp npm run sync:mintlify
@@ -50,8 +50,8 @@ Cursor users: `.cursor/mcp.json` in this repo points at the knowledge base MCP s
 
 | Tool | Purpose |
 |------|---------|
-| `search_knowledge_base` | Semantic search — titles, links, excerpts |
-| `query_docs_filesystem_knowledge_base` | Read pages (`cat`, `head`), grep (`rg`), explore structure (`tree`, `ls`) |
+| `search_creativ_energy` | Semantic search — titles, links, excerpts |
+| `query_docs_filesystem_creativ_energy` | Read pages (`cat`, `head`), grep (`rg`), explore structure (`tree`, `ls`) |
 
 ## In-app link
 

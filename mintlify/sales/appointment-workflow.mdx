@@ -12,7 +12,7 @@ From an opportunity, tap **Solar workflow**. You will see:
 - Customer name and address
 - Current step highlighted
 - Progress through the full pipeline
-- Job status: **In progress**, **Won**, or **Lost**
+- Job status: **In progress**, **Won**, or **Quoted**
 
 ## Core workflow steps
 
@@ -38,13 +38,9 @@ If the customer **does not have an energy bill**, update the survey accordingly.
 
 ### 3. Calculator & system design
 
-Choose the calculator type your appointment requires:
+Use the **Off-peak calculator** to model the system. Enter array sizes, battery options, and consumption details. Progress is saved per opportunity.
 
-- **Off-peak** — standard tariff modelling
-- **Flux** — Octopus Flux tariff scenarios
-- **EPVS** — EPVS-compliant calculator path
-
-Enter array sizes, battery options, and consumption details. Progress is tracked per opportunity.
+You do not need to choose a calculator type — the app uses Off-peak for all current appointments.
 
 ### 4. Pricing
 
@@ -76,11 +72,16 @@ Complete payment collection and installation booking steps when they appear in y
 
 ### 9. Finish appointment
 
-Use **Finish appointment** to record the outcome. Mark the job **Won** or **Lost** (or **Quote** where applicable).
+Use **Finish appointment** to record the outcome:
 
-## Win / loss tracking
+- **Won** — the customer committed and signed (or is proceeding to install)
+- **Quoted** — you left a quote with the customer; they have not committed yet
 
-When you mark an outcome, the dashboard updates your conversion stats. Outcomes are tracked from the date tracking was enabled — historical jobs before that date may not appear in win/loss charts.
+These are the only two outcomes reps record. There is no separate "lost" option in the app.
+
+## Outcome tracking
+
+When you mark **Won** or **Quoted**, your dashboard and reports update. Outcomes are tracked from the date tracking was enabled — historical jobs before that date may not appear in performance charts.
 
 ## Admin-only actions
 
