@@ -1,0 +1,68 @@
+---
+title: "Troubleshooting"
+description: "Common sales rep issues — login, photos, signing, API errors, and who to contact."
+---
+
+## Cannot log in
+
+- Confirm you are on [app.creativuk.co.uk](https://app.creativuk.co.uk) (not a bookmarked old URL)
+- Try **Forgot password** and check spam for reset emails
+- If login succeeds but immediately logs you out, clear browser cache or try a private window
+- Contact your manager if the account is locked or inactive
+
+## App is slow or will not load
+
+- Check Wi‑Fi or mobile data at the property
+- Refresh the page (web) or force-close and reopen the app
+- Avoid running heavy downloads on the same connection during photo uploads
+
+## Survey photos will not upload
+
+- Grant camera and photo library permissions when prompted
+- Use good lighting and keep file size reasonable — very large images may timeout
+- Save the section and retry individual fields
+- On web, ensure the browser allows camera access (HTTPS required)
+
+## Workflow step stuck or missing
+
+- Pull to refresh on the Solar workflow screen
+- Complete the previous step fully (including submit, not just save)
+- If you changed survey answers (e.g. energy bill), go back to workflow — new steps may appear
+- Admins can reset steps — ask operations if you are blocked
+
+## Signing link does not open
+
+- Tap **Open in browser** from the signing screen
+- Disable pop-up blockers for app.creativuk.co.uk
+- Verify customer email on the opportunity record
+- Wait 1–2 minutes and refresh status — webhooks can delay updates
+
+## Calculator or pricing errors
+
+- Fill all required fields (look for validation messages)
+- Confirm the correct calculator type (Off-peak / Flux / EPVS)
+- Note the opportunity ID and contact operations for override or template issues
+
+## API or network errors
+
+Short network failures may show generic error messages. Retry once. If errors persist:
+
+1. Note the time and what you were doing
+2. Copy the opportunity ID from the URL or workflow screen
+3. Contact support or your team lead
+
+Developers: see the frontend repo `docs/TROUBLESHOOTING.md` for IIS, routing, and API URL issues.
+
+## Who to contact
+
+| Issue | Contact |
+|-------|---------|
+| Account access | Your manager or IT |
+| Missing appointment in app | Operations / CRM admin |
+| Pricing override or template | Operations |
+| Signing stuck after 30+ minutes | Support with opportunity ID |
+| Bug or app crash | Support with steps to reproduce |
+
+## Still stuck?
+
+Open **Profile → Support & Help** to return to this knowledge base, or email [support@creativuk.co.uk](mailto:support@creativuk.co.uk).

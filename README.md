@@ -9,6 +9,8 @@
 - `docs/WEB-CONFIG.md`: explanation of `public/web.config`
 - `docs/API-URLS.md`: how `API_BASE_URL` is selected (dev vs production)
 - `docs/TROUBLESHOOTING.md`: common issues & fixes
+- `docs/SALES-REPS.md`: sales rep knowledge base (Mintlify + MCP)
+- [Sales rep guides (live)](https://creativenergy.mintlify.app/sales)
 
 ## 🚀 Quick Start
 

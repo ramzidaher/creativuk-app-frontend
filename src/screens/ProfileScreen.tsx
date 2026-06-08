@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import {
   Alert,
   Dimensions,
+  Linking,
   Platform,
   RefreshControl,
   ScrollView,
@@ -17,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
+const SALES_KNOWLEDGE_BASE_URL = 'https://creativenergy.mintlify.app/sales';
 
 interface ProfileMenuItem {
   id: string;
@@ -133,11 +135,26 @@ const ProfileScreen: React.FC = () => {
     {
       id: 'support',
       title: 'Support & Help',
-      subtitle: 'Get help and contact support',
+      subtitle: 'Sales guides and knowledge base',
       icon: 'help-circle',
       iconType: 'feather',
-      onPress: () => {
-        Alert.alert('Support', 'For support, please contact your system administrator.');
+      onPress: async () => {
+        try {
+          const canOpen = await Linking.canOpenURL(SALES_KNOWLEDGE_BASE_URL);
+          if (canOpen) {
+            await Linking.openURL(SALES_KNOWLEDGE_BASE_URL);
+          } else {
+            Alert.alert(
+              'Knowledge base',
+              `Open this link in your browser:\n${SALES_KNOWLEDGE_BASE_URL}`
+            );
+          }
+        } catch {
+          Alert.alert(
+            'Knowledge base',
+            `Open this link in your browser:\n${SALES_KNOWLEDGE_BASE_URL}`
+          );
+        }
       },
     },
     {

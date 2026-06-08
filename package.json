@@ -24,7 +24,8 @@
     "dev:production": "expo start --web --clear",
     "dev:local": "expo start --web --clear",
     "dev:relative": "expo start --web --clear",
-    "switch-url": "node scripts/switch-url.js"
+    "switch-url": "node scripts/switch-url.js",
+    "sync:mintlify": "node scripts/sync-mintlify-from-mcp.mjs"
   },
   "dependencies": {
     "@emotion/css": "^11.13.5",

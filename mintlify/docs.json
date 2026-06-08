@@ -1,0 +1,47 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "Creativ Energy",
+  "theme": "mint",
+  "colors": {
+    "primary": "#1a5632",
+    "light": "#f5f9f6",
+    "dark": "#0d2818"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Open app",
+        "href": "https://app.creativuk.co.uk"
+      },
+      {
+        "label": "Support",
+        "href": "mailto:support@creativuk.co.uk"
+      }
+    ]
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Sales reps",
+        "pages": [
+          "sales/index",
+          "sales/getting-started",
+          "sales/appointment-workflow",
+          "sales/calculator-and-pricing",
+          "sales/survey-signing-contracts",
+          "sales/opportunities-and-dashboard",
+          "sales/troubleshooting"
+        ]
+      },
+      {
+        "group": "AI assistants",
+        "pages": ["mcp"]
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "website": "https://creativuk.co.uk"
+    }
+  }
+}
