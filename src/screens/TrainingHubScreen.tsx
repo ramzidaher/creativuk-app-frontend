@@ -4,6 +4,7 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,7 @@ import {
   TRAINING_HOW_TO_GUIDES,
   TRAINING_SCENARIO_TEMPLATES,
   TRAINING_TARIFF_REFERENCE,
+  TrainingHowToGuide,
   TrainingScenarioTemplate,
 } from '../constants/trainingScenarios';
 import { useTheme } from '../context/ThemeContext';
@@ -34,8 +36,26 @@ const TrainingHubScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [program, setProgram] = useState<TrainingProgram | null>(null);
-  const [expandedGuide, setExpandedGuide] = useState<string | null>(null);
   const [startingScenario, setStartingScenario] = useState<string | null>(null);
+
+  const openGuideUrl = async (url: string) => {
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (!canOpen) {
+        Alert.alert('Cannot open link', url);
+        return;
+      }
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('Error', 'Could not open this guide link.');
+    }
+  };
+
+  const handleGuidePress = (guide: TrainingHowToGuide) => {
+    if (guide.url) {
+      openGuideUrl(guide.url);
+    }
+  };
 
   const loadProgram = useCallback(async () => {
     try {
@@ -183,26 +203,39 @@ const TrainingHubScreen: React.FC = () => {
 
           <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>How-to guides</Text>
           {TRAINING_HOW_TO_GUIDES.map((guide) => (
-            <TouchableOpacity
+            <View
               key={guide.id}
               style={[styles.guideCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}
-              onPress={() => setExpandedGuide(expandedGuide === guide.id ? null : guide.id)}
             >
-              <View style={styles.guideHeader}>
-                <Text style={[styles.guideTitle, { color: theme.primaryText }]}>{guide.title}</Text>
-                <Feather
-                  name={expandedGuide === guide.id ? 'chevron-up' : 'chevron-down'}
-                  size={18}
-                  color={theme.secondaryText}
-                />
-              </View>
-              {expandedGuide === guide.id &&
-                guide.steps.map((step, i) => (
-                  <Text key={i} style={[styles.guideStep, { color: theme.secondaryText }]}>
-                    {i + 1}. {step}
-                  </Text>
-                ))}
-            </TouchableOpacity>
+              <TouchableOpacity style={styles.guideHeader} onPress={() => handleGuidePress(guide)}>
+                <View style={styles.guideHeaderText}>
+                  <Text style={[styles.guideTitle, { color: theme.primaryText }]}>{guide.title}</Text>
+                  <Text style={[styles.guideDescription, { color: theme.secondaryText }]}>{guide.description}</Text>
+                </View>
+                <Feather name="external-link" size={18} color={theme.primaryButton} />
+              </TouchableOpacity>
+
+              {guide.url && (
+                <TouchableOpacity
+                  style={[styles.guideLinkButton, { borderColor: theme.primaryButton }]}
+                  onPress={() => openGuideUrl(guide.url!)}
+                >
+                  <Feather name="external-link" size={14} color={theme.primaryButton} />
+                  <Text style={[styles.guideLinkText, { color: theme.primaryButton }]}>Open guide</Text>
+                </TouchableOpacity>
+              )}
+
+              {guide.links?.map((link) => (
+                <TouchableOpacity
+                  key={link.url}
+                  style={[styles.guideLinkButton, { borderColor: theme.primaryButton }]}
+                  onPress={() => openGuideUrl(link.url)}
+                >
+                  <Feather name="external-link" size={14} color={theme.primaryButton} />
+                  <Text style={[styles.guideLinkText, { color: theme.primaryButton }]}>{link.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           ))}
 
           <Text style={[styles.sectionTitle, { color: theme.primaryText, marginTop: 8 }]}>
@@ -288,9 +321,21 @@ const styles = StyleSheet.create({
   tariffLine: { fontSize: 14, marginTop: 4, lineHeight: 20 },
   sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 10 },
   guideCard: { padding: 12, borderRadius: 10, borderWidth: 1, marginBottom: 8 },
-  guideHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  guideHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },
+  guideHeaderText: { flex: 1 },
   guideTitle: { fontSize: 14, fontWeight: '600' },
-  guideStep: { fontSize: 13, marginTop: 8, lineHeight: 18 },
+  guideDescription: { fontSize: 12, lineHeight: 17, marginTop: 4 },
+  guideLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  guideLinkText: { fontSize: 13, fontWeight: '600', flex: 1 },
   scenarioCard: { padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 12 },
   scenarioHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   scenarioTitle: { fontSize: 15, fontWeight: '600', flex: 1 },

@@ -13,6 +13,21 @@ export interface TrainingScenarioTemplate {
   scenarioNotes: string;
 }
 
+export interface TrainingGuideLink {
+  label: string;
+  url: string;
+}
+
+export interface TrainingHowToGuide {
+  id: string;
+  title: string;
+  description: string;
+  /** Single external guide — opens directly when tapped */
+  url?: string;
+  /** Multiple guides — user picks which to open */
+  links?: TrainingGuideLink[];
+}
+
 export const TRAINING_TARIFF_REFERENCE = {
   supplier: '100Green Smart Tide',
   currentElectricity: {
@@ -34,34 +49,32 @@ export const TRAINING_TARIFF_REFERENCE = {
   },
 };
 
-export const TRAINING_HOW_TO_GUIDES = [
+export const TRAINING_HOW_TO_GUIDES: TrainingHowToGuide[] = [
   {
     id: 'find-property',
     title: 'How to find the property',
-    steps: [
-      'Open the address in satellite view before finalising the design.',
-      'Verify roof space can accommodate 10+ panels.',
-      'Confirm property type matches the scenario (semi-detached or detached).',
-    ],
+    description: 'Look up the address and verify the correct property before designing.',
+    url: 'https://www.findmyaddress.co.uk/search',
   },
   {
     id: 'opensolar-design',
     title: 'How to design on OpenSolar',
-    steps: [
-      'Create the project using the scenario address.',
-      'Use satellite imagery to place panels on suitable roof sections.',
-      'Size the system appropriately for the customer usage in the scenario.',
-      'Save the design before moving to the calculator step.',
-    ],
+    description: 'OpenSolar design guide — satellite imagery, panel placement, and saving your design.',
+    url: 'https://support.opensolar.com/hc/en-us/articles/7576156328207--Design',
   },
   {
     id: 'complete-app',
     title: 'How to complete the app',
-    steps: [
-      'Work through each workflow step in order: survey, OpenSolar, calculator, proposal, contract, and outcome.',
-      'Enter tariff and usage data from the scenario hints — do not auto-fill without checking.',
-      'For no-bill customers, calculate usage: Monthly Direct Debit × 12 ÷ 0.25.',
-      'Use the new 100Green Smart Tide tariff rates when entering the new electricity tariff.',
+    description: 'Pick a step-by-step guide to follow through the full appointment workflow.',
+    links: [
+      {
+        label: 'App step-by-step (SharePoint)',
+        url: 'https://jarmqltd-my.sharepoint.com/:w:/r/personal/pamela_rennie_creativuk_co_uk/_layouts/15/Doc.aspx?sourcedoc=%7B2111CCBC-147A-43B0-9A79-7B892389B1DB%7D&file=App%20%25u2013%20Step%20by%20Step%20This%20is%20a%20step%20by%20step.docx&fromShare=true&action=default&mobileredirect=true',
+      },
+      {
+        label: 'Creativ UK docs',
+        url: 'https://docs.app.creativuk.co.uk/',
+      },
     ],
   },
 ];
