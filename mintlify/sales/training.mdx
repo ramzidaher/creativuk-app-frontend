@@ -1,0 +1,103 @@
+---
+title: Sales rep training
+description: In-app training module with Peterborough test scenarios and tariff reference
+---
+
+## Overview
+
+New sales reps complete **five practice appointments** in the Creativ app using the same full workflow as real jobs (survey → OpenSolar → calculator → contract → outcome).
+
+- **Reps:** Profile → **My Training**
+- **Admins:** Profile → **Training Management**
+
+All five scenarios are available as soon as an admin starts a program.
+
+## Tariff reference (100Green Smart Tide)
+
+### Current electricity tariff
+
+- Use the customer's latest bill if available
+- If no bill is available, use **25p/kWh**
+
+### New electricity tariff
+
+**Single rate**
+
+- Day rate: **27.73p/kWh**
+- Night rate (7 hours): **7p/kWh**
+
+**Dual rate**
+
+- Day rate: **36.26p/kWh**
+- Night rate (7 hours): **7p/kWh**
+
+**Export:** **12p/kWh**
+
+## Test scenarios (Peterborough)
+
+| # | Customer | Bill | Rate / usage | Address |
+|---|----------|------|--------------|---------|
+| 1 | Mr Jones | Yes | 26p/kWh, 5,240 kWh | 58 Bamber Street, PE1 2HN |
+| 2 | Mrs Smith | No | 25p capped, DD formula | Huntly Grove, PE1 2QW |
+| 3 | Mr Patel | Yes | 28p/kWh, 6,850 kWh | Eastern Avenue, PE1 |
+| 4 | Mrs Brown | No | £150×12÷0.25 = 7,200 kWh | Birchtree Avenue, PE1 4HN |
+| 5 | Mr Wilson | Yes | 27p/kWh, 4,980 kWh | Eastfield Road, PE1 4BH |
+
+### No-bill usage calculation
+
+```
+Monthly Direct Debit × 12 ÷ 0.25 = Annual Usage (kWh)
+```
+
+Example: £120 × 12 ÷ 0.25 = **5,760 kWh**
+
+## How-to guides
+
+### Find the property
+
+1. Open the address in satellite view before finalising the design
+2. Verify roof space for 10+ panels
+3. Confirm property type (semi-detached or detached)
+
+### Design on OpenSolar
+
+1. Create the project using the scenario address
+2. Place panels on suitable roof sections from satellite imagery
+3. Size for the scenario usage
+4. Save before moving to calculator
+
+### Complete the app
+
+1. Work through each workflow step in order
+2. Enter tariff and usage from scenario hints (do not skip checking)
+3. Use 100Green Smart Tide rates for the new tariff fields
+
+## Training mode and contract/payment steps
+
+Training appointments use **fake customers**. Reps still run the real workflow screens.
+
+If contract signing, DocuSeal, or payment steps block progress:
+
+1. Rep continues as far as possible and notes where they are stuck
+2. Admin opens **Profile → Training Management → program → Override** for that scenario
+3. Admin uses **Workflow Override** to mark the blocked step complete
+4. Rep resumes from **My Training → Start appointment**
+
+### Admin override playbook
+
+| Stuck step | Override action |
+|------------|-----------------|
+| Survey images | Workflow Override → fill placeholder images or mark survey complete |
+| OpenSolar / Calculator | Mark step complete after verifying rep did the work |
+| Contract / disclaimer / express consent | Mark step complete (no real signature for training customers) |
+| Payment | Mark step complete — do not capture real payment |
+| Outcome | Rep selects won/lost/quoted on step 13, or admin completes step 13 |
+
+## For admins
+
+1. **Start training:** Training Management → select rep → **Start Training**
+2. **Monitor progress:** Open the program to see each scenario's workflow step
+3. **Review:** Add admin notes per scenario when the rep finishes
+4. **Cancel:** Active programs can be cancelled from the progress screen
+
+Program completes automatically when all five scenarios record a workflow outcome.

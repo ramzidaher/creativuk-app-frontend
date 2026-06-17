@@ -117,6 +117,9 @@ import SolarProjectionScreen from './src/screens/SolarProjectionScreen';
 import WelcomeEmailScreen from './src/screens/WelcomeEmailScreen';
 import AdminToolsScreen from './src/screens/AdminToolsScreen';
 import WorkflowOverrideAdminScreen from './src/screens/WorkflowOverrideAdminScreen';
+import AdminTrainingScreen from './src/screens/AdminTrainingScreen';
+import AdminTrainingProgressScreen from './src/screens/AdminTrainingProgressScreen';
+import TrainingHubScreen from './src/screens/TrainingHubScreen';
 
 export type RootStackParamList = {
   Loading: undefined;
@@ -294,7 +297,10 @@ export type RootStackParamList = {
   Reports: undefined;
   AppointmentCycleTime: undefined;
   AdminTools: undefined;
-  WorkflowOverrideAdmin: undefined;
+  WorkflowOverrideAdmin: { opportunityId?: string } | undefined;
+  AdminTraining: undefined;
+  AdminTrainingProgress: { programId: string };
+  TrainingHub: undefined;
 };
 
 export type TabParamList = {
@@ -394,6 +400,9 @@ const linking: LinkingOptions<RootStackParamList> = {
       AdminUserOpportunities: 'admin/users/:userId/opportunities',
       AdminOpportunityDetails: 'admin/opportunities/:opportunityId',
       WorkflowOverrideAdmin: 'admin/workflow-override',
+      AdminTraining: 'admin/training',
+      AdminTrainingProgress: 'admin/training/:programId',
+      TrainingHub: 'training',
       Debug: 'debug',
       DebugAuth: 'debug/auth',
       DebugSign: 'debug/sign',
@@ -727,6 +736,46 @@ function ProfileScreen() {
                     <Text style={styles.actionTitle}>Admin Panel</Text>
                     <Text style={[styles.actionSubtitle, { color: theme.secondaryText }]}>
                       Manage users and system settings
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={theme.secondaryText} />
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {isAdmin && (
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: theme.primaryButton }]}
+                onPress={() => navigation.navigate('AdminTraining')}
+              >
+                <View style={styles.actionButtonContent}>
+                  <View style={[styles.actionIcon, { backgroundColor: theme.primaryButton + '20' }]}>
+                    <Ionicons name="school" size={20} color={theme.primaryButton} />
+                  </View>
+                  <View style={styles.actionText}>
+                    <Text style={styles.actionTitle}>Training Management</Text>
+                    <Text style={[styles.actionSubtitle, { color: theme.secondaryText }]}>
+                      Start and monitor sales rep training programs
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={theme.secondaryText} />
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {isSurveyor && (
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: theme.primaryButton }]}
+                onPress={() => navigation.navigate('TrainingHub')}
+              >
+                <View style={styles.actionButtonContent}>
+                  <View style={[styles.actionIcon, { backgroundColor: theme.primaryButton + '20' }]}>
+                    <Ionicons name="book" size={20} color={theme.primaryButton} />
+                  </View>
+                  <View style={styles.actionText}>
+                    <Text style={styles.actionTitle}>My Training</Text>
+                    <Text style={[styles.actionSubtitle, { color: theme.secondaryText }]}>
+                      Tariff reference, guides, and test scenarios
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={theme.secondaryText} />
@@ -1204,6 +1253,27 @@ function AppNavigator() {
           <Stack.Screen
             name="WorkflowOverrideAdmin"
             component={WorkflowOverrideAdminScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="AdminTraining"
+            component={AdminTrainingScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="AdminTrainingProgress"
+            component={AdminTrainingProgressScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="TrainingHub"
+            component={TrainingHubScreen}
             options={{
               headerShown: false,
             }}

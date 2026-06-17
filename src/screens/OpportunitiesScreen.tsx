@@ -94,6 +94,10 @@ export default function OpportunitiesScreen() {
       if (response.success && response.data) {
         // The unified endpoint returns opportunities with appointments
         let allOpportunities: Opportunity[] = response.data.opportunities || [];
+        // Exclude training scenarios — they live in the Training hub only
+        allOpportunities = allOpportunities.filter(
+          (opp) => opp.source !== 'TRAINING' && !(opp as any).tags?.includes?.('training'),
+        );
         const ids = new Set(allOpportunities.map((o: Opportunity) => o.id || (o as any).ghlOpportunityId));
 
         // Merge manual opportunities so they always show in Appointments tab

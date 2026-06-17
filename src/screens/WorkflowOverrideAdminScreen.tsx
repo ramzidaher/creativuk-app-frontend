@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import React, { useCallback, useState } from 'react';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -123,9 +123,10 @@ export default function WorkflowOverrideAdminScreen() {
   const { user } = useAuth();
   const { theme, isDark } = useTheme();
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
 
   const isAdmin = user?.role === 'ADMIN';
-  const [opportunityId, setOpportunityId] = useState('');
+  const [opportunityId, setOpportunityId] = useState(route.params?.opportunityId ?? '');
   const [skipEnergyBill, setSkipEnergyBill] = useState(false);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -151,6 +152,15 @@ export default function WorkflowOverrideAdminScreen() {
       setLoading(false);
     }
   }, [opportunityId]);
+
+  useEffect(() => {
+    const initialId = route.params?.opportunityId?.trim();
+    if (initialId) {
+      setOpportunityId(initialId);
+      loadOverview(initialId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.params?.opportunityId]);
 
   const runAction = async (key: string, fn: () => Promise<void>) => {
     setActionLoading(key);

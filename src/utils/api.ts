@@ -943,6 +943,13 @@ export const workflowApi = {
     });
   },
 
+  async syncDisclaimerCompletion(ghlOpportunityId: string): Promise<ApiResponse<any>> {
+    return api.post<any>(
+      `/opportunity-workflow/progress/${ghlOpportunityId}/sync-disclaimer`,
+      {},
+    );
+  },
+
   async pauseOpportunity(ghlOpportunityId: string): Promise<ApiResponse<any>> {
     return api.put<any>(`/opportunity-workflow/progress/${ghlOpportunityId}/pause`, {});
   },
@@ -2853,4 +2860,72 @@ export const adminWorkflowOverrideApi = {
       `/admin/workflow-override/${encodeURIComponent(opportunityId.trim())}/disclaimer-display`,
       { mode },
     ),
+};
+
+export type TrainingProgramStatus = 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+export type TrainingScenarioStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
+
+export interface TrainingWorkflowProgress {
+  currentStep: number | null;
+  currentStepLabel: string | null;
+  workflowStatus: string | null;
+  totalSteps: number;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface TrainingScenario {
+  id: string;
+  programId: string;
+  scenarioNumber: number;
+  opportunityId: string;
+  status: TrainingScenarioStatus;
+  completedAt?: string | null;
+  adminReviewedAt?: string | null;
+  adminNotes?: string | null;
+  scenarioData: Record<string, unknown>;
+  workflowProgress?: TrainingWorkflowProgress | null;
+}
+
+export interface TrainingProgram {
+  id: string;
+  userId: string;
+  startedById: string;
+  status: TrainingProgramStatus;
+  startedAt: string;
+  completedAt?: string | null;
+  user?: { id: string; name?: string; email?: string; username?: string };
+  startedBy?: { id: string; name?: string; email?: string };
+  scenarios: TrainingScenario[];
+  summary?: {
+    totalScenarios: number;
+    completedScenarios: number;
+    progressPercent: number;
+  };
+}
+
+export const trainingApi = {
+  getTemplates: () => api.get<{
+    scenarios: unknown[];
+    tariffReference: unknown;
+    howToGuides: unknown[];
+  }>('/training/scenarios/templates'),
+
+  getMyProgram: () => api.get<{ program: TrainingProgram | null }>('/training/my-program'),
+
+  startProgram: (userId: string) =>
+    api.post<TrainingProgram>('/training/programs', { userId }),
+
+  listPrograms: (status?: TrainingProgramStatus) => {
+    const query = status ? `?status=${status}` : '';
+    return api.get<{ programs: TrainingProgram[] }>(`/training/programs${query}`);
+  },
+
+  getProgram: (programId: string) => api.get<TrainingProgram>(`/training/programs/${programId}`),
+
+  cancelProgram: (programId: string) =>
+    api.patch<{ success: boolean }>(`/training/programs/${programId}/cancel`, {}),
+
+  reviewScenario: (scenarioId: string, adminNotes?: string) =>
+    api.patch<TrainingScenario>(`/training/scenarios/${scenarioId}/review`, { adminNotes }),
 };

@@ -73,6 +73,7 @@ export default function SolarWorkflowScreen() {
   // Outcome selection state
   const [showOutcomeSelection, setShowOutcomeSelection] = useState(false);
   const [isProcessingOutcome, setIsProcessingOutcome] = useState(false);
+  const [isTrainingOpportunity, setIsTrainingOpportunity] = useState(false);
 
   useEffect(() => {
     // Load all data in parallel for faster loading
@@ -215,6 +216,12 @@ export default function SolarWorkflowScreen() {
       return true;
     }
   };
+
+  const isDisclaimerWorkflowComplete = () =>
+    Boolean(
+      workflowProgress?.disclaimerCompleted ||
+        workflowProgress?.stepData?.disclaimerCompletedAt,
+    );
 
   // Helper function to determine if workflow is already started
   const isWorkflowStarted = () => {
@@ -632,6 +639,14 @@ export default function SolarWorkflowScreen() {
         }
       }
       
+      try {
+        const oppDetailsRes = await api.get(`/opportunities/${opportunityId}`);
+        const oppSource = (oppDetailsRes.data as any)?.source ?? (oppDetailsRes.data as any)?.opportunity?.source;
+        setIsTrainingOpportunity(oppSource === 'TRAINING');
+      } catch {
+        setIsTrainingOpportunity(false);
+      }
+
       console.log('🔍 SolarWorkflowScreen: loadData completed successfully');
     } catch (error) {
       console.error('🔍 SolarWorkflowScreen: Error in loadData:', error);
@@ -1070,7 +1085,9 @@ export default function SolarWorkflowScreen() {
       const stepProgress =
         workflowProgress?.steps.find((s: any) => s.stepType === stepInfo?.stepType) ??
         workflowProgress?.steps.find((s: any) => s.stepNumber === stepNumber);
-      const isCompleted = stepProgress?.status === 'COMPLETED';
+      const isCompleted =
+        stepProgress?.status === 'COMPLETED' ||
+        (stepInfo?.stepType === 'DISCLAIMER_SIGNING' && isDisclaimerWorkflowComplete());
       const isSkipped = stepProgress?.status === 'SKIPPED';
       const currentStepMeta = workflowProgress?.steps?.find((s: any) => s.stepNumber === currentStep);
       let isCurrent: boolean;
@@ -1111,6 +1128,10 @@ export default function SolarWorkflowScreen() {
           // Special handling for OpenSolar step - check if project is linked
           if (prevStep?.stepType === 'OPEN_SOLAR' && openSolarProjectId) {
             continue; // OpenSolar step is considered completed if project is linked
+          }
+
+          if (prevStep?.stepType === 'DISCLAIMER_SIGNING' && isDisclaimerWorkflowComplete()) {
+            continue;
           }
           
           // For steps 1-3, they are always accessible themselves, but still need to be completed
@@ -1276,10 +1297,13 @@ export default function SolarWorkflowScreen() {
   };
 
   const renderStep = (step: any) => {
+    const isDisclaimerStep = step.stepType === 'DISCLAIMER_SIGNING';
     const stepProgress =
       workflowProgress?.steps.find((s: any) => s.stepType === step.stepType) ??
       workflowProgress?.steps.find((s: any) => s.stepNumber === step.stepNumber);
-    const isCompleted = stepProgress?.status === 'COMPLETED';
+    const isCompleted =
+      stepProgress?.status === 'COMPLETED' ||
+      (isDisclaimerStep && isDisclaimerWorkflowComplete());
     const isInProgress = stepProgress?.status === 'IN_PROGRESS';
     const isSkipped = stepProgress?.status === 'SKIPPED';
     const currentStepMeta = workflowProgress?.steps?.find((s: any) => s.stepNumber === currentStep);
@@ -1323,19 +1347,23 @@ export default function SolarWorkflowScreen() {
           : undefined;
         const prevStepStatus = prevStepProgress?.status;
         
-        // Special handling for OpenSolar step - check if project is linked
-        if (prevStep?.stepType === 'OPEN_SOLAR' && openSolarProjectId) {
-          continue; // OpenSolar step is considered completed if project is linked
-        }
-        
-        // For steps 1-3, they are always accessible themselves, but still need to be completed
-        // for later steps (like Proposal) to be unlocked
-        // A step allows progression if it's COMPLETED or SKIPPED
-        // If step navigation is enabled, also allow if step hasn't been started (no progress entry)
-        const prevStepAllowsProgression = 
-          prevStepStatus === 'COMPLETED' || 
-          prevStepStatus === 'SKIPPED' ||
-          (stepNavigationEnabled && !prevStepProgress); // Allow if not started when navigation is enabled
+          // Special handling for OpenSolar step - check if project is linked
+          if (prevStep?.stepType === 'OPEN_SOLAR' && openSolarProjectId) {
+            continue; // OpenSolar step is considered completed if project is linked
+          }
+
+          if (prevStep?.stepType === 'DISCLAIMER_SIGNING' && isDisclaimerWorkflowComplete()) {
+            continue;
+          }
+          
+          // For steps 1-3, they are always accessible themselves, but still need to be completed
+          // for later steps (like Proposal) to be unlocked
+          // A step allows progression if it's COMPLETED or SKIPPED
+          // If step navigation is enabled, also allow if step hasn't been started (no progress entry)
+          const prevStepAllowsProgression = 
+            prevStepStatus === 'COMPLETED' || 
+            prevStepStatus === 'SKIPPED' ||
+            (stepNavigationEnabled && !prevStepProgress); // Allow if not started when navigation is enabled
         
         // If previous step doesn't allow progression, block this step
         // Only enforce this when step navigation is disabled (strict sequential mode)
@@ -1729,6 +1757,19 @@ export default function SolarWorkflowScreen() {
         )}
       </View>
 
+      {isTrainingOpportunity && (
+        <View style={[styles.trainingBanner, { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }]}>
+          <Feather name="book-open" size={16} color="#b45309" />
+          <View style={styles.trainingBannerText}>
+            <Text style={styles.trainingBannerTitle}>Training mode</Text>
+            <Text style={styles.trainingBannerSubtitle}>
+              Practice appointment — use scenario hints from My Training. If contract or payment steps block on
+              fake customer data, ask your admin to use Workflow Override.
+            </Text>
+          </View>
+        </View>
+      )}
+
       <ScrollView 
         ref={scrollViewRef}
         style={[
@@ -2064,6 +2105,19 @@ const styles = StyleSheet.create({
   loadingContent: {
     alignItems: 'center',
   },
+  trainingBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginHorizontal: 12,
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  trainingBannerText: { flex: 1 },
+  trainingBannerTitle: { fontSize: 14, fontWeight: '700', color: '#b45309', marginBottom: 4 },
+  trainingBannerSubtitle: { fontSize: 12, lineHeight: 17, color: '#92400e' },
   loadingText: {
     fontSize: 16,
     color: '#64748b',
