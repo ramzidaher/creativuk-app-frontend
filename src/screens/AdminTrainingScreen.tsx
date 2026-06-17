@@ -40,12 +40,14 @@ const AdminTrainingScreen: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [programs, setPrograms] = useState<TrainingProgram[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
   const [startingFor, setStartingFor] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
+      setLoadError(null);
       const [programsRes, usersRes] = await Promise.all([
         trainingApi.listPrograms(),
         adminOpportunityDetailsApi.getAllUsersWithOpportunities().catch(() =>
@@ -56,6 +58,9 @@ const AdminTrainingScreen: React.FC = () => {
       if (programsRes.success && programsRes.data) {
         const list = (programsRes.data as any).programs ?? programsRes.data;
         setPrograms(Array.isArray(list) ? list : []);
+      } else {
+        setPrograms([]);
+        setLoadError(programsRes.error || 'Failed to load training programs.');
       }
 
       if (usersRes.success) {
@@ -76,6 +81,7 @@ const AdminTrainingScreen: React.FC = () => {
       }
     } catch (e) {
       console.error('AdminTraining load error:', e);
+      setLoadError(e instanceof Error ? e.message : 'Failed to load training programs.');
       Alert.alert('Error', 'Failed to load training programs.');
     } finally {
       setLoading(false);
@@ -159,6 +165,16 @@ const AdminTrainingScreen: React.FC = () => {
           }
           contentContainerStyle={styles.scrollContent}
         >
+          {loadError ? (
+            <View style={[styles.errorCard, { backgroundColor: '#fef2f2', borderColor: '#fecaca' }]}>
+              <Text style={styles.errorTitle}>Could not load training programs</Text>
+              <Text style={styles.errorText}>{loadError}</Text>
+              <Text style={styles.errorHint}>
+                If this mentions database tables, restart the backend after running: npx prisma migrate deploy
+              </Text>
+            </View>
+          ) : null}
+
           <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Start training for rep</Text>
           {users.length === 0 ? (
             <Text style={[styles.emptyText, { color: theme.secondaryText }]}>No surveyors found.</Text>
@@ -246,6 +262,10 @@ const styles = StyleSheet.create({
   headerSubtitle: { fontSize: 13, marginTop: 2 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scrollContent: { padding: 16, paddingBottom: 40 },
+  errorCard: { padding: 14, borderRadius: 10, borderWidth: 1, marginBottom: 16 },
+  errorTitle: { fontSize: 15, fontWeight: '700', color: '#b91c1c', marginBottom: 6 },
+  errorText: { fontSize: 13, color: '#7f1d1d', lineHeight: 18 },
+  errorHint: { fontSize: 12, color: '#991b1b', marginTop: 8, lineHeight: 17 },
   sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 12 },
   emptyText: { fontSize: 14, marginBottom: 8 },
   userCard: {
