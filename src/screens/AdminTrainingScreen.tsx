@@ -4,6 +4,8 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -33,6 +35,31 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED: '#94a3b8',
 };
 
+function parseSurveyorUsers(data: unknown): UserOption[] {
+  const arr = Array.isArray(data)
+    ? data
+    : Array.isArray((data as any)?.data)
+      ? (data as any).data
+      : Array.isArray((data as any)?.users)
+        ? (data as any).users
+        : [];
+  const list: UserOption[] = [];
+  const seen = new Set<string>();
+  arr.forEach((item: any) => {
+    const user = item?.user ?? item;
+    const id = user?.id ?? user?.userId;
+    const role = user?.role;
+    if (!id || seen.has(id)) return;
+    if (role && role !== 'SURVEYOR') return;
+    seen.add(id);
+    list.push({
+      id,
+      name: user.name || user.username || user.email || 'Unknown',
+    });
+  });
+  return list;
+}
+
 const AdminTrainingScreen: React.FC = () => {
   const { theme } = useTheme();
   const navigation = useNavigation<any>();
@@ -44,6 +71,8 @@ const AdminTrainingScreen: React.FC = () => {
   const [programs, setPrograms] = useState<TrainingProgram[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
   const [startingFor, setStartingFor] = useState<string | null>(null);
+  const [confirmUser, setConfirmUser] = useState<UserOption | null>(null);
+  const [actionMessage, setActionMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -64,19 +93,13 @@ const AdminTrainingScreen: React.FC = () => {
       }
 
       if (usersRes.success) {
-        const data = usersRes.data?.data || usersRes.data || [];
-        const arr = Array.isArray(data) ? data : [];
-        const list: UserOption[] = [];
-        arr.forEach((item: any) => {
-          const user = item?.user ?? item;
-          const id = user.id ?? user.userId;
-          if (id && (user.role === 'SURVEYOR' || !user.role)) {
-            list.push({
-              id,
-              name: user.name || user.username || user.email || 'Unknown',
-            });
+        let list = parseSurveyorUsers(usersRes.data);
+        if (list.length === 0) {
+          const fallback = await adminAnalyticsApi.getAllUsers();
+          if (fallback.success) {
+            list = parseSurveyorUsers(fallback.data);
           }
-        });
+        }
         setUsers(list);
       }
     } catch (e) {
@@ -95,35 +118,41 @@ const AdminTrainingScreen: React.FC = () => {
     }, [loadData]),
   );
 
-  const handleStartTraining = async (userId: string, userName: string) => {
-    Alert.alert(
-      'Start Training',
-      `Start training program for ${userName}? This creates 5 test scenarios.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Start',
-          onPress: async () => {
-            setStartingFor(userId);
-            try {
-              const res = await trainingApi.startProgram(userId);
-              if (res.success && res.data) {
-                const program = res.data as TrainingProgram;
-                Alert.alert('Success', 'Training program started.');
-                navigation.navigate('AdminTrainingProgress', { programId: program.id });
-                loadData();
-              } else {
-                Alert.alert('Error', res.error || 'Failed to start training.');
-              }
-            } catch (e) {
-              Alert.alert('Error', e instanceof Error ? e.message : 'Failed to start training.');
-            } finally {
-              setStartingFor(null);
-            }
-          },
-        },
-      ],
-    );
+  const runStartTraining = async (userId: string) => {
+    setStartingFor(userId);
+    setActionMessage(null);
+    try {
+      const res = await trainingApi.startProgram(userId);
+      if (res.success && res.data) {
+        const program = res.data as TrainingProgram;
+        const programId = program.id;
+        if (!programId) {
+          setActionMessage({ type: 'error', text: 'Training started but program id was missing in the response.' });
+          return;
+        }
+        setConfirmUser(null);
+        await loadData();
+        navigation.navigate('AdminTrainingProgress', { programId });
+      } else {
+        setActionMessage({ type: 'error', text: res.error || 'Failed to start training.' });
+        if (Platform.OS !== 'web') {
+          Alert.alert('Error', res.error || 'Failed to start training.');
+        }
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to start training.';
+      setActionMessage({ type: 'error', text: message });
+      if (Platform.OS !== 'web') {
+        Alert.alert('Error', message);
+      }
+    } finally {
+      setStartingFor(null);
+    }
+  };
+
+  const handleStartTraining = (user: UserOption) => {
+    setActionMessage(null);
+    setConfirmUser(user);
   };
 
   const activeProgramUserIds = new Set(
@@ -165,6 +194,27 @@ const AdminTrainingScreen: React.FC = () => {
           }
           contentContainerStyle={styles.scrollContent}
         >
+          {actionMessage ? (
+            <View
+              style={[
+                styles.actionMessageCard,
+                {
+                  backgroundColor: actionMessage.type === 'error' ? '#fef2f2' : '#ecfdf5',
+                  borderColor: actionMessage.type === 'error' ? '#fecaca' : '#a7f3d0',
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.actionMessageText,
+                  { color: actionMessage.type === 'error' ? '#991b1b' : '#065f46' },
+                ]}
+              >
+                {actionMessage.text}
+              </Text>
+            </View>
+          ) : null}
+
           {loadError ? (
             <View style={[styles.errorCard, { backgroundColor: '#fef2f2', borderColor: '#fecaca' }]}>
               <Text style={styles.errorTitle}>Could not load training programs</Text>
@@ -196,7 +246,7 @@ const AdminTrainingScreen: React.FC = () => {
                     <TouchableOpacity
                       style={[styles.startButton, { backgroundColor: theme.primaryButton }]}
                       disabled={startingFor === user.id}
-                      onPress={() => handleStartTraining(user.id, user.name)}
+                      onPress={() => handleStartTraining(user)}
                     >
                       {startingFor === user.id ? (
                         <ActivityIndicator size="small" color="#fff" />
@@ -243,6 +293,43 @@ const AdminTrainingScreen: React.FC = () => {
           )}
         </ScrollView>
       )}
+
+      <Modal
+        visible={confirmUser != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !startingFor && setConfirmUser(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.modalTitle, { color: theme.primaryText }]}>Start training?</Text>
+            <Text style={[styles.modalBody, { color: theme.secondaryText }]}>
+              Start a training program for {confirmUser?.name}? This creates 5 Peterborough test scenarios assigned
+              to them.
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancel, { borderColor: theme.cardBorder }]}
+                disabled={!!startingFor}
+                onPress={() => setConfirmUser(null)}
+              >
+                <Text style={[styles.modalCancelText, { color: theme.primaryText }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalConfirm, { backgroundColor: theme.primaryButton }]}
+                disabled={!!startingFor}
+                onPress={() => confirmUser && runStartTraining(confirmUser.id)}
+              >
+                {startingFor ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>Start Training</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -266,6 +353,8 @@ const styles = StyleSheet.create({
   errorTitle: { fontSize: 15, fontWeight: '700', color: '#b91c1c', marginBottom: 6 },
   errorText: { fontSize: 13, color: '#7f1d1d', lineHeight: 18 },
   errorHint: { fontSize: 12, color: '#991b1b', marginTop: 8, lineHeight: 17 },
+  actionMessageCard: { padding: 12, borderRadius: 10, borderWidth: 1, marginBottom: 12 },
+  actionMessageText: { fontSize: 13, lineHeight: 18 },
   sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 12 },
   emptyText: { fontSize: 14, marginBottom: 8 },
   userCard: {
@@ -295,6 +384,28 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 11, fontWeight: '700' },
   programMeta: { fontSize: 13, marginTop: 6 },
   chevron: { position: 'absolute', right: 14, top: '50%' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: { width: '100%', maxWidth: 420, borderRadius: 14, borderWidth: 1, padding: 20 },
+  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 10 },
+  modalBody: { fontSize: 14, lineHeight: 20, marginBottom: 20 },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+  modalButton: {
+    minWidth: 110,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalCancel: { borderWidth: 1 },
+  modalCancelText: { fontSize: 14, fontWeight: '600' },
+  modalConfirm: {},
+  modalConfirmText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });
 
 export default AdminTrainingScreen;
