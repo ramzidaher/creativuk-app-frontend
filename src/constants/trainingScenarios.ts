@@ -1,3 +1,10 @@
+import {
+  FIND_PROPERTY_INTRO,
+  PROPERTY_NOT_VISIBLE_CALLOUT_TITLE,
+  PROPERTY_NOT_VISIBLE_SECTION_INTRO,
+  PROPERTY_NOT_VISIBLE_STEPS,
+} from './findPropertyGuide';
+
 export interface TrainingScenarioTemplate {
   scenarioNumber: number;
   customerName: string;
@@ -18,6 +25,19 @@ export interface TrainingGuideLink {
   url: string;
 }
 
+export interface TrainingGuideCallout {
+  title: string;
+  body: string;
+}
+
+export interface TrainingGuideSection {
+  title: string;
+  intro?: string;
+  steps?: { title: string; detail: string }[];
+  /** Amber highlight box (e.g. property-not-on-map fallback) */
+  highlight?: boolean;
+}
+
 export interface TrainingHowToGuide {
   id: string;
   title: string;
@@ -26,13 +46,23 @@ export interface TrainingHowToGuide {
   url?: string;
   /** Multiple guides — user picks which to open */
   links?: TrainingGuideLink[];
+  /** In-app callout (e.g. property not on OpenSolar) */
+  callout?: TrainingGuideCallout;
+  /** Expandable in-app steps shown below the description */
+  sections?: TrainingGuideSection[];
 }
 
 export const TRAINING_TARIFF_REFERENCE = {
   supplier: '100Green Smart Tide',
   currentElectricity: {
     withBill: "Use the customer's latest bill if available",
-    withoutBill: 'If no bill is available, use 25p/kWh',
+    withoutBill: 'If no bill is available, use capped rate 25p/kWh',
+  },
+  noBillUsage: {
+    title: 'No energy bill — calculate annual usage',
+    cappedRateNote: 'Use capped rate 25p/kWh (0.25 in the formula below).',
+    formula: 'Monthly direct debit × 12 ÷ 0.25 = Annual usage (kWh)',
+    example: 'Example: £120 × 12 ÷ 0.25 = 5,760 kWh',
   },
   newElectricity: {
     singleRate: {
@@ -53,29 +83,29 @@ export const TRAINING_HOW_TO_GUIDES: TrainingHowToGuide[] = [
   {
     id: 'find-property',
     title: 'How to find the property',
-    description: 'Look up the address and verify the correct property before designing.',
+    description: FIND_PROPERTY_INTRO,
     url: 'https://www.findmyaddress.co.uk/search',
+    sections: [
+      {
+        title: PROPERTY_NOT_VISIBLE_CALLOUT_TITLE,
+        intro: PROPERTY_NOT_VISIBLE_SECTION_INTRO,
+        steps: PROPERTY_NOT_VISIBLE_STEPS,
+        highlight: true,
+      },
+    ],
   },
   {
     id: 'opensolar-design',
     title: 'How to design on OpenSolar',
-    description: 'OpenSolar design guide — satellite imagery, panel placement, and saving your design.',
+    description:
+      'Create and save the OpenSolar design before you start Solar Progress — then link it in step 2 using the project ID or property address.',
     url: 'https://support.opensolar.com/hc/en-us/articles/7576156328207--Design',
   },
   {
     id: 'complete-app',
     title: 'How to complete the app',
-    description: 'Pick a step-by-step guide to follow through the full appointment workflow.',
-    links: [
-      {
-        label: 'App step-by-step (SharePoint)',
-        url: 'https://jarmqltd-my.sharepoint.com/:w:/r/personal/pamela_rennie_creativuk_co_uk/_layouts/15/Doc.aspx?sourcedoc=%7B2111CCBC-147A-43B0-9A79-7B892389B1DB%7D&file=App%20%25u2013%20Step%20by%20Step%20This%20is%20a%20step%20by%20step.docx&fromShare=true&action=default&mobileredirect=true',
-      },
-      {
-        label: 'Creativ UK docs',
-        url: 'https://docs.app.creativuk.co.uk/',
-      },
-    ],
+    description: 'Step-by-step Word guide for the full appointment workflow.',
+    url: 'https://jarmqltd-my.sharepoint.com/:w:/r/personal/pamela_rennie_creativuk_co_uk/_layouts/15/Doc.aspx?sourcedoc=%7B2111CCBC-147A-43B0-9A79-7B892389B1DB%7D&file=App%20%25u2013%20Step%20by%20Step%20This%20is%20a%20step%20by%20step.docx&fromShare=true&action=default&mobileredirect=true',
   },
 ];
 

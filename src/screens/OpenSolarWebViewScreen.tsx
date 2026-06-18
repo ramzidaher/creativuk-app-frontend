@@ -17,6 +17,18 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import BottomNavigation from '../components/BottomNavigation';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import {
+  OPENSOLAR_LINK_BY_ADDRESS_HINT,
+  OPENSOLAR_LINK_BY_ID_HINT,
+  OPENSOLAR_LINK_SCREEN_INTRO,
+  OPENSOLAR_LINK_SCREEN_TITLE,
+} from '../constants/opensolarWorkflow';
+import {
+  PROPERTY_NOT_VISIBLE_CALLOUT_TITLE,
+  PROPERTY_NOT_VISIBLE_SECTION_INTRO,
+  PROPERTY_NOT_VISIBLE_SHORT_HINT,
+  PROPERTY_NOT_VISIBLE_STEPS,
+} from '../constants/findPropertyGuide';
 
 const { width, height } = Dimensions.get('window');
 
@@ -31,6 +43,7 @@ export default function OpenSolarProjectScreen() {
   const { opportunityId, opportunity } = route.params as RouteParams;
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
+  const isTrainingOpportunity = opportunity?.source === 'TRAINING';
   
   console.log('OpenSolarProject: Opportunity:', opportunity?.name);
   
@@ -65,8 +78,18 @@ export default function OpenSolarProjectScreen() {
     }
   }, []);
 
-  // Search for existing OpenSolar projects
+  // Search for existing OpenSolar projects by property address
+  const getOpportunityAddress = () => {
+    if (!opportunity) return '';
+    const parts = [opportunity.contactAddress, opportunity.contactPostcode].filter(Boolean);
+    return parts.join(', ');
+  };
+
   const handleSearchProjects = () => {
+    const prefilledAddress = getOpportunityAddress();
+    if (prefilledAddress) {
+      setSearchAddress(prefilledAddress);
+    }
     setSearchStep('search');
     setSearchError(null);
   };
@@ -503,7 +526,7 @@ export default function OpenSolarProjectScreen() {
               <Feather name="arrow-left" size={20} color={theme.secondaryText} />
             </TouchableOpacity>
             <View style={styles.headerTextContainer}>
-              <Text style={[styles.headerTitle, { color: theme.primaryText }]}>OpenSolar Project</Text>
+              <Text style={[styles.headerTitle, { color: theme.primaryText }]}>{OPENSOLAR_LINK_SCREEN_TITLE}</Text>
               <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
                 {opportunity?.name || 'Solar Project'}
               </Text>
@@ -643,43 +666,106 @@ export default function OpenSolarProjectScreen() {
             </TouchableOpacity>
           </View>
         ) : searchStep === 'main' ? (
-          // Main Options Section
+          // Main linking options — project ID first, then address
           <View style={styles.section}>
             <View style={[styles.sectionHeader, { backgroundColor: theme.cardBackground }]}>
-              <Ionicons name="sunny" size={32} color={theme.primaryButton} />
+              <Ionicons name="link" size={32} color={theme.primaryButton} />
               <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
-                OpenSolar Project Options
+                {OPENSOLAR_LINK_SCREEN_TITLE}
               </Text>
             </View>
-            
-            <Text style={[styles.sectionSubtitle, { color: theme.secondaryText }]}>
-              Search and link your existing OpenSolar project.
-            </Text>
 
-            {/* Search Existing Project Option */}
+            <View style={[styles.infoCallout, { backgroundColor: '#eff6ff', borderColor: '#93c5fd' }]}>
+              <Text style={[styles.infoCalloutText, { color: '#1e40af' }]}>{OPENSOLAR_LINK_SCREEN_INTRO}</Text>
+            </View>
+
+            <View style={[styles.propertyFallbackCallout, { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }]}>
+              <Text style={styles.propertyFallbackCalloutTitle}>{PROPERTY_NOT_VISIBLE_CALLOUT_TITLE}</Text>
+              {isTrainingOpportunity ? (
+                <>
+                  <Text style={[styles.propertyFallbackSectionIntro, { color: theme.secondaryText }]}>
+                    {PROPERTY_NOT_VISIBLE_SECTION_INTRO}
+                  </Text>
+                  {PROPERTY_NOT_VISIBLE_STEPS.map((step, index) => (
+                    <View key={step.title} style={styles.propertyFallbackStep}>
+                      <Text style={[styles.propertyFallbackStepTitle, { color: theme.primaryText }]}>
+                        {index + 1}. {step.title}
+                      </Text>
+                      <Text style={[styles.propertyFallbackStepDetail, { color: theme.secondaryText }]}>
+                        {step.detail}
+                      </Text>
+                    </View>
+                  ))}
+                </>
+              ) : (
+                <Text style={[styles.propertyFallbackShortHint, { color: theme.secondaryText }]}>
+                  {PROPERTY_NOT_VISIBLE_SHORT_HINT}
+                </Text>
+              )}
+            </View>
+
+            <Text style={[styles.linkMethodTitle, { color: theme.primaryText }]}>Option 1 — Project ID (recommended)</Text>
+            <Text style={[styles.linkMethodHint, { color: theme.secondaryText }]}>{OPENSOLAR_LINK_BY_ID_HINT}</Text>
+
+            <TextInput
+              style={[styles.projectIdInput, {
+                backgroundColor: theme.cardBackground,
+                borderColor: theme.cardBorder,
+                color: theme.primaryText,
+              }]}
+              placeholder="Enter OpenSolar project ID (e.g. 7910393)"
+              placeholderTextColor={theme.secondaryText}
+              value={manualProjectId}
+              onChangeText={setManualProjectId}
+              keyboardType="numeric"
+            />
+
+            <TouchableOpacity
+              style={[styles.searchButton, { backgroundColor: theme.primaryButton }]}
+              onPress={linkToExistingProject}
+              disabled={isLinkingProject}
+            >
+              {isLinkingProject ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <>
+                  <Feather name="link" size={20} color="#ffffff" />
+                  <Text style={styles.searchButtonText}>Link by Project ID</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.linkDivider}>
+              <View style={[styles.linkDividerLine, { backgroundColor: theme.cardBorder }]} />
+              <Text style={[styles.linkDividerText, { color: theme.secondaryText }]}>or</Text>
+              <View style={[styles.linkDividerLine, { backgroundColor: theme.cardBorder }]} />
+            </View>
+
+            <Text style={[styles.linkMethodTitle, { color: theme.primaryText }]}>Option 2 — Property address</Text>
+            <Text style={[styles.linkMethodHint, { color: theme.secondaryText }]}>{OPENSOLAR_LINK_BY_ADDRESS_HINT}</Text>
+
             <TouchableOpacity
               style={[styles.secondaryButton, { borderColor: theme.primaryButton }]}
               onPress={handleSearchProjects}
             >
-              <Feather name="search" size={20} color={theme.primaryButton} />
+              <Feather name="map-pin" size={20} color={theme.primaryButton} />
               <Text style={[styles.secondaryButtonText, { color: theme.primaryButton }]}>
-                Search Existing Project
+                Link by Property Address
               </Text>
             </TouchableOpacity>
-
           </View>
         ) : searchStep === 'search' ? (
           // Search Projects Section
           <View style={styles.section}>
             <View style={[styles.sectionHeader, { backgroundColor: theme.cardBackground }]}>
-              <Ionicons name="search" size={32} color={theme.primaryButton} />
+              <Ionicons name="map-pin" size={32} color={theme.primaryButton} />
               <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
-                Search for Your Project
+                Link by Property Address
               </Text>
             </View>
             
             <Text style={[styles.sectionSubtitle, { color: theme.secondaryText }]}>
-              Enter the address used in your OpenSolar project to find and link it.
+              {OPENSOLAR_LINK_BY_ADDRESS_HINT}
             </Text>
 
             <View style={styles.searchForm}>
@@ -689,7 +775,7 @@ export default function OpenSolarProjectScreen() {
                   borderColor: theme.cardBorder,
                   color: theme.primaryText 
                 }]}
-                placeholder="Enter project address..."
+                placeholder="Enter the property address from OpenSolar..."
                 placeholderTextColor={theme.secondaryText}
                 value={searchAddress}
                 onChangeText={setSearchAddress}
@@ -707,7 +793,7 @@ export default function OpenSolarProjectScreen() {
                 ) : (
                   <>
                     <Feather name="search" size={20} color="#ffffff" />
-                    <Text style={styles.searchButtonText}>Search Projects</Text>
+                    <Text style={styles.searchButtonText}>Find Matching Project</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -733,12 +819,12 @@ export default function OpenSolarProjectScreen() {
             <View style={[styles.sectionHeader, { backgroundColor: theme.cardBackground }]}>
               <Ionicons name="list" size={32} color={theme.primaryButton} />
               <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
-                Select Your Project
+                Select the Correct Design
               </Text>
             </View>
             
             <Text style={[styles.sectionSubtitle, { color: theme.secondaryText }]}>
-              Found {searchProjects.length} project(s) for "{searchAddress}"
+              Found {searchProjects.length} project(s) for "{searchAddress}". Choose the design that matches this customer.
             </Text>
             
             {searchProjects.length === 0 ? (
@@ -1228,6 +1314,84 @@ const styles = StyleSheet.create({
     color: '#64748b',
     lineHeight: 20,
     marginBottom: 20,
+  },
+  infoCallout: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+  },
+  infoCalloutText: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  propertyFallbackCallout: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+  },
+  propertyFallbackCalloutTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#b45309',
+    marginBottom: 6,
+  },
+  propertyFallbackSectionIntro: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  propertyFallbackShortHint: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  propertyFallbackStep: {
+    marginTop: 8,
+  },
+  propertyFallbackStepTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 17,
+  },
+  propertyFallbackStepDetail: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+    paddingLeft: 14,
+  },
+  linkMethodTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  linkMethodHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  projectIdInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    minHeight: 52,
+    marginBottom: 12,
+  },
+  linkDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginVertical: 20,
+  },
+  linkDividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  linkDividerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    textTransform: 'uppercase',
   },
   searchForm: {
     gap: 16,

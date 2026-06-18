@@ -575,34 +575,38 @@ export default function DisclaimerSigningScreen() {
     }
   };
 
-  // Helper function to get the correct disclaimer step number
-  const getDisclaimerStepNumber = async (): Promise<number> => {
+  const syncDisclaimerWorkflowCompletion = async () => {
     try {
       const { workflowApi } = await import('../utils/api');
-      const progressResponse = await workflowApi.getOpportunityProgress(opportunityId);
-      if (progressResponse && progressResponse.success && progressResponse.data && progressResponse.data.steps) {
-        const disclaimerStep = progressResponse.data.steps.find((s: any) => s.stepType === 'DISCLAIMER_SIGNING');
-        if (disclaimerStep && disclaimerStep.stepNumber) {
-          console.log('🔍 Found DISCLAIMER_SIGNING step number:', disclaimerStep.stepNumber);
-          return disclaimerStep.stepNumber;
-        }
-      }
+      const res = await workflowApi.syncDisclaimerCompletion(opportunityId);
+      console.log('✅ Disclaimer workflow sync:', res.data);
     } catch (error) {
-      console.warn('⚠️ Could not fetch workflow progress for disclaimer step number:', error);
+      console.warn('⚠️ Could not sync disclaimer completion to workflow:', error);
     }
-    // Default fallback - disclaimer is typically step 8
-    return 8;
+  };
+
+  const isDocuSealSigningComplete = (statusData: any): boolean => {
+    const top = (statusData?.status ?? '').toLowerCase();
+    const submitter = (statusData?.submitters?.[0]?.status ?? '').toLowerCase();
+    return (
+      top === 'completed' ||
+      top === 'approved' ||
+      submitter === 'completed' ||
+      submitter === 'approved'
+    );
   };
 
   // Update status from response
   const updateStatusFromResponse = (statusData: any) => {
-    const status = statusData.status?.toLowerCase() || statusData.submitters?.[0]?.status?.toLowerCase();
-    
-    if (status === 'completed') {
+    if (isDocuSealSigningComplete(statusData)) {
       setSigningStatus('completed');
-      // Stay on status screen - don't navigate to complete step
-      // Step will be marked as complete when user clicks "Next" button
-    } else if (status === 'opened') {
+      void syncDisclaimerWorkflowCompletion();
+      return;
+    }
+
+    const status = statusData.status?.toLowerCase() || statusData.submitters?.[0]?.status?.toLowerCase();
+
+    if (status === 'opened') {
       setSigningStatus('opened');
     } else if (status === 'declined') {
       setSigningStatus('declined');
@@ -1192,22 +1196,8 @@ export default function DisclaimerSigningScreen() {
                   style={[styles.signButton, { backgroundColor: '#4CAF50' }]}
                   onPress={async () => {
                     try {
-                      console.log('🔍 Disclaimer completed, marking step as complete and navigating...');
-                      
-                      // Get the correct step number for disclaimer
-                      const { workflowApi } = await import('../utils/api');
-                      const disclaimerStepNumber = await getDisclaimerStepNumber();
-                      
-                      // Mark disclaimer step as completed
-                      await workflowApi.completeStep(opportunityId, disclaimerStepNumber, {
-                        submissionId: submissionId,
-                        signedAt: new Date().toISOString(),
-                        status: 'completed'
-                      });
-                      
-                      console.log('✅ Disclaimer step marked as complete, navigating to ContractSigning...');
-                      
-                      // Navigate to Contract Signing (which includes email confirmation)
+                      console.log('🔍 Disclaimer completed, syncing workflow and navigating...');
+                      await syncDisclaimerWorkflowCompletion();
                       navigation.navigate('ContractSigning', { opportunityId });
                     } catch (error) {
                       console.error('❌ Error completing disclaimer step:', error);

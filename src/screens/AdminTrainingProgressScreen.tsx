@@ -4,6 +4,7 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -106,7 +107,17 @@ const AdminTrainingProgressScreen: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.primaryBackground }]}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        { backgroundColor: theme.primaryBackground },
+        Platform.OS === 'web' && {
+          height: '100vh' as const,
+          maxHeight: '100vh' as const,
+          overflow: 'hidden' as const,
+        },
+      ]}
+    >
       <View style={[styles.header, { backgroundColor: theme.cardBackground, borderBottomColor: theme.cardBorder }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Feather name="arrow-left" size={22} color={theme.primaryText} />
@@ -129,7 +140,35 @@ const AdminTrainingProgressScreen: React.FC = () => {
           <ActivityIndicator size="large" color={theme.primaryButton} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View
+          style={[
+            styles.scrollHost,
+            Platform.OS === 'web' && {
+              height: 'calc(100vh - 120px)' as const,
+              overflow: 'hidden' as const,
+            },
+          ]}
+        >
+          <ScrollView
+            style={[
+              styles.scrollView,
+              Platform.OS === 'web' && {
+                height: '100%' as const,
+                maxHeight: '100%' as const,
+              },
+            ]}
+            contentContainerStyle={[
+              styles.scrollContent,
+              Platform.OS === 'web' && { flexGrow: 1, paddingBottom: 100 },
+            ]}
+            showsVerticalScrollIndicator={Platform.OS === 'web'}
+            nestedScrollEnabled
+            scrollEnabled
+            bounces={Platform.OS !== 'web'}
+            alwaysBounceVertical={Platform.OS !== 'web'}
+            keyboardShouldPersistTaps="handled"
+            removeClippedSubviews={Platform.OS !== 'web'}
+          >
           <View style={[styles.summaryCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
             <Text style={[styles.summaryTitle, { color: theme.primaryText }]}>
               {program.summary?.completedScenarios ?? 0} / {program.summary?.totalScenarios ?? 5} complete
@@ -234,6 +273,7 @@ const AdminTrainingProgressScreen: React.FC = () => {
             );
           })}
         </ScrollView>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -253,6 +293,8 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '700' },
   headerSubtitle: { fontSize: 13, marginTop: 2 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  scrollHost: { flex: 1 },
+  scrollView: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 40 },
   summaryCard: { padding: 16, borderRadius: 12, borderWidth: 1, marginBottom: 16 },
   summaryTitle: { fontSize: 18, fontWeight: '700', marginBottom: 10 },

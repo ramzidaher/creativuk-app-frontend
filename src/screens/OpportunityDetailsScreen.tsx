@@ -21,6 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Opportunity, Appointment } from '../types';
 import { api, workflowApi } from '../utils/api';
+import { OPENSOLAR_PREP_MESSAGE, OPENSOLAR_PREP_TITLE } from '../constants/opensolarWorkflow';
 
 const { width, height } = Dimensions.get('window');
 
@@ -684,6 +685,16 @@ export default function OpportunityDetailsScreen() {
               <Feather name="settings" size={20} color={theme.secondaryText} />
               <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Progress</Text>
             </View>
+
+            {!isWorkflowStarted() && (
+              <View style={[styles.opensolarPrepCard, { backgroundColor: '#eff6ff', borderColor: '#3b82f6' }]}>
+                <Feather name="sun" size={18} color="#1d4ed8" />
+                <View style={styles.opensolarPrepCardText}>
+                  <Text style={styles.opensolarPrepCardTitle}>{OPENSOLAR_PREP_TITLE}</Text>
+                  <Text style={styles.opensolarPrepCardBody}>{OPENSOLAR_PREP_MESSAGE}</Text>
+                </View>
+              </View>
+            )}
             
             <TouchableOpacity
               style={styles.workflowButton}
@@ -1161,8 +1172,27 @@ const styles = StyleSheet.create({
     opacity: 0.9,
     lineHeight: 22,
   },
-  
-  // Enhanced Modal styles
+  opensolarPrepCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  opensolarPrepCardText: { flex: 1 },
+  opensolarPrepCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1d4ed8',
+    marginBottom: 6,
+  },
+  opensolarPrepCardBody: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#1e40af',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.4)',

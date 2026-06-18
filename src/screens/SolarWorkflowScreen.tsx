@@ -288,8 +288,9 @@ export default function SolarWorkflowScreen() {
             case 'OPEN_SOLAR':
               return {
                 ...step,
-                title: 'OpenSolar',
-                description: 'Access OpenSolar platform for design',
+                title: 'Link OpenSolar Design',
+                description:
+                  'Enter the OpenSolar project ID or property address to link the design you created before the appointment',
                 stepType: 'OPEN_SOLAR'
               };
             case 'CALCULATOR':
@@ -1527,6 +1528,11 @@ export default function SolarWorkflowScreen() {
               </View>
             </View>
             <Text style={[styles.stepDescription, { color: theme.secondaryText }]}>{step.description}</Text>
+            {isOpenSolarStep && !hasOpenSolarProject && !showAsCompleted && (
+              <Text style={[styles.stepHint, { color: theme.primaryButton }]}>
+                Your OpenSolar design should already be saved — link it here with the project ID or address.
+              </Text>
+            )}
           </View>
           <View style={styles.stepArrow}>
             <Feather name="chevron-right" size={20} color={theme.tertiaryText} />
@@ -1569,6 +1575,8 @@ export default function SolarWorkflowScreen() {
         height: '100vh',
         maxHeight: '100vh',
         overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
       }
     ]}>
       {/* Background Image */}
@@ -1757,19 +1765,16 @@ export default function SolarWorkflowScreen() {
         )}
       </View>
 
-      {isTrainingOpportunity && (
-        <View style={[styles.trainingBanner, { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }]}>
-          <Feather name="book-open" size={16} color="#b45309" />
-          <View style={styles.trainingBannerText}>
-            <Text style={styles.trainingBannerTitle}>Training mode</Text>
-            <Text style={styles.trainingBannerSubtitle}>
-              Practice appointment — use scenario hints from My Training. If contract or payment steps block on
-              fake customer data, ask your admin to use Workflow Override.
-            </Text>
-          </View>
-        </View>
-      )}
-
+      <View
+        style={[
+          styles.scrollHost,
+          Platform.OS === 'web' && {
+            flex: 1,
+            minHeight: 0,
+            overflow: 'hidden' as const,
+          },
+        ]}
+      >
       <ScrollView 
         ref={scrollViewRef}
         style={[
@@ -1793,21 +1798,38 @@ export default function SolarWorkflowScreen() {
         contentContainerStyle={[
           { paddingBottom: 40 },
           Platform.OS === 'web' && {
-            minHeight: '100vh' as any, // Ensure content is taller than viewport
-            paddingBottom: 100, // Extra padding for web
-          }
+            flexGrow: 1,
+            paddingBottom: 100,
+          },
         ]}
       >
-        {/* Hero Section */}
-        <View style={styles.heroSection}>
-          <View style={[styles.heroIcon, { backgroundColor: theme.primaryButton + '20' }]}>
-            <Feather name="zap" size={32} color={theme.primaryButton} />
+        {isTrainingOpportunity && (
+          <View style={[styles.trainingBanner, { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }]}>
+            <Feather name="book-open" size={16} color="#b45309" />
+            <View style={styles.trainingBannerText}>
+              <Text style={styles.trainingBannerTitle}>Training mode</Text>
+              <Text style={styles.trainingBannerSubtitle}>
+                Practice appointment — use scenario hints in My Training. If contract or payment blocks on fake
+                data, ask your admin to use Workflow Override.
+              </Text>
+            </View>
           </View>
-          <Text style={[styles.heroTitle, { color: theme.primaryText }]}>Solar Installation Progress</Text>
-          <Text style={[styles.heroSubtitle, { color: theme.secondaryText }]}>
-            Complete all steps to finish your solar installation project
-          </Text>
-        </View>
+        )}
+
+        {!isTrainingOpportunity && (
+          <>
+            {/* Hero Section */}
+            <View style={styles.heroSection}>
+              <View style={[styles.heroIcon, { backgroundColor: theme.primaryButton + '20' }]}>
+                <Feather name="zap" size={32} color={theme.primaryButton} />
+              </View>
+              <Text style={[styles.heroTitle, { color: theme.primaryText }]}>Solar Installation Progress</Text>
+              <Text style={[styles.heroSubtitle, { color: theme.secondaryText }]}>
+                Complete all steps to finish your solar installation project
+              </Text>
+            </View>
+          </>
+        )}
 
         {/* Opportunity Info */}
         {opportunity && (
@@ -1856,6 +1878,7 @@ export default function SolarWorkflowScreen() {
           )}
         </View>
       </ScrollView>
+      </View>
 
       {/* Step Action Modal - Never show for steps that have direct navigation */}
       {(() => {
@@ -2109,8 +2132,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    marginHorizontal: 12,
-    marginTop: 8,
+    marginBottom: 12,
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
@@ -2342,6 +2364,10 @@ const styles = StyleSheet.create({
   },
   
   // Scroll View
+  scrollHost: {
+    flex: 1,
+    minHeight: 0,
+  },
   scrollView: {
     flex: 1,
     backgroundColor: 'transparent',
@@ -2547,6 +2573,12 @@ const styles = StyleSheet.create({
     color: '#64748b',
     lineHeight: 22,
     fontWeight: '500',
+  },
+  stepHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+    marginTop: 8,
   },
   stepArrow: {
     alignItems: 'center',

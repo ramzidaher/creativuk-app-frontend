@@ -951,7 +951,7 @@ export default function OpportunitiesScreen() {
           )}
           {!showDatePicker && (
             <Text style={[styles.filterHint, { color: theme.secondaryText }]}>
-              Tap to expand and filter opportunities by appointment date
+              This list shows today only until you pick a date range. Tap to expand, then use Next Day, This Week, or This Month for upcoming jobs.
             </Text>
           )}
           
@@ -1012,7 +1012,7 @@ export default function OpportunitiesScreen() {
               Appointments
             </Text>
             <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
-              Showing appointments that have been booked
+              Today's visits by default — expand the date filter for tomorrow or later
             </Text>
           </View>
         </View>

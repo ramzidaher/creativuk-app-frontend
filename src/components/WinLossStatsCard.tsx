@@ -196,6 +196,9 @@ const WinLossStatsCard: React.FC<WinLossStatsCardProps> = ({
             <FontAwesome5 name="percentage" size={20} color={theme.primaryButton} />
             <Text style={[styles.metricValue, { color: theme.primaryText }]}>{formatPercentage(stats.conversionRate)}</Text>
             <Text style={[styles.metricLabel, { color: theme.secondaryText }]}>Conversion Rate</Text>
+            <Text style={[styles.metricHelp, { color: theme.secondaryText }]}>
+              Won ÷ all tracked outcomes in this period
+            </Text>
           </View>
         </View>
 
@@ -408,6 +411,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     textAlign: 'center',
+  },
+  metricHelp: {
+    fontSize: 10,
+    marginTop: 2,
+    textAlign: 'center',
+    lineHeight: 14,
+    paddingHorizontal: 4,
   },
   detailsContainer: {
     padding: 20,

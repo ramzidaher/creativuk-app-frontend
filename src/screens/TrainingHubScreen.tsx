@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -125,7 +126,17 @@ const TrainingHubScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.primaryBackground }]}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        { backgroundColor: theme.primaryBackground },
+        Platform.OS === 'web' && {
+          height: '100vh' as const,
+          maxHeight: '100vh' as const,
+          overflow: 'hidden' as const,
+        },
+      ]}
+    >
       <View style={[styles.header, { backgroundColor: theme.cardBackground, borderBottomColor: theme.cardBorder }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Feather name="arrow-left" size={22} color={theme.primaryText} />
@@ -151,12 +162,41 @@ const TrainingHubScreen: React.FC = () => {
           </Text>
         </View>
       ) : (
-        <ScrollView
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadProgram(); }} />
-          }
-          contentContainerStyle={styles.scrollContent}
+        <View
+          style={[
+            styles.scrollHost,
+            Platform.OS === 'web' && {
+              height: 'calc(100vh - 120px)' as const,
+              overflow: 'hidden' as const,
+            },
+          ]}
         >
+          <ScrollView
+            style={[
+              styles.scrollView,
+              Platform.OS === 'web' && {
+                height: '100%' as const,
+                maxHeight: '100%' as const,
+              },
+            ]}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadProgram(); }} />
+            }
+            contentContainerStyle={[
+              styles.scrollContent,
+              Platform.OS === 'web' && {
+                flexGrow: 1,
+                paddingBottom: 100,
+              },
+            ]}
+            showsVerticalScrollIndicator={Platform.OS === 'web'}
+            nestedScrollEnabled
+            scrollEnabled
+            bounces={Platform.OS !== 'web'}
+            alwaysBounceVertical={Platform.OS !== 'web'}
+            keyboardShouldPersistTaps="handled"
+            removeClippedSubviews={Platform.OS !== 'web'}
+          >
           <View style={[styles.summaryCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
             <Text style={[styles.summaryTitle, { color: theme.primaryText }]}>
               Progress: {program.summary?.completedScenarios ?? 0}/{program.summary?.totalScenarios ?? 5}
@@ -182,6 +222,20 @@ const TrainingHubScreen: React.FC = () => {
             <Text style={[styles.tariffLine, { color: theme.primaryText }]}>
               {TRAINING_TARIFF_REFERENCE.currentElectricity.withoutBill}
             </Text>
+            <View style={[styles.usageFormulaBox, { backgroundColor: '#eff6ff', borderColor: '#93c5fd' }]}>
+              <Text style={[styles.usageFormulaTitle, { color: '#1d4ed8' }]}>
+                {TRAINING_TARIFF_REFERENCE.noBillUsage.title}
+              </Text>
+              <Text style={[styles.usageFormulaLine, { color: theme.primaryText }]}>
+                {TRAINING_TARIFF_REFERENCE.noBillUsage.cappedRateNote}
+              </Text>
+              <Text style={[styles.usageFormulaFormula, { color: theme.primaryText }]}>
+                {TRAINING_TARIFF_REFERENCE.noBillUsage.formula}
+              </Text>
+              <Text style={[styles.usageFormulaExample, { color: theme.secondaryText }]}>
+                {TRAINING_TARIFF_REFERENCE.noBillUsage.example}
+              </Text>
+            </View>
             <Text style={[styles.tariffSection, { color: theme.secondaryText, marginTop: 10 }]}>
               New electricity — Single rate
             </Text>
@@ -207,13 +261,48 @@ const TrainingHubScreen: React.FC = () => {
               key={guide.id}
               style={[styles.guideCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}
             >
-              <TouchableOpacity style={styles.guideHeader} onPress={() => handleGuidePress(guide)}>
+              <View style={styles.guideHeader}>
                 <View style={styles.guideHeaderText}>
                   <Text style={[styles.guideTitle, { color: theme.primaryText }]}>{guide.title}</Text>
                   <Text style={[styles.guideDescription, { color: theme.secondaryText }]}>{guide.description}</Text>
                 </View>
-                <Feather name="external-link" size={18} color={theme.primaryButton} />
-              </TouchableOpacity>
+                {guide.url && !guide.sections?.length && (
+                  <TouchableOpacity onPress={() => handleGuidePress(guide)}>
+                    <Feather name="external-link" size={18} color={theme.primaryButton} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {guide.sections?.map((section) => (
+                <View
+                  key={section.title}
+                  style={[
+                    styles.guideSection,
+                    section.highlight && styles.guideCallout,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.guideSectionTitle,
+                      section.highlight && styles.guideCalloutTitle,
+                      { color: section.highlight ? undefined : theme.primaryText },
+                    ]}
+                  >
+                    {section.title}
+                  </Text>
+                  {section.intro ? (
+                    <Text style={[styles.guideSectionIntro, { color: theme.secondaryText }]}>{section.intro}</Text>
+                  ) : null}
+                  {section.steps?.map((step, index) => (
+                    <View key={step.title} style={styles.guideStep}>
+                      <Text style={[styles.guideStepTitle, { color: theme.primaryText }]}>
+                        {index + 1}. {step.title}
+                      </Text>
+                      <Text style={[styles.guideStepDetail, { color: theme.secondaryText }]}>{step.detail}</Text>
+                    </View>
+                  ))}
+                </View>
+              ))}
 
               {guide.url && (
                 <TouchableOpacity
@@ -221,7 +310,13 @@ const TrainingHubScreen: React.FC = () => {
                   onPress={() => openGuideUrl(guide.url!)}
                 >
                   <Feather name="external-link" size={14} color={theme.primaryButton} />
-                  <Text style={[styles.guideLinkText, { color: theme.primaryButton }]}>Open guide</Text>
+                  <Text style={[styles.guideLinkText, { color: theme.primaryButton }]}>
+                    {guide.id === 'find-property'
+                      ? 'Open FindMyAddress'
+                      : guide.id === 'complete-app'
+                        ? 'App step-by-step'
+                        : 'Open guide'}
+                  </Text>
                 </TouchableOpacity>
               )}
 
@@ -288,7 +383,8 @@ const TrainingHubScreen: React.FC = () => {
               </View>
             );
           })}
-        </ScrollView>
+          </ScrollView>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -310,6 +406,8 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
   emptyTitle: { fontSize: 18, fontWeight: '600', marginTop: 16 },
   emptyText: { fontSize: 14, textAlign: 'center', marginTop: 8, lineHeight: 20 },
+  scrollHost: { flex: 1 },
+  scrollView: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 40 },
   summaryCard: { padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 12 },
   summaryTitle: { fontSize: 16, fontWeight: '600', marginBottom: 8 },
@@ -319,12 +417,59 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 15, fontWeight: '700', marginBottom: 10 },
   tariffSection: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
   tariffLine: { fontSize: 14, marginTop: 4, lineHeight: 20 },
+  usageFormulaBox: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  usageFormulaTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  usageFormulaLine: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  usageFormulaFormula: {
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 20,
+    marginTop: 6,
+  },
+  usageFormulaExample: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
   sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 10 },
   guideCard: { padding: 12, borderRadius: 10, borderWidth: 1, marginBottom: 8 },
   guideHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },
   guideHeaderText: { flex: 1 },
   guideTitle: { fontSize: 14, fontWeight: '600' },
   guideDescription: { fontSize: 12, lineHeight: 17, marginTop: 4 },
+  guideCallout: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
+  },
+  guideCalloutTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#b45309',
+    marginBottom: 6,
+  },
+  guideSection: { marginTop: 12 },
+  guideSectionTitle: { fontSize: 13, fontWeight: '700', marginBottom: 6 },
+  guideSectionIntro: { fontSize: 12, lineHeight: 18, marginBottom: 8 },
+  guideStep: { marginTop: 8 },
+  guideStepTitle: { fontSize: 12, fontWeight: '600', lineHeight: 17 },
+  guideStepDetail: { fontSize: 12, lineHeight: 17, marginTop: 2, paddingLeft: 14 },
   guideLinkButton: {
     flexDirection: 'row',
     alignItems: 'center',

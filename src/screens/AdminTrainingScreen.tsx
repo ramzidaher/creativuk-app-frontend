@@ -170,7 +170,17 @@ const AdminTrainingScreen: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.primaryBackground }]}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        { backgroundColor: theme.primaryBackground },
+        Platform.OS === 'web' && {
+          height: '100vh' as const,
+          maxHeight: '100vh' as const,
+          overflow: 'hidden' as const,
+        },
+      ]}
+    >
       <View style={[styles.header, { backgroundColor: theme.cardBackground, borderBottomColor: theme.cardBorder }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Feather name="arrow-left" size={22} color={theme.primaryText} />
@@ -188,12 +198,38 @@ const AdminTrainingScreen: React.FC = () => {
           <ActivityIndicator size="large" color={theme.primaryButton} />
         </View>
       ) : (
-        <ScrollView
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} />
-          }
-          contentContainerStyle={styles.scrollContent}
+        <View
+          style={[
+            styles.scrollHost,
+            Platform.OS === 'web' && {
+              height: 'calc(100vh - 120px)' as const,
+              overflow: 'hidden' as const,
+            },
+          ]}
         >
+          <ScrollView
+            style={[
+              styles.scrollView,
+              Platform.OS === 'web' && {
+                height: '100%' as const,
+                maxHeight: '100%' as const,
+              },
+            ]}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} />
+            }
+            contentContainerStyle={[
+              styles.scrollContent,
+              Platform.OS === 'web' && { flexGrow: 1, paddingBottom: 100 },
+            ]}
+            showsVerticalScrollIndicator={Platform.OS === 'web'}
+            nestedScrollEnabled
+            scrollEnabled
+            bounces={Platform.OS !== 'web'}
+            alwaysBounceVertical={Platform.OS !== 'web'}
+            keyboardShouldPersistTaps="handled"
+            removeClippedSubviews={Platform.OS !== 'web'}
+          >
           {actionMessage ? (
             <View
               style={[
@@ -292,6 +328,7 @@ const AdminTrainingScreen: React.FC = () => {
             ))
           )}
         </ScrollView>
+        </View>
       )}
 
       <Modal
@@ -348,6 +385,8 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '700' },
   headerSubtitle: { fontSize: 13, marginTop: 2 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  scrollHost: { flex: 1 },
+  scrollView: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 40 },
   errorCard: { padding: 14, borderRadius: 10, borderWidth: 1, marginBottom: 16 },
   errorTitle: { fontSize: 15, fontWeight: '700', color: '#b91c1c', marginBottom: 6 },

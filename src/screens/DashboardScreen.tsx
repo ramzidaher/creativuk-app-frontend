@@ -25,6 +25,25 @@ import { reportsApi } from '../utils/api';
 import { Switch } from 'react-native-paper';
 import MobileCanvasSignaturePad from '../components/MobileCanvasSignaturePad';
 import SimpleSignaturePad from '../components/SimpleSignaturePad';
+import {
+  DASHBOARD_APPOINTMENTS_HELP_ADMIN,
+  DASHBOARD_APPOINTMENTS_HELP_REP,
+  DASHBOARD_APPOINTMENTS_LABEL_ADMIN,
+  DASHBOARD_APPOINTMENTS_LABEL_REP,
+  DASHBOARD_APPOINTMENTS_TIP_BODY,
+  DASHBOARD_APPOINTMENTS_TIP_CTA,
+  DASHBOARD_APPOINTMENTS_TIP_TITLE,
+  DASHBOARD_CONVERSION_HELP_ADMIN,
+  DASHBOARD_CONVERSION_HELP_REP,
+  DASHBOARD_CONVERSION_LABEL,
+  DASHBOARD_SALES_WON_HELP,
+  DASHBOARD_SALES_WON_LABEL,
+  DASHBOARD_SECTION_TITLE,
+  DASHBOARD_STATS_INFO_BODY,
+  DASHBOARD_STATS_INFO_TITLE,
+  getDashboardPeriodLabel,
+  getDashboardSectionSubtitle,
+} from '../constants/dashboardCopy';
 
 const { width, height } = Dimensions.get('window');
 
@@ -544,8 +563,10 @@ const DashboardScreen = () => {
           <AnimatedCard delay={300}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleContainer}>
-                <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Sales Performance</Text>
-                <Text style={[styles.sectionSubtitle, { color: theme.secondaryText }]}>Your monthly sales statistics</Text>
+                <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>{DASHBOARD_SECTION_TITLE}</Text>
+                <Text style={[styles.sectionSubtitle, { color: theme.secondaryText }]}>
+                  {getDashboardSectionSubtitle(selectedMonth, selectedYear)}
+                </Text>
               </View>
               <View style={styles.dateFilterContainer}>
                 <TouchableOpacity 
@@ -554,7 +575,9 @@ const DashboardScreen = () => {
                 >
                   <Feather name="calendar" size={16} color={theme.primaryButton} />
                   <Text style={[styles.dateFilterText, { color: theme.primaryButton }]}>
-                    {selectedMonth && selectedYear ? `${selectedMonth}/${selectedYear}` : 'Current Month'}
+                    {selectedMonth && selectedYear
+                      ? getDashboardPeriodLabel(selectedMonth, selectedYear)
+                      : getDashboardPeriodLabel('', '')}
                   </Text>
                   <Feather name={showDatePicker ? "chevron-up" : "chevron-down"} size={16} color={theme.primaryButton} />
                 </TouchableOpacity>
@@ -650,7 +673,9 @@ const DashboardScreen = () => {
                   </View>
                   <View style={styles.statBadgeContainer}>
                     <Text style={[styles.statBadge, { backgroundColor: theme.primaryButton + '15', borderColor: theme.primaryButton + '30' }]}>
-                      {selectedMonth && selectedYear ? `${selectedMonth}/${selectedYear}` : 'This Month'}
+                      {selectedMonth && selectedYear
+                        ? getDashboardPeriodLabel(selectedMonth, selectedYear)
+                        : 'This month'}
                     </Text>
                     <View style={styles.statTrend}>
                       <Feather 
@@ -670,7 +695,12 @@ const DashboardScreen = () => {
                 <Text style={[styles.statNumber, { color: theme.primaryText }]}>
                   {loading ? '...' : getSalesInsights().appointments || 0}
                 </Text>
-                <Text style={[styles.statLabel, { color: theme.secondaryText }]}>Appointments Sat</Text>
+                <Text style={[styles.statLabel, { color: theme.secondaryText }]}>
+                  {isAdmin ? DASHBOARD_APPOINTMENTS_LABEL_ADMIN : DASHBOARD_APPOINTMENTS_LABEL_REP}
+                </Text>
+                <Text style={[styles.statHelp, { color: theme.secondaryText }]}>
+                  {isAdmin ? DASHBOARD_APPOINTMENTS_HELP_ADMIN : DASHBOARD_APPOINTMENTS_HELP_REP}
+                </Text>
                 <View style={[styles.statProgress, { backgroundColor: isDark ? '#334155' : '#e2e8f0' }]}>
                   <View style={[styles.statProgressBar, { width: '60%', backgroundColor: theme.primaryButton }]} />
                 </View>
@@ -701,7 +731,8 @@ const DashboardScreen = () => {
                 <Text style={[styles.statNumber, { color: theme.primaryText }]}>
                   {loading ? '...' : getSalesInsights().sales || 0}
                 </Text>
-                <Text style={[styles.statLabel, { color: theme.secondaryText }]}>Sales Won</Text>
+                <Text style={[styles.statLabel, { color: theme.secondaryText }]}>{DASHBOARD_SALES_WON_LABEL}</Text>
+                <Text style={[styles.statHelp, { color: theme.secondaryText }]}>{DASHBOARD_SALES_WON_HELP}</Text>
                 <View style={[styles.statProgress, { backgroundColor: isDark ? '#334155' : '#e2e8f0' }]}>
                   <View style={[styles.statProgressBar, { width: '40%', backgroundColor: theme.successButton }]} />
                 </View>
@@ -732,12 +763,40 @@ const DashboardScreen = () => {
                 <Text style={[styles.statNumber, { color: theme.primaryText }]}>
                   {loading ? '...' : `${getSalesInsights().conversionRate || 0}%`}
                 </Text>
-                <Text style={[styles.statLabel, { color: theme.secondaryText }]}>Conversion Rate</Text>
+                <Text style={[styles.statLabel, { color: theme.secondaryText }]}>{DASHBOARD_CONVERSION_LABEL}</Text>
+                <Text style={[styles.statHelp, { color: theme.secondaryText }]}>
+                  {isAdmin ? DASHBOARD_CONVERSION_HELP_ADMIN : DASHBOARD_CONVERSION_HELP_REP}
+                </Text>
                 <View style={[styles.statProgress, { backgroundColor: isDark ? '#334155' : '#e2e8f0' }]}>
                   <View style={[styles.statProgressBar, { width: `${Math.min((getSalesInsights().conversionRate || 0) * 2, 100)}%`, backgroundColor: theme.primaryButton }]} />
                 </View>
               </View>
             </View>
+
+            <View style={[styles.dashboardInfoCard, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: theme.cardBorder }]}>
+              <Feather name="info" size={16} color={theme.primaryButton} />
+              <View style={styles.dashboardInfoCardText}>
+                <Text style={[styles.dashboardInfoCardTitle, { color: theme.primaryText }]}>
+                  {DASHBOARD_STATS_INFO_TITLE}
+                </Text>
+                <Text style={[styles.dashboardInfoCardBody, { color: theme.secondaryText }]}>
+                  {DASHBOARD_STATS_INFO_BODY}
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.dashboardTipCard, { backgroundColor: '#eff6ff', borderColor: '#93c5fd' }]}
+              onPress={() => navigation.navigate('Opportunities')}
+              activeOpacity={0.85}
+            >
+              <Feather name="calendar" size={18} color="#1d4ed8" />
+              <View style={styles.dashboardTipCardText}>
+                <Text style={styles.dashboardTipCardTitle}>{DASHBOARD_APPOINTMENTS_TIP_TITLE}</Text>
+                <Text style={styles.dashboardTipCardBody}>{DASHBOARD_APPOINTMENTS_TIP_BODY}</Text>
+                <Text style={styles.dashboardTipCardCta}>{DASHBOARD_APPOINTMENTS_TIP_CTA} →</Text>
+              </View>
+            </TouchableOpacity>
           </AnimatedCard>
 
 
@@ -963,6 +1022,60 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '500',
     letterSpacing: 0.2,
+  },
+  statHelp: {
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 17,
+    marginTop: 6,
+    paddingHorizontal: 4,
+    opacity: 0.9,
+  },
+  dashboardInfoCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: 20,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  dashboardInfoCardText: { flex: 1 },
+  dashboardInfoCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  dashboardInfoCardBody: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  dashboardTipCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  dashboardTipCardText: { flex: 1 },
+  dashboardTipCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1d4ed8',
+    marginBottom: 4,
+  },
+  dashboardTipCardBody: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#1e40af',
+  },
+  dashboardTipCardCta: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1d4ed8',
+    marginTop: 8,
   },
   statProgress: {
     width: '100%',
