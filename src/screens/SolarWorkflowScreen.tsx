@@ -325,7 +325,7 @@ export default function SolarWorkflowScreen() {
               return {
                 ...step,
                 title: 'Hometree',
-                description: 'Visit Hometree Finance for installation services',
+                description: 'View contract data and fill in the Hometree quote',
                 stepType: 'INSTALLATION_SCHEDULING'
               };
             case 'INSTALLATION_BOOKING':
@@ -809,38 +809,7 @@ export default function SolarWorkflowScreen() {
     console.log('🔍 SolarWorkflowScreen: Job status reset to IN_PROGRESS');
   };
 
-  const handleHometreeStep = async () => {
-    try {
-      // Open Hometree Finance dashboard
-      const url = 'https://hometreefinance.co.uk/dashboard/login';
-      const supported = await Linking.canOpenURL(url);
-      
-      if (supported) {
-        await Linking.openURL(url);
-        
-        // Mark the step as completed
-        const hometreeStep = workflowSteps.find(step => step.stepType === 'INSTALLATION_SCHEDULING');
-        if (hometreeStep) {
-          const stepProgress = workflowProgress?.steps.find((s: any) => s.stepNumber === hometreeStep.stepNumber);
-          if (stepProgress && stepProgress.status !== 'COMPLETED') {
-            try {
-              await workflowApi.completeStep(opportunityId, hometreeStep.stepNumber);
-              // Refresh data to update the UI
-              await loadData();
-              Alert.alert('✅ Hometree', 'Step marked as completed. You can visit Hometree anytime for installation services.');
-            } catch (error) {
-              console.error('Error completing Hometree step:', error);
-            }
-          }
-        }
-      } else {
-        Alert.alert('Error', 'Cannot open Hometree website');
-      }
-    } catch (error) {
-      console.error('Error opening Hometree:', error);
-      Alert.alert('Error', 'Failed to open Hometree website');
-    }
-  };
+  // Hometree step opens HometreeDataScreen via handleStepPress (INSTALLATION_SCHEDULING)
 
   // Signing step handlers - redirect to sign.com
   const handleSigningStep = async (stepType: string) => {
@@ -980,87 +949,52 @@ export default function SolarWorkflowScreen() {
   const handleOutcomeSelect = async (outcome: 'won' | 'lost') => {
     try {
       setIsProcessingOutcome(true);
-      
-      // Get customer details from opportunity or workflow progress
-      const customerName = opportunity?.name || 'Unknown Customer';
-      const postcode = opportunity?.contactPostcode || opportunity?.postcode || 'Unknown Postcode';
-      
-      // Get file paths from workflow progress
-      const progressResponse = await workflowApi.getOpportunityProgress(opportunityId);
-      
-      let surveyStep, calculatorStep, contractStep, proposalStep;
-      if (progressResponse.success && progressResponse.data) {
-        surveyStep = progressResponse.data.steps?.find((s: any) => s.stepNumber === 1);
-        calculatorStep = progressResponse.data.steps?.find((s: any) => s.stepNumber === 3);
-        contractStep = progressResponse.data.steps?.find((s: any) => s.stepNumber === 8);
-        proposalStep = progressResponse.data.steps?.find((s: any) => s.stepNumber === 4);
-      }
-      
-      // Prepare file paths based on actual directory structure
-      const files = {
-        surveyPath: surveyStep?.data?.surveyPath || `uploads/survey-reports/${opportunityId}`,
-        calculatorPath: calculatorStep?.data?.calculatorPath || `src/excel-file-calculator/epvs-opportunities`,
-        contractPath: contractStep?.data?.pdfPath || `src/excel-file-calculator/epvs-opportunities/pdfs`,
-        proposalPath: proposalStep?.data?.pptxFile || `src/excel-file-calculator/output`
-      };
-      
-      // Call the OneDrive organization API
-      const result = await api.post('/onedrive/organize-by-outcome', {
-        opportunityId,
-        customerName,
-        postcode,
-        outcome: outcome,
-        files
-      });
-      
-      if (result.success) {
-        // Sync status and outcome with backend (PUT /opportunities/:id/status, POST /opportunity-outcomes)
-        const outcomeType = outcome === 'won' ? OpportunityOutcomeType.WON : OpportunityOutcomeType.LOST;
-        const [statusResult, recordResult] = await Promise.allSettled([
-          opportunitiesApi.updateStatus(opportunityId, outcome),
-          opportunityOutcomesApi.recordOutcome({
-            ghlOpportunityId: opportunityId,
-            userId: user?.id ?? '',
-            outcome: outcomeType,
-          }),
-        ]);
-        if (statusResult.status === 'rejected' || (statusResult.status === 'fulfilled' && !statusResult.value.success)) {
-          console.warn('Opportunity status update failed:', statusResult.status === 'fulfilled' ? statusResult.value.error : statusResult.reason);
-        }
-        if (recordResult.status === 'rejected' || (recordResult.status === 'fulfilled' && !recordResult.value.success)) {
-          console.warn('Record outcome failed:', recordResult.status === 'fulfilled' ? recordResult.value.error : recordResult.reason);
-        }
 
-        const finishStep = await workflowApi.getWorkflowSteps();
-        const welcomeStepNumber =
-          finishStep.success && finishStep.data
-            ? finishStep.data.find((s: any) => s.stepType === 'WELCOME_EMAIL')?.stepNumber ?? 13
-            : 13;
-        await workflowApi.completeStep(opportunityId, welcomeStepNumber, {
-          outcome: outcome,
-          organizedAt: new Date().toISOString(),
-          folderPath: (result as any).folderPath,
-        });
-        
-        // Update job status
-        setJobStatus(outcome.toUpperCase() as 'WON' | 'LOST');
-        setShowOutcomeSelection(false);
-        
-        // Refresh data to update the UI
-        await loadData();
-        await loadJobStatus();
-        
-        Alert.alert(
-          '✅ Appointment Completed!', 
-          `Files have been organized in OneDrive for ${outcome === 'won' ? 'Customer Orders 2' : 'Customer Quotations'} folder.`,
-          [{ text: 'OK' }]
-        );
-      } else {
-        throw new Error((result as any).message || 'Failed to organize files');
+      const outcomeType = outcome === 'won' ? OpportunityOutcomeType.WON : OpportunityOutcomeType.LOST;
+      const [statusResult, recordResult] = await Promise.allSettled([
+        opportunitiesApi.updateStatus(opportunityId, outcome),
+        opportunityOutcomesApi.recordOutcome({
+          ghlOpportunityId: opportunityId,
+          userId: user?.id ?? '',
+          outcome: outcomeType,
+        }),
+      ]);
+      if (statusResult.status === 'rejected' || (statusResult.status === 'fulfilled' && !statusResult.value.success)) {
+        console.warn('Opportunity status update failed:', statusResult.status === 'fulfilled' ? statusResult.value.error : statusResult.reason);
       }
+      if (recordResult.status === 'rejected' || (recordResult.status === 'fulfilled' && !recordResult.value.success)) {
+        console.warn('Record outcome failed:', recordResult.status === 'fulfilled' ? recordResult.value.error : recordResult.reason);
+      }
+
+      const finishStep = await workflowApi.getWorkflowSteps();
+      const welcomeStepNumber =
+        finishStep.success && finishStep.data
+          ? finishStep.data.find((s: any) => s.stepType === 'WELCOME_EMAIL')?.stepNumber ?? 13
+          : 13;
+
+      const completeResult = await workflowApi.completeStep(opportunityId, welcomeStepNumber, {
+        outcome,
+        organizedAt: new Date().toISOString(),
+      });
+
+      if (!completeResult.success) {
+        throw new Error(completeResult.error || 'Failed to complete workflow outcome step');
+      }
+
+      setJobStatus(outcome.toUpperCase() as 'WON' | 'LOST');
+      setShowOutcomeSelection(false);
+
+      await loadData();
+      await loadJobStatus();
+
+      Alert.alert(
+        'Appointment Completed',
+        `Files are synced to OneDrive under temp/ and organized in final/ for this ${outcome} outcome.`,
+        [{ text: 'OK' }],
+      );
     } catch (error) {
       console.error('Error processing outcome:', error);
-      Alert.alert('Error', 'Failed to organize files. Please try again.');
+      Alert.alert('Error', 'Failed to finalize appointment files. Please try again.');
     } finally {
       setIsProcessingOutcome(false);
     }
@@ -1233,8 +1167,8 @@ export default function SolarWorkflowScreen() {
     }
     
     if (stepInfo?.stepType === 'INSTALLATION_SCHEDULING') {
-      console.log('🔍 Opening Hometree Finance dashboard');
-      handleHometreeStep();
+      console.log('🔍 Navigating to Hometree quote helper');
+      navigation.navigate('HometreeData', { opportunityId });
       return;
     }
     

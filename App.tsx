@@ -76,6 +76,7 @@ import FluxCalculatorScreen from './src/screens/EPVSCalculatorScreen';
 import FluxDynamicInputsScreen from './src/screens/EPVSDynamicInputsScreen';
 import FluxRadioButtonScreen from './src/screens/EPVSRadioButtonScreen';
 import FluxTemplateSelectionScreen from './src/screens/FluxTemplateSelectionScreen';
+import HometreeDataScreen from './src/screens/HometreeDataScreen';
 import InstallationBookingScreen from './src/screens/InstallationBookingScreen';
 import LoadingScreen from './src/screens/loadingScreen';
 import SignComScreen from './src/screens/SignComScreen';
@@ -390,6 +391,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       // Survey and other screens
       Survey: 'survey/:opportunityId',
       SolarProjection: 'solar-projection/:opportunityId',
+      HometreeData: 'hometree/:opportunityId',
       Payment: 'payment/:opportunityId',
       WelcomeEmail: 'welcome-email/:opportunityId',
       FinishAppointment: 'finish-appointment/:opportunityId',
@@ -1368,6 +1370,14 @@ function AppNavigator() {
           <Stack.Screen 
             name="SolarProjection" 
             component={SolarProjectionScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+
+          <Stack.Screen 
+            name="HometreeData" 
+            component={HometreeDataScreen}
             options={{
               headerShown: false,
             }}

@@ -602,53 +602,9 @@ export default function SolarProjectionScreen() {
         console.log('🔍 Solar projection step completed successfully, navigating to next step...');
         console.log('🔍 Navigation params:', { opportunityId });
         
-        // Navigate directly to the next step: Hometree (step 6)
-        // Open Hometree Finance dashboard in new tab
-        const url = 'https://hometreefinance.co.uk/dashboard/login';
-        
-        try {
-          // For web platform, use window.open directly
-          if (Platform.OS === 'web') {
-            window.open(url, '_blank');
-            console.log('🔍 Opened Hometree Finance dashboard in new tab (web)');
-          } else {
-            // For mobile platforms, use Linking
-            const supported = await Linking.canOpenURL(url);
-            if (supported) {
-              await Linking.openURL(url);
-              console.log('🔍 Opened Hometree Finance dashboard (mobile)');
-            } else {
-              throw new Error('Cannot open Hometree URL on mobile');
-            }
-          }
-          
-          // Mark Hometree step (step 6 - INSTALLATION_SCHEDULING) as completed
-          try {
-            console.log('🔧 Marking Hometree step (step 6) as completed...');
-            const hometreeStepData = {
-              openedAt: new Date().toISOString(),
-              url: url
-            };
-            const hometreeResult = await workflowApi.completeStep(opportunityId, 6, hometreeStepData);
-            console.log('✅ Hometree step marked as completed:', hometreeResult);
-          } catch (hometreeError) {
-            console.error('❌ Error marking Hometree step as complete:', hometreeError);
-            // Don't block navigation if this fails
-          }
-          
-          // Navigate to Contract Generation after opening Hometree
-          // This ensures when user returns to app, they go to the next step
-          setTimeout(() => {
-            navigation.navigate('ContractGeneration', { opportunityId });
-            console.log('🔍 Navigated to Contract Generation after opening Hometree');
-          }, 1000); // Small delay to ensure Hometree opens first
-          
-        } catch (error) {
-          console.error('❌ Error opening Hometree:', error);
-          Alert.alert('Error', 'Cannot open Hometree Finance dashboard. Please try again.');
-        }
-        
-        console.log('🔍 Navigation call completed');
+        // Navigate to Hometree quote helper (step 6)
+        navigation.navigate('HometreeData', { opportunityId });
+        console.log('🔍 Navigated to Hometree quote helper');
       } else {
         console.error('❌ Step completion failed:', result);
         Alert.alert('Error', 'Failed to complete solar projection step. Please try again.');

@@ -1627,6 +1627,50 @@ export const presentationApi = {
     }
   },
 
+  async getHometreeQuoteData(
+    opportunityId: string,
+    calculatorType?: 'flux' | 'off-peak' | 'epvs',
+  ): Promise<ApiResponse<any>> {
+    try {
+      const storage = getStorage();
+      const token = storage ? await storage.getItem('accessToken') : null;
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      let url = buildApiUrl(`/presentation/hometree-data/${opportunityId}`);
+      if (calculatorType) {
+        url += `?calculatorType=${calculatorType}`;
+      }
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'ngrok-skip-browser-warning': 'true',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to load Hometree data: ${errorText}`);
+      }
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to load Hometree data');
+      }
+
+      return { data: result.data, success: true };
+    } catch (error) {
+      console.error('Hometree data API error:', error);
+      return {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        success: false,
+      };
+    }
+  },
+
   async downloadPresentation(filename: string): Promise<string> {
     return buildApiUrl(`/presentation/download/${filename}`);
   }
