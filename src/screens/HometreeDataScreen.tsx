@@ -70,6 +70,8 @@ interface HometreeQuoteData {
   };
   savings: {
     solarSavingsYear1Gbp: string | null;
+    solarOnlyYear1Gbp?: string | null;
+    exportSavingsYear1Gbp?: string | null;
     essSavingsYear1Gbp: string | null;
     totalSavingsYear1Gbp: string | null;
   };
@@ -648,15 +650,19 @@ export default function HometreeDataScreen() {
           />
         </Section>
 
-        <Section title="Savings" theme={theme}>
+        <Section
+          title="Savings"
+          description="Enter solar + export in the solar field; battery savings go in ESS"
+          theme={theme}
+        >
           <DataRow
-            label="Solar savings during year 1"
+            label="Solar savings during year 1 (solar + export)"
             value={formatCurrency(data.savings.solarSavingsYear1Gbp)}
             theme={theme}
             onCopy={handleCopy}
           />
           <DataRow
-            label="ESS savings during year 1"
+            label="ESS savings during year 1 (battery)"
             value={formatCurrency(data.savings.essSavingsYear1Gbp)}
             theme={theme}
             onCopy={handleCopy}
