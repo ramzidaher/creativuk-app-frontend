@@ -1630,6 +1630,7 @@ export const presentationApi = {
   async getHometreeQuoteData(
     opportunityId: string,
     calculatorType?: 'flux' | 'off-peak' | 'epvs',
+    fileName?: string,
   ): Promise<ApiResponse<any>> {
     try {
       const storage = getStorage();
@@ -1638,10 +1639,17 @@ export const presentationApi = {
         throw new Error('Authentication required');
       }
 
-      let url = buildApiUrl(`/presentation/hometree-data/${opportunityId}`);
+      const params = new URLSearchParams();
       if (calculatorType) {
-        url += `?calculatorType=${calculatorType}`;
+        params.set('calculatorType', calculatorType);
       }
+      if (fileName) {
+        params.set('fileName', fileName);
+      }
+      const query = params.toString();
+      const url = buildApiUrl(
+        `/presentation/hometree-data/${opportunityId}${query ? `?${query}` : ''}`,
+      );
 
       const response = await fetch(url, {
         method: 'GET',

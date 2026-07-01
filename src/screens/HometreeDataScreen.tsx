@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,12 +15,21 @@ import {
   View,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
-import { presentationApi, workflowApi } from '../utils/api';
+import { api, buildApiUrl, getStorage, presentationApi, workflowApi } from '../utils/api';
 
 const HOMETREE_URL = 'https://hometreefinance.co.uk/dashboard/login';
 
 interface RouteParams {
   opportunityId: string;
+}
+
+interface SheetInfo {
+  fileName: string;
+  filePath: string;
+  size: number;
+  lastModified: string;
+  calculatorType: 'epvs' | 'off-peak' | 'flux';
+  version?: number;
 }
 
 interface HometreeQuoteData {
@@ -69,6 +78,22 @@ interface HometreeQuoteData {
   };
 }
 
+type Step = 'sheets' | 'data';
+
+function extractVersionFromFilename(fileName: string): number {
+  const versionMatch = fileName.match(/-v(\d+)/i);
+  return versionMatch ? parseInt(versionMatch[1], 10) : 1;
+}
+
+function getVersionName(sheet: SheetInfo): string {
+  const baseName =
+    sheet.calculatorType === 'flux' || sheet.calculatorType === 'epvs'
+      ? 'Flux Calculator'
+      : 'Off Peak Calculator';
+  const version = sheet.version ?? extractVersionFromFilename(sheet.fileName);
+  return `${baseName} V${version}`;
+}
+
 function DataRow({
   label,
   value,
@@ -115,14 +140,90 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <View style={[styles.section, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+    <View
+      style={[
+        styles.section,
+        { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder },
+      ]}
+    >
       <Text style={[styles.sectionTitle, { color: '#166534' }]}>{title}</Text>
       {description ? (
-        <Text style={[styles.sectionDescription, { color: theme.secondaryText }]}>{description}</Text>
+        <Text style={[styles.sectionDescription, { color: theme.secondaryText }]}>
+          {description}
+        </Text>
       ) : null}
       {children}
     </View>
   );
+}
+
+async function downloadCalculatorSheet(opportunityId: string, sheet: SheetInfo) {
+  if (Platform.OS === 'web') {
+    const storage = getStorage();
+    const token = storage ? await storage.getItem('accessToken') : null;
+    if (!token) {
+      throw new Error('Authentication required to download file');
+    }
+
+    const response = await fetch(buildApiUrl('/opportunity-workflow/sheet/download'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'ngrok-skip-browser-warning': 'true',
+        Accept: 'application/vnd.ms-excel.sheet.macroEnabled.12, application/octet-stream, */*',
+      },
+      body: JSON.stringify({ opportunityId, fileName: sheet.fileName }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || `Download failed: ${response.status}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    if (!arrayBuffer?.byteLength) {
+      throw new Error('Downloaded file is empty');
+    }
+
+    const blob = new Blob([arrayBuffer], {
+      type: 'application/vnd.ms-excel.sheet.macroEnabled.12',
+    });
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = sheet.fileName;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    }, 100);
+    return;
+  }
+
+  const storage = getStorage();
+  const token = storage ? await storage.getItem('accessToken') : null;
+  if (!token) {
+    throw new Error('Authentication required to download file');
+  }
+
+  const response = await fetch(buildApiUrl('/opportunity-workflow/sheet/download'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      'ngrok-skip-browser-warning': 'true',
+      Accept: 'application/vnd.ms-excel.sheet.macroEnabled.12, application/octet-stream, */*',
+    },
+    body: JSON.stringify({ opportunityId, fileName: sheet.fileName }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Download failed: ${response.status}`);
+  }
+
+  Alert.alert('Downloaded', `${sheet.fileName} downloaded. Open it to install or edit the calculator.`);
 }
 
 export default function HometreeDataScreen() {
@@ -131,36 +232,102 @@ export default function HometreeDataScreen() {
   const { opportunityId } = route.params as RouteParams;
   const { theme, isDark, toggleTheme } = useTheme();
 
-  const [loading, setLoading] = useState(true);
+  const [step, setStep] = useState<Step>('sheets');
+  const [availableSheets, setAvailableSheets] = useState<SheetInfo[]>([]);
+  const [selectedSheet, setSelectedSheet] = useState<SheetInfo | null>(null);
+  const [loadingSheets, setLoadingSheets] = useState(true);
+  const [loadingData, setLoadingData] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [data, setData] = useState<HometreeQuoteData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openingHometree, setOpeningHometree] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
-  const loadData = useCallback(async () => {
+  const groupedSheets = useMemo(() => {
+    const groups = availableSheets.reduce(
+      (acc, sheet) => {
+        const type =
+          sheet.calculatorType === 'flux' || sheet.calculatorType === 'epvs'
+            ? 'flux'
+            : 'off-peak';
+        if (!acc[type]) acc[type] = [];
+        acc[type].push(sheet);
+        return acc;
+      },
+      {} as Record<string, SheetInfo[]>,
+    );
+
+    Object.keys(groups).forEach((type) => {
+      groups[type].sort((a, b) => {
+        const versionA = a.version ?? extractVersionFromFilename(a.fileName);
+        const versionB = b.version ?? extractVersionFromFilename(b.fileName);
+        return versionA - versionB;
+      });
+    });
+
+    return groups;
+  }, [availableSheets]);
+
+  const loadAvailableSheets = useCallback(async () => {
     try {
+      setLoadingSheets(true);
       setError(null);
-      const response = await presentationApi.getHometreeQuoteData(opportunityId);
-      if (response.success && response.data) {
-        setData(response.data);
+      const sheetsResponse = await api.post('/opportunity-workflow/get-opportunity-sheets', {
+        opportunityId,
+      });
+
+      if (sheetsResponse.success) {
+        const responseData = sheetsResponse.data as any;
+        const actualData = responseData?.data || responseData;
+        const sheets = Array.isArray(actualData) ? actualData : [];
+        setAvailableSheets(sheets as SheetInfo[]);
       } else {
-        setError(response.error || 'Failed to load Hometree data');
+        throw new Error('Failed to load available calculators');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load Hometree data');
+      setError(err instanceof Error ? err.message : 'Failed to load calculators');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setLoadingSheets(false);
     }
   }, [opportunityId]);
 
+  const loadHometreeData = useCallback(
+    async (sheet: SheetInfo) => {
+      try {
+        setLoadingData(true);
+        setError(null);
+        const response = await presentationApi.getHometreeQuoteData(
+          opportunityId,
+          sheet.calculatorType === 'epvs' ? 'flux' : sheet.calculatorType,
+          sheet.fileName,
+        );
+        if (response.success && response.data) {
+          setData(response.data);
+          setStep('data');
+        } else {
+          throw new Error(response.error || 'Failed to load Hometree data');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load Hometree data');
+      } finally {
+        setLoadingData(false);
+        setRefreshing(false);
+      }
+    },
+    [opportunityId],
+  );
+
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadAvailableSheets();
+  }, [loadAvailableSheets]);
 
   const handleRefresh = () => {
-    setRefreshing(true);
-    loadData();
+    if (step === 'data' && selectedSheet) {
+      setRefreshing(true);
+      loadHometreeData(selectedSheet);
+      return;
+    }
+    loadAvailableSheets();
   };
 
   const handleCopy = async (label: string, value: string) => {
@@ -183,9 +350,7 @@ export default function HometreeDataScreen() {
         window.open(HOMETREE_URL, '_blank');
       } else {
         const supported = await Linking.canOpenURL(HOMETREE_URL);
-        if (!supported) {
-          throw new Error('Cannot open Hometree URL');
-        }
+        if (!supported) throw new Error('Cannot open Hometree URL');
         await Linking.openURL(HOMETREE_URL);
       }
 
@@ -194,6 +359,7 @@ export default function HometreeDataScreen() {
           openedAt: new Date().toISOString(),
           url: HOMETREE_URL,
           usedHometreeHelper: true,
+          sourceFile: selectedSheet?.fileName,
         });
       } catch (stepError) {
         console.error('Error completing Hometree step:', stepError);
@@ -203,6 +369,26 @@ export default function HometreeDataScreen() {
     } finally {
       setOpeningHometree(false);
     }
+  };
+
+  const handleDownloadCalculator = async (sheet?: SheetInfo | null) => {
+    const target = sheet ?? selectedSheet;
+    if (!target) {
+      Alert.alert('Select a calculator', 'Choose a calculator file first.');
+      return;
+    }
+    try {
+      setDownloading(true);
+      await downloadCalculatorSheet(opportunityId, target);
+    } catch (err) {
+      Alert.alert('Download failed', err instanceof Error ? err.message : 'Could not download calculator');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const continueToContractGeneration = () => {
+    navigation.navigate('ContractGeneration', { opportunityId });
   };
 
   const formatCurrency = (value: string | null | undefined) => {
@@ -219,6 +405,281 @@ export default function HometreeDataScreen() {
     return `${num.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kWh`;
   };
 
+  const renderSheetSelection = () => (
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={styles.scrollContent}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+    >
+      <Text style={[styles.stepIntro, { color: theme.secondaryText }]}>
+        Select which calculator to use. Values come from your completed calculator — the same data
+        that will be used when you generate the contract in the next step.
+      </Text>
+
+      {loadingSheets ? (
+        <View style={styles.centeredInline}>
+          <ActivityIndicator size="large" color={theme.primaryButton} />
+          <Text style={[styles.loadingText, { color: theme.secondaryText }]}>
+            Loading calculators…
+          </Text>
+        </View>
+      ) : availableSheets.length === 0 ? (
+        <View style={[styles.emptyCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+          <Feather name="folder" size={40} color={theme.secondaryText} />
+          <Text style={[styles.emptyTitle, { color: theme.primaryText }]}>No calculator found</Text>
+          <Text style={[styles.emptyText, { color: theme.secondaryText }]}>
+            Complete the calculator step first, then return here to fill in Hometree.
+          </Text>
+          <TouchableOpacity
+            style={[styles.secondaryAction, { borderColor: theme.primaryButton }]}
+            onPress={() => navigation.navigate('CalculatorTypeSelection', { opportunityId })}
+          >
+            <Feather name="settings" size={18} color={theme.primaryButton} />
+            <Text style={[styles.secondaryActionText, { color: theme.primaryButton }]}>
+              Open Calculator
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <>
+          {Object.entries(groupedSheets).map(([type, sheets]) => (
+            <View key={type} style={styles.sheetGroup}>
+              <Text style={[styles.groupLabel, { color: theme.primaryText }]}>
+                {type === 'flux' ? 'Flux Calculator' : 'Off Peak Calculator'}
+              </Text>
+              {sheets.map((sheet) => {
+                const isSelected = selectedSheet?.fileName === sheet.fileName;
+                return (
+                  <TouchableOpacity
+                    key={sheet.fileName}
+                    style={[
+                      styles.sheetOption,
+                      {
+                        backgroundColor: theme.cardBackground,
+                        borderColor: isSelected ? theme.primaryButton : theme.cardBorder,
+                      },
+                      isSelected && {
+                        backgroundColor: isDark
+                          ? `${theme.primaryButton}20`
+                          : `${theme.primaryButton}10`,
+                      },
+                    ]}
+                    onPress={() => setSelectedSheet(sheet)}
+                  >
+                    <View style={styles.sheetOptionMain}>
+                      <Text style={[styles.sheetOptionTitle, { color: theme.primaryText }]}>
+                        {getVersionName(sheet)}
+                      </Text>
+                      <Text style={[styles.sheetOptionMeta, { color: theme.secondaryText }]}>
+                        {sheet.fileName}
+                      </Text>
+                    </View>
+                    {isSelected && <Feather name="check-circle" size={22} color={theme.primaryButton} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
+
+          <View style={styles.sheetActions}>
+            <TouchableOpacity
+              style={[
+                styles.secondaryAction,
+                { borderColor: theme.cardBorder, opacity: selectedSheet ? 1 : 0.5 },
+              ]}
+              onPress={() => handleDownloadCalculator(selectedSheet)}
+              disabled={!selectedSheet || downloading}
+            >
+              {downloading ? (
+                <ActivityIndicator size="small" color={theme.primaryButton} />
+              ) : (
+                <>
+                  <Feather name="download" size={18} color={theme.primaryButton} />
+                  <Text style={[styles.secondaryActionText, { color: theme.primaryButton }]}>
+                    Download Calculator
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.primaryAction,
+                { backgroundColor: theme.primaryButton, opacity: selectedSheet ? 1 : 0.5 },
+              ]}
+              onPress={() => selectedSheet && loadHometreeData(selectedSheet)}
+              disabled={!selectedSheet || loadingData}
+            >
+              {loadingData ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Feather name="arrow-right" size={18} color="#fff" />
+                  <Text style={styles.primaryActionText}>Load Hometree Data</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
+
+      {error ? <Text style={[styles.errorInline, { color: '#dc2626' }]}>{error}</Text> : null}
+    </ScrollView>
+  );
+
+  const renderDataView = () => {
+    if (!data) return null;
+
+    return (
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+      >
+        <Text style={[styles.stepIntro, { color: theme.secondaryText }]}>
+          Copy and paste these values into Hometree Finance. Open Hometree using the button below,
+          then work through each field.
+        </Text>
+
+        <TouchableOpacity
+          style={[styles.hometreeButton, { backgroundColor: '#166534' }]}
+          onPress={openHometree}
+          disabled={openingHometree}
+        >
+          {openingHometree ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Feather name="external-link" size={20} color="#fff" />
+              <Text style={styles.hometreeButtonText}>Open Hometree Finance</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.sourceRow}>
+          <View style={styles.sourceText}>
+            <Text style={[styles.sourceLabel, { color: theme.secondaryText }]}>Using calculator</Text>
+            <Text style={[styles.sourceValue, { color: theme.primaryText }]}>
+              {data.sourceFile || selectedSheet?.fileName}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.sourceDownload, { borderColor: theme.cardBorder }]}
+            onPress={() => handleDownloadCalculator(selectedSheet)}
+            disabled={downloading}
+          >
+            <Feather name="download" size={16} color={theme.primaryButton} />
+            <Text style={[styles.sourceDownloadText, { color: theme.primaryButton }]}>Download</Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.changeSheetLink, { borderColor: theme.cardBorder }]}
+          onPress={() => {
+            setStep('sheets');
+            setData(null);
+          }}
+        >
+          <Feather name="refresh-cw" size={14} color={theme.secondaryText} />
+          <Text style={[styles.changeSheetText, { color: theme.secondaryText }]}>
+            Change calculator
+          </Text>
+        </TouchableOpacity>
+
+        <Section title="Customer Details" theme={theme}>
+          <DataRow label="Reference" value={data.customer.reference} theme={theme} onCopy={handleCopy} />
+          <DataRow label="First Name" value={data.customer.firstName} theme={theme} onCopy={handleCopy} />
+          <DataRow label="Last Name" value={data.customer.lastName} theme={theme} onCopy={handleCopy} />
+          <DataRow label="Installation Postcode" value={data.customer.postcode} theme={theme} onCopy={handleCopy} />
+          <DataRow label="Installation Address" value={data.customer.address} theme={theme} onCopy={handleCopy} />
+        </Section>
+
+        {data.solarPanel && (
+          <Section title="Solar Panel" theme={theme}>
+            <DataRow label="Manufacturer" value={data.solarPanel.manufacturer} theme={theme} onCopy={handleCopy} />
+            <DataRow label="Type (Module)" value={data.solarPanel.type} theme={theme} onCopy={handleCopy} />
+            <DataRow label="Model" value={data.solarPanel.model} theme={theme} onCopy={handleCopy} />
+            <DataRow label="Units to be installed" value={data.solarPanel.units} theme={theme} onCopy={handleCopy} />
+            <DataRow
+              label="Product Warranty"
+              value={data.solarPanel.warrantyYears ? `${data.solarPanel.warrantyYears} years` : null}
+              theme={theme}
+              onCopy={handleCopy}
+            />
+          </Section>
+        )}
+
+        {data.inverter && (
+          <Section title="Inverter" theme={theme}>
+            <DataRow label="Manufacturer" value={data.inverter.manufacturer} theme={theme} onCopy={handleCopy} />
+            <DataRow label="Type" value={data.inverter.type} theme={theme} onCopy={handleCopy} />
+            <DataRow label="Model" value={data.inverter.model} theme={theme} onCopy={handleCopy} />
+            <DataRow label="Units to be installed" value={data.inverter.units} theme={theme} onCopy={handleCopy} />
+            <DataRow
+              label="Product Warranty"
+              value={data.inverter.warrantyYears ? `${data.inverter.warrantyYears} years` : null}
+              theme={theme}
+              onCopy={handleCopy}
+            />
+          </Section>
+        )}
+
+        {data.battery && (
+          <Section title="Battery Storage" theme={theme}>
+            <DataRow label="Manufacturer" value={data.battery.manufacturer} theme={theme} onCopy={handleCopy} />
+            <DataRow label="Type" value={data.battery.type} theme={theme} onCopy={handleCopy} />
+            <DataRow label="Model" value={data.battery.model} theme={theme} onCopy={handleCopy} />
+            <DataRow label="Units to be installed" value={data.battery.units} theme={theme} onCopy={handleCopy} />
+            <DataRow
+              label="Product Warranty"
+              value={data.battery.warrantyYears ? `${data.battery.warrantyYears} years` : null}
+              theme={theme}
+              onCopy={handleCopy}
+            />
+          </Section>
+        )}
+
+        <Section title="Generation" theme={theme}>
+          <DataRow
+            label="Solar generation during year 1"
+            value={formatKwh(data.generation.solarGenerationYear1Kwh)}
+            theme={theme}
+            onCopy={handleCopy}
+          />
+        </Section>
+
+        <Section title="Savings" theme={theme}>
+          <DataRow
+            label="Solar savings during year 1"
+            value={formatCurrency(data.savings.solarSavingsYear1Gbp)}
+            theme={theme}
+            onCopy={handleCopy}
+          />
+          <DataRow
+            label="ESS savings during year 1"
+            value={formatCurrency(data.savings.essSavingsYear1Gbp)}
+            theme={theme}
+            onCopy={handleCopy}
+          />
+        </Section>
+
+        <Section title="Quote" theme={theme}>
+          <DataRow
+            label="Total quote price (including VAT)"
+            value={formatCurrency(data.quote.totalPriceIncludingVatGbp)}
+            theme={theme}
+            onCopy={handleCopy}
+          />
+        </Section>
+
+        <Text style={[styles.footerNote, { color: theme.secondaryText }]}>
+          When done, screenshot the Hometree application (panel, inverter, battery, generation) and
+          send it to the office in Teams for approval.
+        </Text>
+      </ScrollView>
+    );
+  };
+
   return (
     <SafeAreaView
       style={[
@@ -232,14 +693,14 @@ export default function HometreeDataScreen() {
           <View style={styles.headerLeft}>
             <TouchableOpacity
               style={[styles.backButton, { backgroundColor: theme.tertiaryBackground, borderColor: theme.borderColor }]}
-              onPress={() => navigation.goBack()}
+              onPress={() => (step === 'data' ? setStep('sheets') : navigation.goBack())}
             >
               <Feather name="arrow-left" size={20} color={theme.secondaryText} />
             </TouchableOpacity>
             <View style={styles.headerTextContainer}>
               <Text style={[styles.headerTitle, { color: theme.primaryText }]}>Hometree Quote Helper</Text>
               <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
-                Copy values from your contract into Hometree
+                {step === 'sheets' ? 'Choose your calculator' : 'Copy values into Hometree'}
               </Text>
             </View>
           </View>
@@ -250,165 +711,17 @@ export default function HometreeDataScreen() {
             <Feather name={isDark ? 'sun' : 'moon'} size={20} color={theme.secondaryText} />
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={[styles.continueButton, { backgroundColor: theme.primaryButton }]}
+          onPress={continueToContractGeneration}
+        >
+          <Text style={styles.continueButtonText}>Continue to Contract Generation</Text>
+          <Feather name="arrow-right" size={18} color="#fff" />
+        </TouchableOpacity>
       </View>
 
-      {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={theme.primaryButton} />
-          <Text style={[styles.loadingText, { color: theme.secondaryText }]}>
-            Loading contract data…
-          </Text>
-        </View>
-      ) : error ? (
-        <View style={styles.centered}>
-          <Feather name="alert-circle" size={48} color={theme.errorText || '#dc2626'} />
-          <Text style={[styles.errorTitle, { color: theme.primaryText }]}>Could not load data</Text>
-          <Text style={[styles.errorText, { color: theme.secondaryText }]}>{error}</Text>
-          <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: theme.primaryButton }]}
-            onPress={() => {
-              setLoading(true);
-              loadData();
-            }}
-          >
-            <Text style={styles.primaryButtonText}>Try again</Text>
-          </TouchableOpacity>
-        </View>
-      ) : data ? (
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-        >
-          <View style={[styles.infoBanner, { backgroundColor: isDark ? '#14532d33' : '#ecfdf5', borderColor: '#86efac' }]}>
-            <Feather name="info" size={18} color="#166534" />
-            <Text style={[styles.infoBannerText, { color: isDark ? '#bbf7d0' : '#166534' }]}>
-              These values are pulled from your EPVS calculator / contract ({data.calculatorType}). Open Hometree
-              in another tab and copy each field across — no need to cross-reference both documents manually.
-            </Text>
-          </View>
-
-          {data.sourceFile ? (
-            <Text style={[styles.metaText, { color: theme.secondaryText }]}>
-              Source: {data.sourceFile}
-            </Text>
-          ) : null}
-
-          <Section title="Customer Details" theme={theme}>
-            <DataRow label="Reference" value={data.customer.reference} theme={theme} onCopy={handleCopy} />
-            <DataRow label="First Name" value={data.customer.firstName} theme={theme} onCopy={handleCopy} />
-            <DataRow label="Last Name" value={data.customer.lastName} theme={theme} onCopy={handleCopy} />
-            <DataRow label="Installation Postcode" value={data.customer.postcode} theme={theme} onCopy={handleCopy} />
-            <DataRow label="Installation Address" value={data.customer.address} theme={theme} onCopy={handleCopy} />
-          </Section>
-
-          {data.solarPanel && (
-            <Section
-              title="Solar Panel"
-              description="Manufacturer, type, model, units and warranty"
-              theme={theme}
-            >
-              <DataRow label="Manufacturer" value={data.solarPanel.manufacturer} theme={theme} onCopy={handleCopy} />
-              <DataRow label="Type (Module)" value={data.solarPanel.type} theme={theme} onCopy={handleCopy} />
-              <DataRow label="Model" value={data.solarPanel.model} theme={theme} onCopy={handleCopy} />
-              <DataRow label="Units to be installed" value={data.solarPanel.units} theme={theme} onCopy={handleCopy} />
-              <DataRow
-                label="Product Warranty"
-                value={data.solarPanel.warrantyYears ? `${data.solarPanel.warrantyYears} years` : null}
-                theme={theme}
-                onCopy={handleCopy}
-              />
-            </Section>
-          )}
-
-          {data.inverter && (
-            <Section title="Inverter" theme={theme}>
-              <DataRow label="Manufacturer" value={data.inverter.manufacturer} theme={theme} onCopy={handleCopy} />
-              <DataRow label="Type" value={data.inverter.type} theme={theme} onCopy={handleCopy} />
-              <DataRow label="Model" value={data.inverter.model} theme={theme} onCopy={handleCopy} />
-              <DataRow label="Units to be installed" value={data.inverter.units} theme={theme} onCopy={handleCopy} />
-              <DataRow
-                label="Product Warranty"
-                value={data.inverter.warrantyYears ? `${data.inverter.warrantyYears} years` : null}
-                theme={theme}
-                onCopy={handleCopy}
-              />
-            </Section>
-          )}
-
-          {data.battery && (
-            <Section title="Battery Storage" theme={theme}>
-              <DataRow label="Manufacturer" value={data.battery.manufacturer} theme={theme} onCopy={handleCopy} />
-              <DataRow label="Type" value={data.battery.type} theme={theme} onCopy={handleCopy} />
-              <DataRow label="Model" value={data.battery.model} theme={theme} onCopy={handleCopy} />
-              <DataRow label="Units to be installed" value={data.battery.units} theme={theme} onCopy={handleCopy} />
-              <DataRow
-                label="Product Warranty"
-                value={data.battery.warrantyYears ? `${data.battery.warrantyYears} years` : null}
-                theme={theme}
-                onCopy={handleCopy}
-              />
-            </Section>
-          )}
-
-          <Section title="Generation" description="Predicted total net output for year 1" theme={theme}>
-            <DataRow
-              label="Solar generation during year 1"
-              value={formatKwh(data.generation.solarGenerationYear1Kwh)}
-              theme={theme}
-              onCopy={handleCopy}
-            />
-          </Section>
-
-          <Section
-            title="Savings"
-            description="If you don't have separate solar and ESS savings, enter the total in the solar savings field"
-            theme={theme}
-          >
-            <DataRow
-              label="Solar savings during year 1"
-              value={formatCurrency(data.savings.solarSavingsYear1Gbp)}
-              theme={theme}
-              onCopy={handleCopy}
-            />
-            <DataRow
-              label="ESS savings during year 1"
-              value={formatCurrency(data.savings.essSavingsYear1Gbp)}
-              theme={theme}
-              onCopy={handleCopy}
-            />
-          </Section>
-
-          <Section title="Quote" description="Total quote price including VAT" theme={theme}>
-            <DataRow
-              label="Total quote price (including VAT)"
-              value={formatCurrency(data.quote.totalPriceIncludingVatGbp)}
-              theme={theme}
-              onCopy={handleCopy}
-            />
-          </Section>
-
-          <TouchableOpacity
-            style={[styles.hometreeButton, { backgroundColor: '#166534' }]}
-            onPress={openHometree}
-            disabled={openingHometree}
-          >
-            {openingHometree ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Feather name="external-link" size={20} color="#fff" />
-                <Text style={styles.hometreeButtonText}>Open Hometree Finance</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <Text style={[styles.footerNote, { color: theme.secondaryText }]}>
-            After filling in Hometree, screenshot the application (panel, inverter, battery, generation) and send
-            it to the office in Teams for approval.
-          </Text>
-        </ScrollView>
-      ) : null}
+      {step === 'sheets' ? renderSheetSelection() : renderDataView()}
     </SafeAreaView>
   );
 }
@@ -417,7 +730,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     paddingTop: Platform.OS === 'web' ? 16 : 8,
-    paddingBottom: 16,
+    paddingBottom: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
   },
@@ -425,6 +738,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 12,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   backButton: {
@@ -446,29 +760,104 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scrollView: { flex: 1 },
-  scrollContent: { padding: 16, paddingBottom: 40 },
-  centered: {
-    flex: 1,
+  continueButton: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    gap: 12,
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
   },
-  loadingText: { marginTop: 12, fontSize: 15 },
-  errorTitle: { fontSize: 18, fontWeight: '600', marginTop: 8 },
-  errorText: { textAlign: 'center', fontSize: 14, lineHeight: 20 },
-  infoBanner: {
-    flexDirection: 'row',
+  continueButtonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  scrollView: { flex: 1 },
+  scrollContent: { padding: 16, paddingBottom: 40 },
+  stepIntro: { fontSize: 14, lineHeight: 20, marginBottom: 16 },
+  centeredInline: { alignItems: 'center', paddingVertical: 40, gap: 12 },
+  loadingText: { fontSize: 15 },
+  emptyCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 24,
+    alignItems: 'center',
     gap: 10,
+  },
+  emptyTitle: { fontSize: 18, fontWeight: '600' },
+  emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  sheetGroup: { marginBottom: 16 },
+  groupLabel: { fontSize: 15, fontWeight: '700', marginBottom: 8 },
+  sheetOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 10,
     padding: 14,
+    marginBottom: 8,
+  },
+  sheetOptionMain: { flex: 1 },
+  sheetOptionTitle: { fontSize: 16, fontWeight: '600' },
+  sheetOptionMeta: { fontSize: 12, marginTop: 4 },
+  sheetActions: { gap: 10, marginTop: 8 },
+  primaryAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 10,
+  },
+  primaryActionText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  secondaryAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
     borderRadius: 10,
     borderWidth: 1,
-    marginBottom: 12,
-    alignItems: 'flex-start',
   },
-  infoBannerText: { flex: 1, fontSize: 13, lineHeight: 19 },
-  metaText: { fontSize: 12, marginBottom: 16 },
+  secondaryActionText: { fontWeight: '600', fontSize: 14 },
+  errorInline: { marginTop: 12, fontSize: 14, textAlign: 'center' },
+  hometreeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  hometreeButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  sourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 10,
+  },
+  sourceText: { flex: 1 },
+  sourceLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase' },
+  sourceValue: { fontSize: 14, marginTop: 2 },
+  sourceDownload: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  sourceDownloadText: { fontSize: 13, fontWeight: '600' },
+  changeSheetLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  changeSheetText: { fontSize: 13, fontWeight: '500' },
   section: {
     borderRadius: 12,
     borderWidth: 1,
@@ -484,7 +873,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   dataRowText: { flex: 1 },
-  dataLabel: { fontSize: 12, fontWeight: '600', marginBottom: 3, textTransform: 'uppercase', letterSpacing: 0.3 },
+  dataLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 3,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
   dataValue: { fontSize: 16, fontWeight: '500' },
   copyButton: {
     width: 36,
@@ -494,22 +889,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: 8,
   },
-  primaryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginTop: 8,
-  },
-  primaryButtonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-  hometreeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
-    borderRadius: 12,
-    marginTop: 8,
-  },
-  hometreeButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  footerNote: { fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 16, paddingHorizontal: 8 },
+  footerNote: { fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 8, paddingHorizontal: 8 },
 });
