@@ -19,8 +19,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { api, opportunitiesApi, opportunityOutcomesApi, systemSettingsApi, workflowApi } from '../utils/api';
-import { OpportunityOutcomeType } from '../types';
+import { api, opportunitiesApi, systemSettingsApi, workflowApi } from '../utils/api';
 import BottomNavigation from '../components/BottomNavigation';
 import CalculatorProgressService, { PricingOverrideOption } from '../services/CalculatorProgressService';
 
@@ -950,22 +949,6 @@ export default function SolarWorkflowScreen() {
     try {
       setIsProcessingOutcome(true);
 
-      const outcomeType = outcome === 'won' ? OpportunityOutcomeType.WON : OpportunityOutcomeType.LOST;
-      const [statusResult, recordResult] = await Promise.allSettled([
-        opportunitiesApi.updateStatus(opportunityId, outcome),
-        opportunityOutcomesApi.recordOutcome({
-          ghlOpportunityId: opportunityId,
-          userId: user?.id ?? '',
-          outcome: outcomeType,
-        }),
-      ]);
-      if (statusResult.status === 'rejected' || (statusResult.status === 'fulfilled' && !statusResult.value.success)) {
-        console.warn('Opportunity status update failed:', statusResult.status === 'fulfilled' ? statusResult.value.error : statusResult.reason);
-      }
-      if (recordResult.status === 'rejected' || (recordResult.status === 'fulfilled' && !recordResult.value.success)) {
-        console.warn('Record outcome failed:', recordResult.status === 'fulfilled' ? recordResult.value.error : recordResult.reason);
-      }
-
       const finishStep = await workflowApi.getWorkflowSteps();
       const welcomeStepNumber =
         finishStep.success && finishStep.data
@@ -981,6 +964,11 @@ export default function SolarWorkflowScreen() {
         throw new Error(completeResult.error || 'Failed to complete workflow outcome step');
       }
 
+      // Keep CRM status in sync without blocking OneDrive finalization on duplicate outcome writes
+      void opportunitiesApi.updateStatus(opportunityId, outcome).catch((error) => {
+        console.warn('Opportunity status update failed:', error);
+      });
+
       setJobStatus(outcome.toUpperCase() as 'WON' | 'LOST');
       setShowOutcomeSelection(false);
 
@@ -989,7 +977,9 @@ export default function SolarWorkflowScreen() {
 
       Alert.alert(
         'Appointment Completed',
-        `Files are synced to OneDrive under temp/ and organized in final/ for this ${outcome} outcome.`,
+        outcome === 'won'
+          ? 'Files are in Customer Orders 2026 under temp/ and final/. CRM stage update may take up to a minute.'
+          : 'Files are in Customer Orders 2026 under temp/ and final/ for this quoted outcome.',
         [{ text: 'OK' }],
       );
     } catch (error) {

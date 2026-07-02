@@ -150,7 +150,7 @@ export default function AppointmentOutcomeModal({
                     Customer accepted the proposal
                   </Text>
                   <Text style={[styles.outcomeFolder, { color: theme.tertiaryText }]}>
-                    Files will be saved to: Customer Orders 2
+                    Files will be saved to: Customer Orders 2026 (temp/ → final/)
                   </Text>
                 </View>
                 {selectedOutcome === 'won' && (
@@ -196,7 +196,7 @@ export default function AppointmentOutcomeModal({
                     Customer declined the proposal
                   </Text>
                   <Text style={[styles.outcomeFolder, { color: theme.tertiaryText }]}>
-                    Files will be saved to: Customer Quotations
+                    Files will be saved to: Customer Orders 2026 (temp/ → final/)
                   </Text>
                 </View>
                 {selectedOutcome === 'lost' && (

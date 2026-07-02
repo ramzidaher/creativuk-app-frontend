@@ -16,8 +16,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { opportunitiesApi, opportunityOutcomesApi } from '../utils/api';
-import { OpportunityOutcomeType } from '../types';
+import { opportunitiesApi } from '../utils/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -49,72 +48,31 @@ export default function FinishAppointmentScreen() {
 
     try {
       setIsProcessing(true);
-      
-      // Get customer details from opportunity or workflow progress
-      const customerName = passedOpportunity?.name || 'Unknown Customer';
-      const postcode = passedOpportunity?.postcode || 'Unknown Postcode';
-      
-      // Get file paths from workflow progress
+
       const { workflowApi } = await import('../utils/api');
-      const progressResponse = await workflowApi.getOpportunityProgress(opportunityId);
-      
-      let surveyStep, calculatorStep, contractStep, proposalStep;
-      if (progressResponse.success && progressResponse.data) {
-        surveyStep = progressResponse.data.steps?.find((s: any) => s.stepNumber === 1);
-        calculatorStep = progressResponse.data.steps?.find((s: any) => s.stepNumber === 3);
-        contractStep = progressResponse.data.steps?.find((s: any) => s.stepNumber === 8);
-        proposalStep = progressResponse.data.steps?.find((s: any) => s.stepNumber === 4);
-      }
-      
-      // Prepare file paths based on actual directory structure
-      const files = {
-        surveyPath: surveyStep?.data?.surveyPath || `uploads/survey-reports/${opportunityId}`,
-        calculatorPath: calculatorStep?.data?.calculatorPath || `src/excel-file-calculator/epvs-opportunities`, // Will search for latest file
-        contractPath: contractStep?.data?.pdfPath || `src/excel-file-calculator/epvs-opportunities/pdfs`, // Will search for latest file
-        proposalPath: proposalStep?.data?.pptxFile || `src/excel-file-calculator/output` // Will search for latest file
-      };
-      
-      // Call the OneDrive organization API
-      const { api } = await import('../utils/api');
-      const result = await api.post('/onedrive/organize-by-outcome', {
-        opportunityId,
-        customerName,
-        postcode,
+      const finishStep = await workflowApi.getWorkflowSteps();
+      const welcomeStepNumber =
+        finishStep.success && finishStep.data
+          ? finishStep.data.find((s: any) => s.stepType === 'WELCOME_EMAIL')?.stepNumber ?? 13
+          : 13;
+
+      const completeResult = await workflowApi.completeStep(opportunityId, welcomeStepNumber, {
         outcome: selectedOutcome,
-        files
+        organizedAt: new Date().toISOString(),
       });
-      
-      if (result.success) {
-        const outcomeType =
-          selectedOutcome === 'won' ? OpportunityOutcomeType.WON : OpportunityOutcomeType.LOST;
-        await Promise.allSettled([
-          opportunitiesApi.updateStatus(opportunityId, selectedOutcome),
-          opportunityOutcomesApi.recordOutcome({
-            ghlOpportunityId: opportunityId,
-            userId: user?.id ?? '',
-            outcome: outcomeType,
-          }),
-        ]);
 
-        const finishStep = await workflowApi.getWorkflowSteps();
-        const welcomeStepNumber =
-          finishStep.success && finishStep.data
-            ? finishStep.data.find((s: any) => s.stepType === 'WELCOME_EMAIL')?.stepNumber ?? 13
-            : 13;
-        await workflowApi.completeStep(opportunityId, welcomeStepNumber, {
-          outcome: selectedOutcome,
-          organizedAt: new Date().toISOString(),
-          folderPath: (result as any).folderPath,
-        });
-
-        // Show success modal instead of alert
-        setShowSuccessModal(true);
-      } else {
-        throw new Error((result as any).message || 'Failed to organize files');
+      if (!completeResult.success) {
+        throw new Error(completeResult.error || 'Failed to complete workflow outcome step');
       }
+
+      void opportunitiesApi.updateStatus(opportunityId, selectedOutcome).catch((error) => {
+        console.warn('Opportunity status update failed:', error);
+      });
+
+      setShowSuccessModal(true);
     } catch (error) {
       console.error('Error processing outcome:', error);
-      Alert.alert('Error', 'Failed to organize files. Please try again.');
+      Alert.alert('Error', 'Failed to finalize appointment files. Please try again.');
     } finally {
       setIsProcessing(false);
     }
@@ -294,7 +252,7 @@ export default function FinishAppointmentScreen() {
                     Customer accepted the proposal
                   </Text>
                   <Text style={[styles.outcomeFolder, { color: theme.tertiaryText }]}>
-                    Files will be saved to: Customer Orders 2
+                    Files sync to Customer Orders 2026 (temp/) during the appointment and finalize in final/ when won
                   </Text>
                 </View>
                 {selectedOutcome === 'won' && (
@@ -340,7 +298,7 @@ export default function FinishAppointmentScreen() {
                     Customer declined the proposal
                   </Text>
                   <Text style={[styles.outcomeFolder, { color: theme.tertiaryText }]}>
-                    Files will be saved to: Customer Quotations
+                    Files sync to Customer Orders 2026 (temp/) during the appointment and finalize in final/ when quoted
                   </Text>
                 </View>
                 {selectedOutcome === 'lost' && (
@@ -412,7 +370,7 @@ export default function FinishAppointmentScreen() {
             </Text>
             
             <Text style={[styles.modalMessage, { color: theme.secondaryText }]}>
-              Files have been organized in OneDrive for {selectedOutcome === 'won' ? 'Customer Orders 2' : 'Customer Quotations'} folder.
+              Files are in Customer Orders 2026 under temp/ and organized in final/ for this {selectedOutcome} outcome.
             </Text>
             
             <View style={styles.modalButtonContainer}>
