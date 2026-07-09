@@ -1,6 +1,6 @@
 export interface InputFieldRule {
   fieldId: string;
-  disabledFor: string[]; // Array of radio button shape names that disable this field
+  disabledFor?: string[]; // Array of radio button shape names that disable this field
   enabledFor?: string[]; // Array of radio button shape names that enable this field (optional)
 }
 
@@ -163,7 +163,7 @@ export function isFieldDisabled(fieldId: string, selectedOptions: Record<string,
   // Check if any of the selected radio buttons should disable this field
   const selectedShapeNames = Object.values(selectedOptions);
   const shouldDisable = selectedShapeNames.some(shapeName => 
-    rule.disabledFor.includes(shapeName)
+    (rule.disabledFor ?? []).includes(shapeName)
   );
 
   // If there's an enabledFor rule, check if any selected options enable the field

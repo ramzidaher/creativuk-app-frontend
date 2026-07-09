@@ -24,6 +24,7 @@ export default function InputFieldRulesTest({ visible, onClose }: InputFieldRule
     { group: 'Battery Type', options: ['BatterySC', 'BatteryOC', 'BatteryNone'] },
     { group: 'Existing Solar', options: ['ExistingSolarYes', 'ExistingSolarNo'] },
     { group: 'Import/Export Tariff', options: ['ExportYes', 'ExportNo'] },
+    { group: 'Annual Consumption', options: ['AnnualConsumptionYes', 'AnnualConsumptionNo'] },
   ];
 
   const handleRadioButtonPress = (group: string, option: string) => {
@@ -119,7 +120,9 @@ export default function InputFieldRulesTest({ visible, onClose }: InputFieldRule
                 </View>
               </View>
               <Text style={styles.fieldRule}>
-                Disabled for: {rule.disabledFor.join(', ')}
+                {rule.enabledFor?.length
+                  ? `Enabled for: ${rule.enabledFor.join(', ')}`
+                  : `Disabled for: ${(rule.disabledFor ?? []).join(', ') || '—'}`}
               </Text>
             </View>
           ))}
