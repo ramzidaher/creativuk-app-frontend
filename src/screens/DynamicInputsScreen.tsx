@@ -1579,6 +1579,11 @@ export default function DynamicInputsScreen() {
     );
   }
 
+  const effectiveSelectedOptions = restoredParams?.selectedOptions || selectedOptions;
+  const showDisclaimerBanner =
+    calculatorType === 'off-peak' &&
+    effectiveSelectedOptions['📊 Annual Consumption'] === 'AnnualConsumptionNo';
+
   return (
     <View style={[
       styles.container, 
@@ -1701,6 +1706,14 @@ export default function DynamicInputsScreen() {
                           <View style={[styles.sectionHeaderGroup, { backgroundColor: theme.secondaryBackground, borderColor: theme.cardBorder }]}>
                             <Text style={[styles.sectionTitle, { color: theme.primaryText, fontWeight: 'bold', fontSize: width < 768 ? 14 : 16, marginBottom: 0, textAlign: 'left' }]}>{sectionName}</Text>
                           </View>
+                          {section === 'consumption' && showDisclaimerBanner && (
+                            <View style={[styles.warningBanner, { backgroundColor: (theme.dangerButton || '#ef4444') + '18', borderColor: (theme.dangerButton || '#ef4444') + '50' }]}>
+                              <Feather name="alert-triangle" size={20} color={theme.dangerButton || '#ef4444'} style={{ marginRight: 10 }} />
+                              <Text style={[styles.warningBannerText, { color: theme.primaryText }]}>
+                                Remember to sign a disclaimer
+                              </Text>
+                            </View>
+                          )}
                           {section === 'consumption' && (
                             <Text style={[styles.sectionNote, { color: theme.secondaryText }]}>
                               Annual consumption also from current bill.
@@ -2843,5 +2856,18 @@ const styles = StyleSheet.create({
   helpModalCloseText: {
     fontSize: 15,
     fontWeight: '500',
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  warningBannerText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
   },
 });

@@ -240,22 +240,19 @@ export const DYNAMIC_INPUT_FIELDS: InputFieldDefinition[] = [
     enabledByRadio: { '🔋 Battery Type': ['BatteryOC'] },
   },
 
-  // OFF-PEAK: ELECTRICITY CONSUMPTION fields - Based ONLY on Annual Consumption (Yes/No)
+  // OFF-PEAK: ELECTRICITY CONSUMPTION fields - Based on Annual Consumption (Yes/No)
   // Logic (for both Single Rate and Dual Rate):
-  //   - If Yes → enable: Estimated Annual Usage (kWh), disable: Standing Charge, Annual Spend
-  //   - If No → enable: Standing Charge, Annual Spend, disable: Estimated Annual Usage
+  //   - Both Yes and No → show Estimated Annual Usage (kWh); Excel always uses Yes path on submit
+  //   - Standing Charge and Annual Spend are never shown for Off-Peak
   {
     id: 'estimated_annual_usage',
     label: 'Estimated Annual Usage (kWh)',
     type: 'number',
     required: false,
     cellReference: 'C55',
-    // Off-Peak: Enabled when Annual Consumption is Yes (for both Single and Dual Rate)
+    // Off-Peak: Enabled for both Yes and No (No still collects usage; Excel gets Yes on submit)
     enabledByRadio: { 
-      '📊 Annual Consumption': ['AnnualConsumptionYes'] // Only when Yes is selected (works for both Single and Dual Rate)
-    },
-    disabledByRadio: { 
-      '📊 Annual Consumption': ['AnnualConsumptionNo'] // Disabled when No is selected
+      '📊 Annual Consumption': ['AnnualConsumptionYes', 'AnnualConsumptionNo']
     },
   },
   {
@@ -264,15 +261,10 @@ export const DYNAMIC_INPUT_FIELDS: InputFieldDefinition[] = [
     type: 'number',
     required: false,
     cellReference: 'C56',
-    // Off-Peak: 
-    //   - Single Rate + Yes → disabled
-    //   - Single Rate + No → enabled
-    //   - Dual Rate + Yes → disabled
-    //   - Dual Rate + No → enabled
+    // Off-Peak: never shown (handled in getEnabledFields early return)
     // Flux: Enabled when AnnualUsageYes OR AnnualUsageNo (both cases)
     enabledByRadio: { 
-      '📊 Annual Consumption': ['AnnualConsumptionNo'], // Off-Peak: only when No (for both Single and Dual Rate)
-      '📊 Annual Usage': ['AnnualConsumptionYes', 'AnnualConsumptionNo'] // Flux: both Yes and No
+      '📊 Annual Usage': ['AnnualConsumptionYes', 'AnnualConsumptionNo'] // Flux only
     },
     disabledByRadio: {
       // Off-Peak Single Rate + Yes: disabled
@@ -286,13 +278,9 @@ export const DYNAMIC_INPUT_FIELDS: InputFieldDefinition[] = [
     type: 'number',
     required: false,
     cellReference: 'C57',
-    // Off-Peak: Enabled when Annual Consumption is No (for both Single and Dual Rate)
-    enabledByRadio: { 
-      '📊 Annual Consumption': ['AnnualConsumptionNo'] // Only when No is selected (works for both Single and Dual Rate)
-    },
-    disabledByRadio: { 
-      '📊 Annual Consumption': ['AnnualConsumptionYes'] // Disabled when Yes is selected
-    },
+    // Off-Peak: never shown (handled in getEnabledFields early return)
+    enabledByRadio: {},
+    disabledByRadio: {},
   },
 
   // NOTE: estimated_peak_annual_usage and estimated_off_peak_annual_usage are Flux-only fields
@@ -496,6 +484,11 @@ export function getEnabledFields(
         console.log(`🚫 Hiding Flux-only field ${field.id} for Off-Peak calculator`);
         return false;
       }
+
+      // Off-Peak: standing_charge and annual_spend are never shown (both Yes/No use estimated_annual_usage)
+      if (field.id === 'standing_charge' || field.id === 'annual_spend') {
+        return false;
+      }
     }
     
     // ====== STEP 1: Off-Peak specific: Battery fields logic based on radio button selection ======
@@ -539,16 +532,7 @@ export function getEnabledFields(
       
       let radioConditionMet: boolean;
       
-      // Special handling for standing_charge (Off-Peak): Only enabled when Annual Consumption is No
-      // Standing charge should NOT show when Annual Consumption is Yes (for both Single and Dual Rate)
-      if (field.id === 'standing_charge' && isOffPeak) {
-        const annualConsumption = radioButtonSelections?.['📊 Annual Consumption'] || 
-                                 radioButtonSelections?.['📊 Annual Usage'];
-        
-        // Enabled if: Annual Consumption is No (for both Single and Dual Rate)
-        // Disabled if: Annual Consumption is Yes (for both Single and Dual Rate)
-        radioConditionMet = annualConsumption === 'AnnualConsumptionNo';
-      } else if (isConsumptionField) {
+      if (isConsumptionField) {
         // Other consumption fields require ALL enabledByRadio conditions to be met (AND logic)
         radioConditionMet = Object.entries(field.enabledByRadio).every(([radioGroupTitle, allowedValues]) => {
           let selectedValue = radioButtonSelections?.[radioGroupTitle];
@@ -616,15 +600,6 @@ export function getEnabledFields(
           const selectedValue = radioButtonSelections?.[radioGroupTitle];
           return selectedValue && disallowedValues.includes(selectedValue);
         });
-      }
-      
-      // Special case for standing_charge: Disable when Annual Consumption is Yes (for both Single and Dual Rate)
-      if (field.id === 'standing_charge' && isOffPeak && !radioConditionDisables) {
-        const annualConsumption = radioButtonSelections?.['📊 Annual Consumption'] || 
-                                 radioButtonSelections?.['📊 Annual Usage'];
-        if (annualConsumption === 'AnnualConsumptionYes') {
-          radioConditionDisables = true;
-        }
       }
       
       if (radioConditionDisables) {

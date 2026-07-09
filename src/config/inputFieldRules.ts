@@ -102,18 +102,18 @@ export const inputFieldRules: InputFieldRule[] = [
     disabledFor: ['BatteryNone'], // Disable when No Battery is selected
   },
 
-  // ANNUAL CONSUMPTION - if user doesn't have consumption data
+  // ANNUAL CONSUMPTION - Off-Peak: both Yes and No use estimated annual usage
   {
-    fieldId: 'annual_usage',
-    disabledFor: ['AnnualConsumptionNo'], // Disable when No Annual Consumption is selected
+    fieldId: 'estimated_annual_usage',
+    enabledFor: ['AnnualConsumptionYes', 'AnnualConsumptionNo'],
   },
   {
     fieldId: 'standing_charge',
-    disabledFor: ['AnnualConsumptionNo'], // Disable when No Annual Consumption is selected
+    disabledFor: ['AnnualConsumptionYes', 'AnnualConsumptionNo'],
   },
   {
     fieldId: 'annual_spend',
-    disabledFor: ['AnnualConsumptionNo'], // Disable when No Annual Consumption is selected
+    disabledFor: ['AnnualConsumptionYes', 'AnnualConsumptionNo'],
   },
 
   // WARRANTY FIELDS - based on warranty selections
