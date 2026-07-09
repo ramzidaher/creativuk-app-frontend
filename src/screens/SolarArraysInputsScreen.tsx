@@ -41,6 +41,7 @@ export default function SolarArraysInputsScreen() {
   const [linkedOpenSolar, setLinkedOpenSolar] = useState<any | null>(null);
   const [importing, setImporting] = useState(false);
   const [importedNotice, setImportedNotice] = useState(false);
+  const [hasImportedFromOpenSolar, setHasImportedFromOpenSolar] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [noOfArraysDropdownOptions, setNoOfArraysDropdownOptions] = useState<string[]>(['1', '2', '3', '4', '5', '6', '7', '8']);
   const [showArraysDropdown, setShowArraysDropdown] = useState(false);
@@ -145,9 +146,33 @@ export default function SolarArraysInputsScreen() {
     return false;
   }, [savedArraysData, rows, calculatorType]);
 
+  const hasArrayInputData = useCallback((rowsArray: ArrayRow[]) => {
+    return rowsArray.some(r =>
+      r.enabled && (
+        (r.numberOfPanels?.trim()) ||
+        (r.orientationDeg?.trim()) ||
+        (r.pitchDeg?.trim()) ||
+        (r.shadingFactor?.trim())
+      )
+    );
+  }, []);
 
+  const navigateToPricing = () => {
+    (navigation as any).navigate('Pricing', {
+      opportunityId,
+      templateFileName,
+      calculatorType: calculatorType || 'off-peak',
+      customerDetails,
+    });
+  };
 
-
+  const handleContinue = async () => {
+    if (!hasUnsavedChanges && savedArraysData) {
+      navigateToPricing();
+      return;
+    }
+    await onSave();
+  };
   useEffect(() => {
     const init = async () => {
       console.log('🔍 Initializing SolarArraysInputsScreen for opportunity:', opportunityId);
@@ -277,6 +302,18 @@ export default function SolarArraysInputsScreen() {
                 overrideOpenSolar: overrideOpenSolar
               };
             }));
+
+            const restoredHasImportedData = savedData.arrayRows.some((row: any) =>
+              row.enabled && (
+                row.numberOfPanels?.trim() ||
+                row.orientationDeg?.trim() ||
+                row.pitchDeg?.trim() ||
+                row.shadingFactor?.trim()
+              )
+            );
+            if (restoredHasImportedData) {
+              setHasImportedFromOpenSolar(true);
+            }
             
             console.log('✅ Restored arrays data from CalculatorProgressService');
             setHasRestoredProgress(true);
@@ -409,6 +446,8 @@ export default function SolarArraysInputsScreen() {
         }));
         
         setImportedNotice(true);
+        setHasImportedFromOpenSolar(true);
+        setHasUnsavedChanges(true);
         // Hide notice after 5 seconds
         setTimeout(() => setImportedNotice(false), 5000);
         
@@ -610,25 +649,29 @@ export default function SolarArraysInputsScreen() {
   const onSave = async () => {
     try {
       setSaving(true);
-      
-      // Step 1: Show rounding loading modal and start progress animation
-      console.log('🔄 Starting rounding process...');
-      setShowRoundingModal(true);
-      roundingProgressAnim.setValue(0);
-      
-      // Step 2: Animate progress bar over 1 second
-      Animated.timing(roundingProgressAnim, {
-        toValue: 1,
-        duration: 1000,
-        useNativeDriver: false,
-      }).start();
-      
-      // Step 2.5: Wait 1 second while showing loading modal
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Step 3: Round all orientation values to nearest 5° increment
-      console.log('🔄 Rounding orientation values to nearest 5° increment...');
-      let roundedRows = rows.map(r => {
+
+      const shouldRound = hasArrayInputData(rows);
+      let roundedRows = rows;
+
+      if (shouldRound) {
+        // Step 1: Show rounding loading modal and start progress animation
+        console.log('🔄 Starting rounding process...');
+        setShowRoundingModal(true);
+        roundingProgressAnim.setValue(0);
+        
+        // Step 2: Animate progress bar over 1 second
+        Animated.timing(roundingProgressAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: false,
+        }).start();
+        
+        // Step 2.5: Wait 1 second while showing loading modal
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Step 3: Round all orientation values to nearest 5° increment
+        console.log('🔄 Rounding orientation values to nearest 5° increment...');
+        roundedRows = rows.map(r => {
         if (!r.enabled || !r.orientationDeg || r.orientationDeg.trim() === '') {
           return r;
         }
@@ -676,8 +719,11 @@ export default function SolarArraysInputsScreen() {
         return r;
       });
       
-      // Step 5: Update state with rounded values
-      setRows(roundedRows);
+        // Step 5: Update state with rounded values
+        setRows(roundedRows);
+      } else {
+        console.log('ℹ️ No array input data to round, continuing with empty arrays');
+      }
       
       // Step 6: Close rounding modal
       setShowRoundingModal(false);
@@ -769,18 +815,14 @@ export default function SolarArraysInputsScreen() {
       console.log('✅ Arrays data saved and calculated, navigating to Pricing...');
       
       // Step 13: Navigate to Pricing screen
-      (navigation as any).navigate('Pricing', { 
-        opportunityId,
-        templateFileName,
-        calculatorType: calculatorType || 'off-peak',
-        customerDetails
-      });
+      navigateToPricing();
       
     } catch (e) {
       console.error('❌ Save error:', e);
       Alert.alert('Error', 'Network error while saving arrays');
     } finally {
       setSaving(false);
+      setShowRoundingModal(false);
     }
   };
 
@@ -885,6 +927,15 @@ export default function SolarArraysInputsScreen() {
           }
         ]}
       >
+        {linkedOpenSolar && !hasImportedFromOpenSolar && (
+          <View style={[styles.importReminderBanner, { backgroundColor: (theme.dangerButton || '#ef4444') + '18', borderColor: (theme.dangerButton || '#ef4444') + '50' }]}>
+            <Feather name="alert-triangle" size={20} color={theme.dangerButton || '#ef4444'} />
+            <Text style={[styles.importReminderText, { color: theme.primaryText }]}>
+              Remember to click Import
+            </Text>
+          </View>
+        )}
+
         {linkedOpenSolar && (
           <View style={styles.noteBox}>
             <Feather name="info" size={16} color="#065f46" />
@@ -1048,14 +1099,14 @@ export default function SolarArraysInputsScreen() {
             styles.saveButton, 
             hasUnsavedChanges && styles.saveButtonChanged
           ]} 
-          onPress={onSave} 
+          onPress={handleContinue} 
           disabled={saving}
         >
           {saving ? (
             <Text style={styles.saveText}>Saving…</Text>
           ) : (
             <Text style={styles.saveText}>
-              {hasUnsavedChanges ? 'Save Changes' : 'Continue'}
+              {hasUnsavedChanges ? 'Save & Continue' : 'Continue'}
             </Text>
           )}
         </TouchableOpacity>
@@ -1326,6 +1377,22 @@ const styles = StyleSheet.create({
   importButtonText: { color: '#ffffff', fontWeight: '600', fontSize: 13 },
   scroll: { paddingHorizontal: width < 768 ? 16 : 24, paddingTop: 20 },
   noteBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#ecfdf5', borderColor: '#10b981', borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
+  importReminderBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  importReminderText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+  },
   noteText: { color: '#065f46', fontWeight: '600', flex: 1 },
   importedMessage: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#f0fdf4', borderColor: '#16a34a', borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
   importedMessageText: { color: '#15803d', fontWeight: '600', flex: 1 },
