@@ -3,7 +3,7 @@ import { api } from '../utils/api';
 export interface CalculatorProgressData {
   opportunityId: string;
   userId: string;
-  calculatorType: 'off-peak' | 'flux' | 'epvs';
+  calculatorType: 'off-peak' | 'flux' | 'epvs' | 'v44';
   currentStep: 'template-selection' | 'radio-buttons' | 'dynamic-inputs' | 'arrays' | 'pricing' | 'completed';
   
   // Template Selection Data
@@ -79,7 +79,7 @@ export interface ChangeDetectionResult {
 }
 
 export interface PricingOverrideOption {
-  calculatorType: 'off-peak' | 'flux' | 'epvs';
+  calculatorType: 'off-peak' | 'flux' | 'epvs' | 'v44';
   currentPrice: string | null;
   hasPricingData: boolean;
   lastSavedAt?: string;
@@ -113,7 +113,7 @@ class CalculatorProgressService {
    */
   async saveProgress(
     opportunityId: string,
-    calculatorType: 'off-peak' | 'flux' | 'epvs',
+    calculatorType: 'off-peak' | 'flux' | 'epvs' | 'v44',
     progressData: Partial<CalculatorProgressData>
   ): Promise<{ success: boolean; message: string; dataHash?: string }> {
     try {
@@ -142,7 +142,7 @@ class CalculatorProgressService {
    */
   async getProgress(
     opportunityId: string,
-    calculatorType: 'off-peak' | 'flux' | 'epvs'
+    calculatorType: 'off-peak' | 'flux' | 'epvs' | 'v44'
   ): Promise<CalculatorProgressData | null> {
     try {
       const userId = await this.getUserId();
@@ -199,7 +199,7 @@ class CalculatorProgressService {
    */
   async checkChanges(
     opportunityId: string,
-    calculatorType: 'off-peak' | 'flux' | 'epvs',
+    calculatorType: 'off-peak' | 'flux' | 'epvs' | 'v44',
     newData: Partial<CalculatorProgressData>
   ): Promise<ChangeDetectionResult> {
     try {
@@ -240,7 +240,7 @@ class CalculatorProgressService {
    */
   async getProgressSummary(
     opportunityId: string,
-    calculatorType: 'off-peak' | 'flux' | 'epvs'
+    calculatorType: 'off-peak' | 'flux' | 'epvs' | 'v44'
   ): Promise<ProgressSummary> {
     try {
       const userId = await this.getUserId();
@@ -294,7 +294,7 @@ class CalculatorProgressService {
    */
   async clearProgress(
     opportunityId: string,
-    calculatorType?: 'off-peak' | 'flux' | 'epvs'
+    calculatorType?: 'off-peak' | 'flux' | 'epvs' | 'v44'
   ): Promise<{ success: boolean; message: string }> {
     try {
       const userId = await this.getUserId();
@@ -317,7 +317,7 @@ class CalculatorProgressService {
    */
   async autoSave(
     opportunityId: string,
-    calculatorType: 'off-peak' | 'flux' | 'epvs',
+    calculatorType: 'off-peak' | 'flux' | 'epvs' | 'v44',
     progressData: Partial<CalculatorProgressData>
   ): Promise<{ success: boolean; message: string; saved: boolean; dataHash?: string }> {
     try {
@@ -360,7 +360,7 @@ class CalculatorProgressService {
    */
   async restoreProgress(
     opportunityId: string,
-    calculatorType: 'off-peak' | 'flux' | 'epvs'
+    calculatorType: 'off-peak' | 'flux' | 'epvs' | 'v44'
   ): Promise<CalculatorProgressData | null> {
     try {
       console.log('🔍 Attempting to restore progress for:', { opportunityId, calculatorType });
@@ -445,7 +445,7 @@ class CalculatorProgressService {
    */
   async submitCalculator(
     opportunityId: string,
-    calculatorType: 'off-peak' | 'flux' | 'epvs',
+    calculatorType: 'off-peak' | 'flux' | 'epvs' | 'v44',
     existingFileName?: string
   ): Promise<{ success: boolean; message: string; filePath?: string }> {
     try {
@@ -543,7 +543,7 @@ class CalculatorProgressService {
 
   async overrideCalculatorPrice(
     opportunityId: string,
-    calculatorType: 'off-peak' | 'flux' | 'epvs',
+    calculatorType: 'off-peak' | 'flux' | 'epvs' | 'v44',
     price: number
   ): Promise<{ success: boolean; message: string; warning?: string }> {
     try {

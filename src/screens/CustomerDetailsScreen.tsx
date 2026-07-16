@@ -27,7 +27,7 @@ interface RouteParams {
     batteryInverter: boolean;
   };
   opportunityId?: string;
-  calculatorType?: 'flux' | 'off-peak';
+  calculatorType?: 'flux' | 'off-peak' | 'v44';
 }
 
 interface CustomerDetails {
@@ -591,7 +591,11 @@ export default function CustomerDetailsScreen() {
         batteryInverter: false
       };
       
-      if (calculatorType === 'flux') {
+      if (calculatorType === 'v44') {
+        (navigation as any).navigate('CalculatorQuestions', {
+          opportunityId,
+        });
+      } else if (calculatorType === 'flux') {
         (navigation as any).navigate('FluxRadioButton', {
           opportunityId,
           customerDetails: details,
@@ -621,7 +625,11 @@ export default function CustomerDetailsScreen() {
       
       // Navigate to the appropriate calculator based on calculator type
       const calcType = calculatorType || 'off-peak';
-      if (calcType === 'flux') {
+      if (calcType === 'v44') {
+        (navigation as any).navigate('CalculatorQuestions', {
+          opportunityId,
+        });
+      } else if (calcType === 'flux') {
         (navigation as any).navigate('Calculator', {
           opportunityId,
           calculatorType: 'flux',
@@ -888,7 +896,11 @@ export default function CustomerDetailsScreen() {
                       batteryInverter: false
                     };
                     
-                    if (calculatorType === 'flux') {
+                    if (calculatorType === 'v44') {
+                      (navigation as any).navigate('CalculatorQuestions', {
+                        opportunityId,
+                      });
+                    } else if (calculatorType === 'flux') {
                       (navigation as any).navigate('FluxRadioButton', {
                         opportunityId,
                         customerDetails: details,
@@ -916,7 +928,11 @@ export default function CustomerDetailsScreen() {
                     
                     // Navigate to the appropriate calculator based on calculator type
                     const calcType = calculatorType || 'off-peak';
-                    if (calcType === 'flux') {
+                    if (calcType === 'v44') {
+                      (navigation as any).navigate('CalculatorQuestions', {
+                        opportunityId,
+                      });
+                    } else if (calcType === 'flux') {
                       (navigation as any).navigate('Calculator', {
                         opportunityId,
                         calculatorType: 'flux',

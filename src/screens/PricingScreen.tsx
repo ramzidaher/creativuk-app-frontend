@@ -22,7 +22,7 @@ const { width, height } = Dimensions.get('window');
 
 interface RouteParams {
   opportunityId: string;
-  calculatorType?: 'flux' | 'off-peak' | 'epvs';
+  calculatorType?: 'flux' | 'off-peak' | 'epvs' | 'v44';
   customerDetails?: any;
 }
 
@@ -383,6 +383,10 @@ export default function PricingScreen() {
   const fetchDropdownOptions = useCallback(async () => {
     try {
       setLoadingDropdownOptions(true);
+      if (calculatorType === 'v44') {
+        setInterestRateTypeOptions(['Fixed', 'APR']);
+        return;
+      }
       const { api } = await import('../utils/api');
       
       // Use different endpoints based on calculator type
@@ -1181,6 +1185,13 @@ export default function PricingScreen() {
           }
           
           console.log('✅ Calculator submitted successfully to Excel:', submitResult.filePath);
+          if (calculatorType === 'v44' && submitResult.filePath) {
+            Alert.alert(
+              'Calculator file created',
+              `Saved to:\n${submitResult.filePath}\n\n(Flux/EPVS files go in epvs-opportunities — same as production)`,
+              [{ text: 'OK' }],
+            );
+          }
         } catch (submitError) {
           console.error('❌ Error submitting calculator:', submitError);
           Alert.alert(
@@ -1300,7 +1311,11 @@ export default function PricingScreen() {
             <View style={styles.headerTextContainer}>
               <Text style={[styles.headerTitle, { color: theme.primaryText }]}>System Pricing</Text>
               <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
-                {calculatorType === 'flux' ? 'Flux' : 'Off Peak'} Calculator
+                {calculatorType === 'v44'
+                  ? 'Calculator'
+                  : calculatorType === 'flux'
+                    ? 'Flux Calculator'
+                    : 'Off Peak Calculator'}
               </Text>
             </View>
           </View>

@@ -152,6 +152,7 @@ const AdminPanelScreen: React.FC = () => {
   const [stepNavigationEnabled, setStepNavigationEnabled] = useState(true);
   const [calculatorOffPeakEnabled, setCalculatorOffPeakEnabled] = useState(true);
   const [calculatorFluxEnabled, setCalculatorFluxEnabled] = useState(true);
+  const [calculatorV44Enabled, setCalculatorV44Enabled] = useState(true);
 
   // User data viewing state - removed individual user data viewing
 
@@ -666,6 +667,16 @@ const AdminPanelScreen: React.FC = () => {
             setCalculatorFluxEnabled(true);
           }
         }
+        const v44Setting = response.data.find((setting: any) => setting.key === 'calculator_v44_enabled');
+        if (v44Setting) {
+          try {
+            setCalculatorV44Enabled(JSON.parse(v44Setting.value));
+          } catch {
+            setCalculatorV44Enabled(true);
+          }
+        } else {
+          setCalculatorV44Enabled(true);
+        }
       } else {
         Alert.alert('Error', 'Failed to fetch system settings');
       }
@@ -745,6 +756,29 @@ const AdminPanelScreen: React.FC = () => {
       if (response.success) {
         setCalculatorFluxEnabled(enabled);
         Alert.alert('Success', `Flux calculator ${enabled ? 'enabled' : 'disabled'} successfully`);
+      } else {
+        Alert.alert('Error', `Failed to update setting: ${response.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      Alert.alert('Error', `Failed to update setting: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsLoadingSettings(false);
+    }
+  };
+
+  const updateCalculatorV44Setting = async (enabled: boolean) => {
+    try {
+      setIsLoadingSettings(true);
+      const response = await systemSettingsApi.upsertSetting(
+        'calculator_v44_enabled',
+        JSON.stringify(enabled),
+        'Use combined EPVS Member Calculator v4.4 (skip Flux/Off-Peak pickers)',
+        'calculator',
+        true
+      );
+      if (response.success) {
+        setCalculatorV44Enabled(enabled);
+        Alert.alert('Success', `v4.4 calculator ${enabled ? 'enabled' : 'disabled'} successfully`);
       } else {
         Alert.alert('Error', `Failed to update setting: ${response.error || 'Unknown error'}`);
       }
@@ -1514,6 +1548,47 @@ const AdminPanelScreen: React.FC = () => {
                   />
                   <Text style={[styles.settingStatusText, { color: theme.secondaryText }]}>
                     Flux calculator is {calculatorFluxEnabled ? 'visible' : 'hidden'} to users
+                  </Text>
+                </View>
+              </View>
+
+              {/* v4.4 Combined Calculator Setting */}
+              <View style={[styles.settingCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+                <View style={styles.settingHeader}>
+                  <View style={styles.settingInfo}>
+                    <Text style={[styles.settingTitle, { color: theme.primaryText }]}>Combined Calculator</Text>
+                    <Text style={[styles.settingDescription, { color: theme.secondaryText }]}>
+                      Skip Flux/Off-Peak pickers and use the single EPVS Member Calculator v4.4
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.settingToggle,
+                      {
+                        backgroundColor: calculatorV44Enabled ? theme.successButton : theme.dangerButton,
+                        opacity: isLoadingSettings ? 0.5 : 1,
+                      }
+                    ]}
+                    onPress={() => updateCalculatorV44Setting(!calculatorV44Enabled)}
+                    disabled={isLoadingSettings}
+                  >
+                    <View style={[
+                      styles.settingToggleKnob,
+                      {
+                        backgroundColor: '#ffffff',
+                        transform: [{ translateX: calculatorV44Enabled ? 24 : 2 }],
+                      }
+                    ]} />
+                  </TouchableOpacity>
+                </View>
+                <View style={[styles.settingStatus, { backgroundColor: theme.inputBackground }]}>
+                  <Feather
+                    name={calculatorV44Enabled ? "check-circle" : "x-circle"}
+                    size={16}
+                    color={calculatorV44Enabled ? theme.successButton : theme.dangerButton}
+                  />
+                  <Text style={[styles.settingStatusText, { color: theme.secondaryText }]}>
+                    v4.4 calculator is {calculatorV44Enabled ? 'ON' : 'OFF'}
                   </Text>
                 </View>
               </View>

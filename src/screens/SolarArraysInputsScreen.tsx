@@ -22,7 +22,7 @@ type ArrayRow = {
 interface RouteParams {
   opportunityId?: string;
   templateFileName?: string;
-  calculatorType?: 'flux' | 'off-peak';
+  calculatorType?: 'flux' | 'off-peak' | 'v44';
   customerDetails?: any;
 }
 
@@ -30,11 +30,21 @@ export default function SolarArraysInputsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
   const { theme, isDark } = useTheme();
-  const { opportunityId, templateFileName, calculatorType, customerDetails } = route.params as RouteParams;
+  const routeParams = route.params as RouteParams;
+  const opportunityId = routeParams.opportunityId;
+
+  const [calculatorType, setCalculatorType] = useState<'flux' | 'off-peak' | 'v44'>(
+    routeParams.calculatorType || 'off-peak',
+  );
+  const [customerDetails, setCustomerDetails] = useState(routeParams.customerDetails);
+
+  const maxArrays = calculatorType === 'v44' ? 6 : 8;
 
   const [rows, setRows] = useState<ArrayRow[]>(() => {
-    // Initialize with 1 array by default - will be updated from saved progress or OpenSolar
-    return Array.from({ length: 8 }).map((_, idx) => ({ id: idx + 1, enabled: idx < 1 }));
+    return Array.from({ length: maxArrays }).map((_, idx) => ({
+      id: idx + 1,
+      enabled: idx < 1,
+    }));
   });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -63,7 +73,7 @@ export default function SolarArraysInputsScreen() {
   // Helper function to capture state from any rows array
   const captureStateFromRows = (rowsArray: ArrayRow[]) => {
     const enabledCount = rowsArray.filter(r => r.enabled).length;
-    const isFlux = calculatorType === 'flux';
+    const isFlux = calculatorType === 'flux' || calculatorType === 'v44';
     const sortedRows = [...rowsArray].sort((a, b) => a.id - b.id);
     
     const inputs: Record<string, string> = {};
@@ -160,9 +170,7 @@ export default function SolarArraysInputsScreen() {
   const navigateToPricing = () => {
     (navigation as any).navigate('Pricing', {
       opportunityId,
-      templateFileName,
-      calculatorType: calculatorType || 'off-peak',
-      customerDetails,
+      calculatorType,
     });
   };
 
@@ -176,9 +184,63 @@ export default function SolarArraysInputsScreen() {
   useEffect(() => {
     const init = async () => {
       console.log('🔍 Initializing SolarArraysInputsScreen for opportunity:', opportunityId);
+
+      // Resolve calculator type + customer from progress when URL only has opportunityId
+      let resolvedType: 'flux' | 'off-peak' | 'v44' = routeParams.calculatorType || 'off-peak';
+      let progress: any = null;
+      if (opportunityId) {
+        const tryTypes: Array<'v44' | 'flux' | 'off-peak' | 'epvs'> = routeParams.calculatorType
+          ? [routeParams.calculatorType as any]
+          : ['v44', 'flux', 'epvs', 'off-peak'];
+        for (const t of tryTypes) {
+          try {
+            const p = await CalculatorProgressService.getProgress(opportunityId, t as any);
+            if (p) {
+              progress = p;
+              if (t === 'epvs') resolvedType = 'flux';
+              else resolvedType = t as 'flux' | 'off-peak' | 'v44';
+              break;
+            }
+          } catch {
+            /* try next */
+          }
+        }
+      }
+      setCalculatorType(resolvedType);
+      const details = progress?.customerDetails || routeParams.customerDetails;
+      if (details) {
+        setCustomerDetails(details);
+        setCustomerInfo({
+          name: details.customerName || '',
+          postcode: details.postcode || '',
+        });
+      }
+
+      const arrayCap = resolvedType === 'v44' ? 6 : 8;
+      setNoOfArraysDropdownOptions(
+        Array.from({ length: arrayCap }, (_, i) => String(i + 1)),
+      );
+      setRows((prev) => {
+        const next = Array.from({ length: arrayCap }).map((_, idx) => {
+          const existing = prev.find((r) => r.id === idx + 1);
+          return (
+            existing || {
+              id: idx + 1,
+              enabled: idx < 1,
+            }
+          );
+        });
+        return next;
+      });
+
+      // Prefill enabled count from Inputs "No. of Arrays" when no saved arrays yet
+      const prefillCount = Math.min(
+        arrayCap,
+        Math.max(1, parseInt(progress?.dynamicInputs?.no_of_arrays || '1', 10) || 1),
+      );
       
       // Extract customer information for header display
-      if (customerDetails) {
+      if (customerDetails && !details) {
         const customerName = customerDetails.customerName || 'Loading...';
         const customerPostcode = customerDetails.postcode || 'Loading...';
         
@@ -252,10 +314,9 @@ export default function SolarArraysInputsScreen() {
         console.error('❌ Error loading OpenSolar data:', e);
       }
       
-      // Now check for saved progress and restore if needed
+      // Restore saved arrays (or prefill count from Inputs)
       try {
         console.log('🔍 Checking for saved arrays progress...');
-        const progress = await CalculatorProgressService.getProgress(opportunityId!, calculatorType || 'off-peak');
         if (progress && progress.arraysData) {
           console.log('🔍 Found arrays data in progress:', progress.arraysData);
           const savedData = progress.arraysData;
@@ -319,7 +380,13 @@ export default function SolarArraysInputsScreen() {
             setHasRestoredProgress(true);
           }
         } else {
-          console.log('ℹ️ No saved arrays data found');
+          console.log('ℹ️ No saved arrays data found — prefilling count:', prefillCount);
+          setRows((prev) =>
+            prev.map((r, idx) => ({
+              ...r,
+              enabled: idx < prefillCount,
+            })),
+          );
           setHasRestoredProgress(true);
         }
       } catch (error) {
@@ -868,8 +935,10 @@ export default function SolarArraysInputsScreen() {
               <Feather name="arrow-left" size={20} color={theme.secondaryText} />
             </TouchableOpacity>
             <View style={styles.headerTextContainer}>
-              <Text style={[styles.headerTitle, { color: theme.primaryText }]}>New Products - Solar</Text>
-              <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>Configure arrays. Only editable fields shown.</Text>
+              <Text style={[styles.headerTitle, { color: theme.primaryText }]}>SAP Calculations</Text>
+              <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
+                Solar arrays — same layout as the calculator
+              </Text>
             </View>
           </View>
           {linkedOpenSolar && (
@@ -986,101 +1055,201 @@ export default function SolarArraysInputsScreen() {
           </View>
         )}
 
-        {/* No. of Arrays selector */}
-        <View style={[styles.card, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}> 
+        {/* No. of Arrays + SAP table (matches Excel calculator) */}
+        <View style={[styles.card, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
           <Text style={[styles.cardTitle, { color: theme.primaryText }]}>Arrays / Roofs</Text>
-          <View style={{ flexDirection: 'column', gap: 12 }}>
-            <Text style={[styles.inputLabel, { color: theme.primaryText }]}>No. of Arrays</Text>
-            <TouchableOpacity
-              style={[styles.dropdownContainer, { backgroundColor: theme.secondaryBackground, borderColor: theme.cardBorder }]}
-              onPress={() => setShowArraysDropdown(true)}
+          <Text style={[styles.inputLabel, { color: theme.secondaryText, marginBottom: 8 }]}>
+            No. of Arrays
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.dropdownContainer,
+              { backgroundColor: theme.secondaryBackground, borderColor: theme.cardBorder },
+            ]}
+            onPress={() => setShowArraysDropdown(true)}
+          >
+            <Text style={[styles.dropdownText, { color: theme.primaryText }]}>
+              {rows.filter((r) => r.enabled).length}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color={theme.tertiaryText} />
+          </TouchableOpacity>
+
+          <View
+            style={[
+              styles.sapTable,
+              { borderColor: theme.cardBorder, marginTop: 16 },
+            ]}
+          >
+            <ScrollView horizontal showsHorizontalScrollIndicator>
+              <View style={{ minWidth: width < 768 ? 720 : '100%' as any }}>
+            <View
+              style={[
+                styles.sapHeaderRow,
+                { backgroundColor: isDark ? '#334155' : '#525252' },
+              ]}
             >
-              <Text style={[styles.dropdownText, { color: theme.primaryText }]}>
-                {rows.filter(r => r.enabled).length}
-              </Text>
-              <Ionicons 
-                name="chevron-down" 
-                size={20} 
-                color={theme.tertiaryText}
-              />
-            </TouchableOpacity>
+              <Text style={[styles.sapHeaderCell, styles.sapColArray]}>Array</Text>
+              <Text style={[styles.sapHeaderCell, styles.sapColField]}>No. of Panels</Text>
+              <Text style={[styles.sapHeaderCell, styles.sapColField]}>Orientation (° from south)</Text>
+              <Text style={[styles.sapHeaderCell, styles.sapColField]}>Pitch (° from flat)</Text>
+              <Text style={[styles.sapHeaderCell, styles.sapColField]}>Shading (e.g. 0.96)</Text>
+            </View>
+
+            {rows
+              .filter((r) => r.enabled)
+              .map((r, idx) => {
+                const editable =
+                  r.enabled && (r.source !== 'opensolar' || !!r.overrideOpenSolar);
+                return (
+                  <View key={r.id}>
+                    <View
+                      style={[
+                        styles.sapDataRow,
+                        {
+                          borderTopColor: theme.cardBorder,
+                          backgroundColor:
+                            idx % 2 === 1
+                              ? isDark
+                                ? 'rgba(255,255,255,0.04)'
+                                : 'rgba(0,0,0,0.03)'
+                              : 'transparent',
+                        },
+                      ]}
+                    >
+                      <View style={[styles.sapArrayCell, styles.sapColArray]}>
+                        <Text style={[styles.sapArrayNum, { color: theme.primaryText }]}>
+                          {r.id}
+                        </Text>
+                        {r.source === 'opensolar' ? (
+                          <View style={styles.sourceBadgeCompact}>
+                            <Feather name="download" size={10} color="#065f46" />
+                          </View>
+                        ) : null}
+                      </View>
+                      <TextInput
+                        style={[
+                          styles.sapInput,
+                          styles.sapColField,
+                          {
+                            backgroundColor: editable
+                              ? theme.secondaryBackground
+                              : isDark
+                                ? '#1e293b'
+                                : '#f1f5f9',
+                            borderColor: theme.cardBorder,
+                            color: theme.primaryText,
+                            opacity: editable ? 1 : 0.7,
+                          },
+                        ]}
+                        editable={editable}
+                        value={r.numberOfPanels || ''}
+                        onChangeText={(v) => onChange(r.id, 'numberOfPanels', v)}
+                        keyboardType="number-pad"
+                        placeholder="—"
+                        placeholderTextColor={theme.secondaryText}
+                      />
+                      <TextInput
+                        style={[
+                          styles.sapInput,
+                          styles.sapColField,
+                          {
+                            backgroundColor: editable
+                              ? theme.secondaryBackground
+                              : isDark
+                                ? '#1e293b'
+                                : '#f1f5f9',
+                            borderColor: theme.cardBorder,
+                            color: theme.primaryText,
+                            opacity: editable ? 1 : 0.7,
+                          },
+                        ]}
+                        editable={editable}
+                        value={r.orientationDeg || ''}
+                        onChangeText={(v) => onChange(r.id, 'orientationDeg', v)}
+                        onBlur={() => onBlur(r.id, 'orientationDeg', r.orientationDeg || '')}
+                        keyboardType="decimal-pad"
+                        placeholder="—"
+                        placeholderTextColor={theme.secondaryText}
+                      />
+                      <TextInput
+                        style={[
+                          styles.sapInput,
+                          styles.sapColField,
+                          {
+                            backgroundColor: editable
+                              ? theme.secondaryBackground
+                              : isDark
+                                ? '#1e293b'
+                                : '#f1f5f9',
+                            borderColor: theme.cardBorder,
+                            color: theme.primaryText,
+                            opacity: editable ? 1 : 0.7,
+                          },
+                        ]}
+                        editable={editable}
+                        value={r.pitchDeg || ''}
+                        onChangeText={(v) => onChange(r.id, 'pitchDeg', v)}
+                        keyboardType="decimal-pad"
+                        placeholder="—"
+                        placeholderTextColor={theme.secondaryText}
+                      />
+                      <TextInput
+                        style={[
+                          styles.sapInput,
+                          styles.sapColField,
+                          {
+                            backgroundColor: editable
+                              ? theme.secondaryBackground
+                              : isDark
+                                ? '#1e293b'
+                                : '#f1f5f9',
+                            borderColor: theme.cardBorder,
+                            color: theme.primaryText,
+                            opacity: editable ? 1 : 0.7,
+                          },
+                        ]}
+                        editable={editable}
+                        value={r.shadingFactor || ''}
+                        onChangeText={(v) => onChange(r.id, 'shadingFactor', v)}
+                        keyboardType="decimal-pad"
+                        placeholder="—"
+                        placeholderTextColor={theme.secondaryText}
+                      />
+                    </View>
+                    {r.source === 'opensolar' && r.enabled ? (
+                      <View
+                        style={[
+                          styles.sapOverrideRow,
+                          { borderTopColor: theme.cardBorder },
+                        ]}
+                      >
+                        <Text style={[styles.overrideLabel, { color: theme.primaryText }]}>
+                          Override OpenSolar (Array {r.id})
+                        </Text>
+                        <Switch
+                          value={r.overrideOpenSolar || false}
+                          onValueChange={(value) => {
+                            setRows((prev) =>
+                              prev.map((row) =>
+                                row.id === r.id
+                                  ? { ...row, overrideOpenSolar: value }
+                                  : row,
+                              ),
+                            );
+                            setHasUnsavedChanges(true);
+                          }}
+                          trackColor={{ false: '#e2e8f0', true: '#B4F35B' }}
+                          thumbColor={r.overrideOpenSolar ? '#1e293b' : '#64748b'}
+                        />
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })}
+              </View>
+            </ScrollView>
           </View>
         </View>
-
-        {rows.map(r => (
-          <View key={r.id} style={[styles.arrayCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder, opacity: r.enabled ? 1 : 0.6 }]}> 
-            <View style={styles.arrayHeader}>
-              <Text style={[styles.arrayTitle, { color: theme.primaryText }]}>Array {r.id}</Text>
-              {!r.enabled && <Text style={{ color: theme.tertiaryText }}>Disabled</Text>}
-              {r.source === 'opensolar' && r.enabled && (
-                <View style={styles.sourceBadge}>
-                  <Feather name="download" size={12} color="#065f46" />
-                  <Text style={styles.sourceBadgeText}>OpenSolar</Text>
-                </View>
-              )}
-            </View>
-            
-            {/* Override toggle for OpenSolar data */}
-            {r.source === 'opensolar' && r.enabled && (
-              <View style={styles.overrideSection}>
-                <View style={styles.overrideToggle}>
-                  <Text style={[styles.overrideLabel, { color: theme.primaryText }]}>Override OpenSolar Data</Text>
-                  <Switch
-                    value={r.overrideOpenSolar || false}
-                    onValueChange={(value) => {
-                      setRows(prev => prev.map(row => 
-                        row.id === r.id 
-                          ? { ...row, overrideOpenSolar: value }
-                          : row
-                      ));
-                      // Track that changes have been made
-                      setHasUnsavedChanges(true);
-                    }}
-                    trackColor={{ false: '#e2e8f0', true: '#B4F35B' }}
-                    thumbColor={r.overrideOpenSolar ? '#1e293b' : '#64748b'}
-                  />
-                </View>
-                {r.overrideOpenSolar && (
-                  <Text style={[styles.overrideNote, { color: theme.tertiaryText }]}>
-                    Override enabled - you can now enter any values to replace the OpenSolar data
-                  </Text>
-                )}
-              </View>
-            )}
-            
-            <View style={styles.rowGrid}>
-              <Field 
-                label="No. of Panels" 
-                editable={r.enabled && (r.source !== 'opensolar' || !!r.overrideOpenSolar)} 
-                value={r.numberOfPanels} 
-                onChange={v=>onChange(r.id,'numberOfPanels',v)}
-                isOverride={r.source === 'opensolar' && !!r.overrideOpenSolar}
-              />
-              <Field 
-                label="Orientation (° from south)" 
-                editable={r.enabled && (r.source !== 'opensolar' || !!r.overrideOpenSolar)} 
-                value={r.orientationDeg} 
-                onChange={v=>onChange(r.id,'orientationDeg',v)}
-                onBlur={v=>onBlur(r.id,'orientationDeg',v)}
-                isOverride={r.source === 'opensolar' && !!r.overrideOpenSolar}
-              />
-              <Field 
-                label="Pitch (° from flat)" 
-                editable={r.enabled && (r.source !== 'opensolar' || !!r.overrideOpenSolar)} 
-                value={r.pitchDeg} 
-                onChange={v=>onChange(r.id,'pitchDeg',v)}
-                isOverride={r.source === 'opensolar' && !!r.overrideOpenSolar}
-              />
-              <Field 
-                label="Shading (e.g. 0.96)" 
-                editable={r.enabled && (r.source !== 'opensolar' || !!r.overrideOpenSolar)} 
-                value={r.shadingFactor} 
-                onChange={v=>onChange(r.id,'shadingFactor',v)}
-                isOverride={r.source === 'opensolar' && !!r.overrideOpenSolar}
-              />
-            </View>
-          </View>
-        ))}
 
 
       </ScrollView>
@@ -1424,6 +1593,62 @@ const styles = StyleSheet.create({
   },
   arrayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   arrayTitle: { fontSize: 16, fontWeight: '700' },
+  sapTable: {
+    borderWidth: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  sapHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+  },
+  sapHeaderCell: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 12,
+    textAlign: 'center',
+    paddingHorizontal: 4,
+  },
+  sapDataRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    gap: 6,
+  },
+  sapColArray: { width: 56 },
+  sapColField: { width: 140, flexGrow: 1 },
+  sapArrayCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  sapArrayNum: { fontSize: 15, fontWeight: '700' },
+  sapInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  sapOverrideRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  sourceBadgeCompact: {
+    backgroundColor: '#dcfce7',
+    borderRadius: 999,
+    padding: 3,
+  },
   sourceBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   sourceBadgeText: { color: '#065f46', fontSize: 11, fontWeight: '600' },
   overrideSection: { marginBottom: 12, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.06)' },

@@ -121,6 +121,9 @@ import WorkflowOverrideAdminScreen from './src/screens/WorkflowOverrideAdminScre
 import AdminTrainingScreen from './src/screens/AdminTrainingScreen';
 import AdminTrainingProgressScreen from './src/screens/AdminTrainingProgressScreen';
 import TrainingHubScreen from './src/screens/TrainingHubScreen';
+import CalculatorTestingScreen from './src/screens/CalculatorTestingScreen';
+import V44CalculatorQuestionsScreen from './src/screens/V44CalculatorQuestionsScreen';
+import V44CalculatorInputsScreen from './src/screens/V44CalculatorInputsScreen';
 
 export type RootStackParamList = {
   Loading: undefined;
@@ -302,6 +305,18 @@ export type RootStackParamList = {
   AdminTraining: undefined;
   AdminTrainingProgress: { programId: string };
   TrainingHub: undefined;
+  CalculatorTesting: undefined;
+  CalculatorTestingPublic: { publicMode?: boolean } | undefined;
+  CalculatorQuestions: {
+    opportunityId: string;
+    customerDetails?: { customerName: string; address: string; postcode: string };
+    calculatorType?: 'v44';
+  };
+  CalculatorInputs: {
+    opportunityId: string;
+    customerDetails?: { customerName: string; address: string; postcode: string };
+    calculatorType?: 'v44';
+  };
 };
 
 export type TabParamList = {
@@ -312,8 +327,13 @@ export type TabParamList = {
 };
 
 // Deep linking configuration for web URLs
+const webLinkingPrefix =
+  typeof window !== 'undefined' && window.location?.origin
+    ? window.location.origin
+    : 'http://localhost:8081';
+
 const linking: LinkingOptions<RootStackParamList> = {
-  prefixes: ['https://app.creativuk.co.uk', 'http://localhost:8081'],
+  prefixes: ['https://app.creativuk.co.uk', 'http://localhost:8081', 'http://127.0.0.1:8081', webLinkingPrefix],
   config: {
     screens: {
       // Main app screens
@@ -337,6 +357,8 @@ const linking: LinkingOptions<RootStackParamList> = {
       // Calculator workflow screens
       Calculator: 'calculator/:opportunityId?',
       CalculatorTypeSelection: 'calculator-type/:opportunityId?',
+      CalculatorQuestions: 'calculator-questions/:opportunityId',
+      CalculatorInputs: 'calculator-inputs/:opportunityId',
       FluxTemplateSelection: {
         path: 'flux-template/:opportunityId',
         parse: {
@@ -405,6 +427,8 @@ const linking: LinkingOptions<RootStackParamList> = {
       AdminTraining: 'admin/training',
       AdminTrainingProgress: 'admin/training/:programId',
       TrainingHub: 'training',
+      CalculatorTesting: 'admin/calculator-testing',
+      CalculatorTestingPublic: 'dev/calculator-testing',
       Debug: 'debug',
       DebugAuth: 'debug/auth',
       DebugSign: 'debug/sign',
@@ -825,6 +849,26 @@ function ProfileScreen() {
               </TouchableOpacity>
             )}
 
+            {isAdmin && (
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: theme.primaryButton }]}
+                onPress={() => navigation.navigate('CalculatorTesting')}
+              >
+                <View style={styles.actionButtonContent}>
+                  <View style={[styles.actionIcon, { backgroundColor: theme.primaryButton + '20' }]}>
+                    <Ionicons name="flask" size={20} color={theme.primaryButton} />
+                  </View>
+                  <View style={styles.actionText}>
+                    <Text style={styles.actionTitle}>Calculator Testing (v4.4)</Text>
+                    <Text style={[styles.actionSubtitle, { color: theme.secondaryText }]}>
+                      Sandbox for the new combined calculator — template, questions, inputs
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={theme.secondaryText} />
+                </View>
+              </TouchableOpacity>
+            )}
+
             {/* Logout Button */}
             <TouchableOpacity
               style={[styles.logoutButton, { backgroundColor: theme.dangerButton }]}
@@ -918,6 +962,12 @@ function AppNavigator() {
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Register" component={RegisterScreen} />
           <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+          <Stack.Screen
+            name="CalculatorTestingPublic"
+            component={CalculatorTestingScreen}
+            initialParams={{ publicMode: true }}
+            options={{ headerShown: false }}
+          />
         </>
       ) : (
         <>
@@ -978,6 +1028,16 @@ function AppNavigator() {
             options={{
               headerShown: false,
             }}
+          />
+          <Stack.Screen
+            name="CalculatorQuestions"
+            component={V44CalculatorQuestionsScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="CalculatorInputs"
+            component={V44CalculatorInputsScreen}
+            options={{ headerShown: false }}
           />
           <Stack.Screen 
             name="FluxTemplateSelection" 
@@ -1255,6 +1315,13 @@ function AppNavigator() {
           <Stack.Screen
             name="WorkflowOverrideAdmin"
             component={WorkflowOverrideAdminScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="CalculatorTesting"
+            component={CalculatorTestingScreen}
             options={{
               headerShown: false,
             }}

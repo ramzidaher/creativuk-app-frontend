@@ -7,8 +7,8 @@ export const DEVELOPMENT_CONFIG = {
     // Production backend (default for testing)
     PRODUCTION: 'https://app.creativuk.co.uk/api/',
     
-    // Local backend (if you have one running locally)
-    LOCAL: 'http://localhost:3000/api/',
+    // Local Nest backend (port 3010 — avoids conflict with other apps on :3000)
+    LOCAL: 'http://127.0.0.1:3010/',
     
     // Relative path (for production build testing)
     RELATIVE: '/api/',
@@ -18,7 +18,7 @@ export const DEVELOPMENT_CONFIG = {
   },
   
   // Current active URL - change this to switch backends
-  ACTIVE_URL: 'PRODUCTION', // Options: PRODUCTION, LOCAL, RELATIVE, CUSTOM
+  ACTIVE_URL: 'LOCAL', // Options: PRODUCTION, LOCAL, RELATIVE, CUSTOM
   
   // Development mode settings
   DEV_MODE: true,

@@ -22,7 +22,7 @@ const configPath = path.join(__dirname, '..', 'src', 'config', 'development.js')
 // Available URL options
 const URL_OPTIONS = {
   production: 'https://app.creativuk.co.uk/api/',
-  local: 'http://localhost:3000/api/',
+  local: 'http://127.0.0.1:3010/',
   relative: '/api/',
   custom: null // Will be set by user
 };
@@ -65,7 +65,7 @@ function showUsage() {
   console.log('');
   console.log('Options:');
   console.log('  production  - Use production backend (https://app.creativuk.co.uk/api/)');
-  console.log('  local       - Use local backend (http://localhost:3000/api/)');
+  console.log('  local       - Use local backend (http://127.0.0.1:3010/)');
   console.log('  relative    - Use relative path (/api/)');
   console.log('  custom      - Use custom URL (provide URL as second argument)');
   console.log('');
