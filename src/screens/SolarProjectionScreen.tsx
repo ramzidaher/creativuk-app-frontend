@@ -13,6 +13,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -24,6 +25,7 @@ const { width, height } = Dimensions.get('window');
 
 interface RouteParams {
   opportunityId: string;
+  calculatorType?: 'epvs' | 'off-peak' | 'flux' | 'v44';
 }
 
 interface SheetInfo {
@@ -31,9 +33,28 @@ interface SheetInfo {
   filePath: string;
   size: number;
   lastModified: string;
-  calculatorType: 'epvs' | 'off-peak' | 'flux';
+  calculatorType: 'epvs' | 'off-peak' | 'flux' | 'v44';
   version?: number;
 }
+
+const isV44Sheet = (sheet?: SheetInfo | null) => {
+  if (!sheet) return false;
+  if (sheet.calculatorType === 'v44') return true;
+  const name = (sheet.fileName || '').toLowerCase();
+  return name.includes('v4.4') || name.includes('v44') || name.includes('epvs-v4');
+};
+
+const normalizePaymentTypeLabel = (raw: string | null | undefined): string => {
+  if (!raw) return '';
+  const lower = raw.toLowerCase();
+  if (lower.includes('cash')) return 'Cash';
+  if (lower.includes('finance')) return 'Finance';
+  if (lower.includes('hometree') || lower.includes('lease')) return 'Hometree';
+  return raw;
+};
+
+const paymentTypeKey = (raw: string | null | undefined): string =>
+  normalizePaymentTypeLabel(raw).toLowerCase();
 
 interface SolarProjectionData {
   title: string;
@@ -71,7 +92,7 @@ type Step = 'sheets' | 'projection';
 export default function SolarProjectionScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
-  const { opportunityId } = route.params as RouteParams;
+  const { opportunityId, calculatorType: routeCalculatorType } = route.params as RouteParams;
   const { theme, isDark, toggleTheme } = useTheme();
   
   // Step management
@@ -101,8 +122,14 @@ export default function SolarProjectionScreen() {
   const [showTermsDropdown, setShowTermsDropdown] = useState(false);
   const [isUpdatingPayment, setIsUpdatingPayment] = useState(false);
   const [isUpdatingTerms, setIsUpdatingTerms] = useState(false);
+  /** v4.4: edit locally then Recalculate (Excel savings no longer embeds payment toggles) */
+  const [draftPaymentMethod, setDraftPaymentMethod] = useState<string>('');
+  const [draftTerm, setDraftTerm] = useState<string>('');
+  const [draftMonthly, setDraftMonthly] = useState<string>('');
+  const [isRecalculating, setIsRecalculating] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const [contentScale, setContentScale] = useState(1);
+  const isV44 = isV44Sheet(selectedSheet) || routeCalculatorType === 'v44';
 
   // Helper function to extract version from filename
   const extractVersionFromFilename = (fileName: string): number => {
@@ -116,9 +143,11 @@ export default function SolarProjectionScreen() {
 
   // Helper function to generate version name based on actual version
   const getVersionName = (sheet: SheetInfo) => {
-    const baseName = sheet.calculatorType === 'flux' || sheet.calculatorType === 'epvs' 
-      ? 'Flux Calculator' 
-      : 'Off Peak Calculator';
+    const baseName = isV44Sheet(sheet)
+      ? 'EPVS v4.4 Calculator'
+      : sheet.calculatorType === 'flux' || sheet.calculatorType === 'epvs'
+        ? 'Flux Calculator'
+        : 'Off Peak Calculator';
     const version = sheet.version || extractVersionFromFilename(sheet.fileName);
     console.log(`🔍 getVersionName for ${sheet.fileName}:`, {
       calculatorType: sheet.calculatorType,
@@ -133,7 +162,11 @@ export default function SolarProjectionScreen() {
 
   // Group sheets by calculator type
   const groupedSheets = availableSheets.reduce((groups, sheet) => {
-    const type = sheet.calculatorType === 'flux' || sheet.calculatorType === 'epvs' ? 'flux' : 'off-peak';
+    const type = isV44Sheet(sheet)
+      ? 'v44'
+      : sheet.calculatorType === 'flux' || sheet.calculatorType === 'epvs'
+        ? 'flux'
+        : 'off-peak';
     if (!groups[type]) {
       groups[type] = [];
     }
@@ -179,7 +212,7 @@ export default function SolarProjectionScreen() {
         // The API utility wraps the response, so we need to access response.data.data
         const responseData = sheetsResponse.data as any;
         const actualData = responseData?.data || responseData;
-        const sheets = Array.isArray(actualData) ? actualData : [];
+        const sheets = (Array.isArray(actualData) ? actualData : []) as SheetInfo[];
         console.log('📋 Available sheets:', sheets);
         console.log('📋 Sheet details with versions:', sheets.map(sheet => ({
           fileName: sheet.fileName,
@@ -187,7 +220,19 @@ export default function SolarProjectionScreen() {
           version: sheet.version,
           hasVersion: 'version' in sheet
         })));
-        setAvailableSheets(sheets as SheetInfo[]);
+        setAvailableSheets(sheets);
+
+        // Deep-link / workflow with calculatorType=v44 → open the v4.4 file directly
+        if (routeCalculatorType === 'v44') {
+          const v44Sheet =
+            sheets.find((s) => isV44Sheet(s)) ||
+            sheets.find((s) => (s.fileName || '').toLowerCase().includes('v4.4'));
+          if (v44Sheet) {
+            setSelectedSheet(v44Sheet);
+            setStep('projection');
+            await loadSolarProjectionData(v44Sheet);
+          }
+        }
       } else {
         throw new Error('Failed to load available sheets');
       }
@@ -232,7 +277,8 @@ export default function SolarProjectionScreen() {
         version: targetSheet.version
       });
       
-      const url = `/presentation/solar-projection/${opportunityId}?calculatorType=${targetSheet.calculatorType}&fileName=${encodeURIComponent(targetSheet.fileName)}`;
+      const calcType = isV44Sheet(targetSheet) ? 'v44' : targetSheet.calculatorType;
+      const url = `/presentation/solar-projection/${opportunityId}?calculatorType=${calcType}&fileName=${encodeURIComponent(targetSheet.fileName)}`;
       console.log(`🔍 Solar projection data URL:`, url);
       
       const response = await api.get(url);
@@ -241,7 +287,17 @@ export default function SolarProjectionScreen() {
         console.log('✅ Solar projection data loaded:', response.data);
         // The API response has a nested structure: { success: true, data: { ... } }
         const actualData = (response.data as any).data || response.data;
+        if (actualData?.summary?.paymentType) {
+          actualData.summary.paymentType = normalizePaymentTypeLabel(actualData.summary.paymentType);
+        }
         setSolarData(actualData as SolarProjectionData);
+        setDraftPaymentMethod(normalizePaymentTypeLabel(actualData?.summary?.paymentType) || '');
+        setDraftTerm(actualData?.summary?.term != null ? String(actualData.summary.term) : '');
+        setDraftMonthly(
+          actualData?.summary?.monthlyPlanCost != null
+            ? String(actualData.summary.monthlyPlanCost)
+            : '',
+        );
         console.log('🔍 Data title:', actualData?.title);
         console.log('🔍 Data calculator type:', actualData?.summary?.calculatorType);
         console.log('🔍 Table headers count:', actualData?.table?.headers?.length || 0);
@@ -274,7 +330,69 @@ export default function SolarProjectionScreen() {
     }
   };
 
+  const applyProjectionResult = (actualData: any) => {
+    if (actualData?.summary?.paymentType) {
+      actualData.summary.paymentType = normalizePaymentTypeLabel(actualData.summary.paymentType);
+    }
+    setSolarData(actualData as SolarProjectionData);
+    setDraftPaymentMethod(normalizePaymentTypeLabel(actualData?.summary?.paymentType) || '');
+    setDraftTerm(actualData?.summary?.term != null ? String(actualData.summary.term) : '');
+    setDraftMonthly(
+      actualData?.summary?.monthlyPlanCost != null
+        ? String(actualData.summary.monthlyPlanCost)
+        : '',
+    );
+  };
+
+  const recalculateV44Projection = async () => {
+    if (isRecalculating || !selectedSheet) return;
+    const paymentMethod = draftPaymentMethod || 'Hometree';
+    const paymentKey = paymentTypeKey(paymentMethod);
+    if (paymentKey !== 'cash' && !draftTerm) {
+      Alert.alert('Missing Term', 'Select a payment term before recalculating.');
+      return;
+    }
+    if (paymentKey === 'hometree' && (!draftMonthly || Number.isNaN(Number(draftMonthly)))) {
+      Alert.alert('Missing Monthly Cost', 'Enter the Year 1 monthly HomeTree payment before recalculating.');
+      return;
+    }
+
+    try {
+      setIsRecalculating(true);
+      const payload = {
+        paymentMethod,
+        terms: paymentKey === 'cash' ? undefined : Number(draftTerm),
+        monthlyPlanCost:
+          paymentKey === 'hometree' ? Number(draftMonthly) : undefined,
+        calculatorType: 'v44' as const,
+        fileName: selectedSheet.fileName,
+      };
+      console.log('🔧 v44 recalculate payload:', payload);
+      const response = await api.post(
+        `/presentation/solar-projection/${opportunityId}/recalculate`,
+        payload,
+      );
+      if (response.success && response.data) {
+        const actualData = (response.data as any).data || response.data;
+        applyProjectionResult(actualData);
+      } else {
+        throw new Error(response.error || 'Failed to recalculate projection');
+      }
+    } catch (error) {
+      console.error('❌ Error recalculating v44 projection:', error);
+      Alert.alert('Error', 'Failed to recalculate. Please try again.');
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
+
   const updatePaymentMethod = async (paymentMethod: string) => {
+    // v4.4: draft only — apply via Recalculate (Inputs + RecalculateProposal)
+    if (isV44) {
+      setDraftPaymentMethod(paymentMethod);
+      return;
+    }
+
     // Prevent multiple simultaneous updates
     if (isUpdatingPayment) {
       console.log('⚠️ Payment method update already in progress, skipping...');
@@ -304,7 +422,7 @@ export default function SolarProjectionScreen() {
       if (response.success && response.data) {
         console.log('✅ Payment method updated successfully:', response.data);
         const actualData = (response.data as any).data || response.data;
-        setSolarData(actualData as SolarProjectionData);
+        applyProjectionResult(actualData);
         console.log('🔍 Updated data title:', actualData?.title);
         console.log('🔍 Updated data calculator type:', actualData?.summary?.calculatorType);
         console.log('🔍 Updated table headers count:', actualData?.table?.headers?.length || 0);
@@ -322,6 +440,12 @@ export default function SolarProjectionScreen() {
   };
 
   const updateTerms = async (terms: number) => {
+    // v4.4: draft only — apply via Recalculate
+    if (isV44) {
+      setDraftTerm(String(terms));
+      return;
+    }
+
     // Prevent multiple simultaneous updates
     if (isUpdatingTerms) {
       console.log('⚠️ Terms update already in progress, skipping...');
@@ -339,7 +463,7 @@ export default function SolarProjectionScreen() {
       });
       
       // Check if terms are applicable for the current payment method
-      const currentPaymentType = safeGet(solarData, 'summary.paymentType', '').toLowerCase();
+      const currentPaymentType = paymentTypeKey(safeGet(solarData, 'summary.paymentType', ''));
       if (currentPaymentType === 'cash') {
         Alert.alert('Invalid Action', 'Terms are not applicable for Cash payment method.');
         return;
@@ -358,7 +482,7 @@ export default function SolarProjectionScreen() {
       if (response.success && response.data) {
         console.log('✅ Terms updated successfully:', response.data);
         const actualData = (response.data as any).data || response.data;
-        setSolarData(actualData as SolarProjectionData);
+        applyProjectionResult(actualData);
         console.log('🔍 Updated data title:', actualData?.title);
         console.log('🔍 Updated data calculator type:', actualData?.summary?.calculatorType);
         console.log('🔍 Updated table headers count:', actualData?.table?.headers?.length || 0);
@@ -905,18 +1029,22 @@ export default function SolarProjectionScreen() {
                       <View style={[
                         styles.groupIcon,
                         { 
-                          backgroundColor: type === 'flux' ? '#10b981' : '#3b82f6',
-                          borderColor: type === 'flux' ? '#059669' : '#2563eb'
+                          backgroundColor: type === 'v44' ? '#0d9488' : type === 'flux' ? '#10b981' : '#3b82f6',
+                          borderColor: type === 'v44' ? '#0f766e' : type === 'flux' ? '#059669' : '#2563eb'
                         }
                       ]}>
                         <Feather 
-                          name={type === 'flux' ? 'zap' : 'settings'} 
+                          name={type === 'off-peak' ? 'settings' : 'zap'} 
                           size={18} 
                           color="#ffffff" 
                         />
                       </View>
                       <Text style={[styles.groupTitle, { color: theme.primaryText }]}>
-                        {type === 'flux' ? 'Flux Calculator Files' : 'Off Peak Calculator Files'}
+                        {type === 'v44'
+                          ? 'EPVS v4.4 Calculator Files'
+                          : type === 'flux'
+                            ? 'Flux Calculator Files'
+                            : 'Off Peak Calculator Files'}
                       </Text>
                       <Text style={[styles.groupCount, { color: theme.secondaryText }]}>
                         {sheets.length} file{sheets.length !== 1 ? 's' : ''}
@@ -925,6 +1053,8 @@ export default function SolarProjectionScreen() {
                     
                     {sheets.map((sheet, index) => {
                       const versionName = getVersionName(sheet);
+                      const sheetIsV44 = isV44Sheet(sheet);
+                      const sheetIsEpvs = sheetIsV44 || sheet.calculatorType === 'epvs' || sheet.calculatorType === 'flux';
                       
                       return (
                         <TouchableOpacity
@@ -950,12 +1080,12 @@ export default function SolarProjectionScreen() {
                               <View style={[
                                 styles.calculatorTypeBadge,
                                 { 
-                                  backgroundColor: sheet.calculatorType === 'epvs' || sheet.calculatorType === 'flux' ? '#10b981' : '#3b82f6',
-                                  borderColor: sheet.calculatorType === 'epvs' || sheet.calculatorType === 'flux' ? '#059669' : '#2563eb'
+                                  backgroundColor: sheetIsV44 ? '#0d9488' : sheetIsEpvs ? '#10b981' : '#3b82f6',
+                                  borderColor: sheetIsV44 ? '#0f766e' : sheetIsEpvs ? '#059669' : '#2563eb'
                                 }
                               ]}>
                                 <Feather 
-                                  name={sheet.calculatorType === 'epvs' || sheet.calculatorType === 'flux' ? 'zap' : 'settings'} 
+                                  name={sheetIsEpvs ? 'zap' : 'settings'} 
                                   size={16} 
                                   color="#ffffff" 
                                 />
@@ -966,9 +1096,13 @@ export default function SolarProjectionScreen() {
                                 </Text>
                                 <Text style={[
                                   styles.calculatorTypeLabel,
-                                  { color: sheet.calculatorType === 'epvs' || sheet.calculatorType === 'flux' ? '#059669' : '#2563eb' }
+                                  { color: sheetIsV44 ? '#0f766e' : sheetIsEpvs ? '#059669' : '#2563eb' }
                                 ]}>
-                                  {sheet.calculatorType === 'epvs' || sheet.calculatorType === 'flux' ? 'EPVS/Flux Calculator' : 'Off Peak Calculator'}
+                                  {sheetIsV44
+                                    ? 'EPVS v4.4 Calculator'
+                                    : sheetIsEpvs
+                                      ? 'EPVS/Flux Calculator'
+                                      : 'Off Peak Calculator'}
                                 </Text>
                               </View>
                             </View>
@@ -1134,10 +1268,10 @@ export default function SolarProjectionScreen() {
               <TouchableOpacity
                 style={[styles.paymentDropdownButton, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: theme.cardBorder }]}
                 onPress={() => setShowPaymentMethodDropdown(true)}
-                disabled={isUpdatingPayment}
+                disabled={isUpdatingPayment || isRecalculating}
               >
                 <Text style={[styles.paymentDropdownText, { color: theme.primaryText }]}>
-                  {safeGet(solarData, 'summary.paymentType') || 'Select Payment'}
+                  {(isV44 ? draftPaymentMethod : safeGet(solarData, 'summary.paymentType')) || 'Select Payment'}
                 </Text>
                 <Feather name="chevron-down" size={16} color={theme.secondaryText} />
                 {isUpdatingPayment && (
@@ -1147,7 +1281,9 @@ export default function SolarProjectionScreen() {
             </View>
             {/* Only show Term for Hometree and Finance - NOT for Cash */}
             {(() => {
-              const paymentType = safeGet(solarData, 'summary.paymentType', '').toLowerCase();
+              const paymentType = paymentTypeKey(
+                isV44 ? draftPaymentMethod : safeGet(solarData, 'summary.paymentType', ''),
+              );
               const showTerms = paymentType === 'hometree' || paymentType === 'finance';
               
               return showTerms && (
@@ -1156,10 +1292,13 @@ export default function SolarProjectionScreen() {
                   <TouchableOpacity
                     style={[styles.paymentDropdownButton, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: theme.cardBorder }]}
                     onPress={() => setShowTermsDropdown(true)}
-                    disabled={isUpdatingTerms}
+                    disabled={isUpdatingTerms || isRecalculating}
                   >
                     <Text style={[styles.paymentDropdownText, { color: theme.primaryText }]}>
-                      {safeGet(solarData, 'summary.term') ? `${safeGet(solarData, 'summary.term')} years` : 'Select Term'}
+                      {(() => {
+                        const term = isV44 ? draftTerm : safeGet(solarData, 'summary.term');
+                        return term ? `${term} years` : 'Select Term';
+                      })()}
                     </Text>
                     <Feather name="chevron-down" size={16} color={theme.secondaryText} />
                     {isUpdatingTerms && (
@@ -1169,6 +1308,30 @@ export default function SolarProjectionScreen() {
                 </View>
               );
             })()}
+            {/* v4.4 HomeTree: editable Year 1 monthly (Inputs!I88) before Recalculate */}
+            {isV44 && paymentTypeKey(draftPaymentMethod) === 'hometree' && (
+              <View style={[styles.paymentInfoCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+                <Text style={[styles.paymentInfoLabel, { color: theme.secondaryText }]}>Regular Monthly Cost</Text>
+                <TextInput
+                  style={[
+                    styles.paymentDropdownButton,
+                    styles.paymentDropdownText,
+                    {
+                      backgroundColor: isDark ? '#1e293b' : '#f8fafc',
+                      borderColor: theme.cardBorder,
+                      color: theme.primaryText,
+                      paddingVertical: 10,
+                    },
+                  ]}
+                  value={draftMonthly}
+                  onChangeText={setDraftMonthly}
+                  keyboardType="decimal-pad"
+                  editable={!isRecalculating}
+                  placeholder="0.00"
+                  placeholderTextColor={theme.secondaryText}
+                />
+              </View>
+            )}
             {safeGet(solarData, 'summary.paymentTerm') && (
               <View style={[styles.paymentInfoCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
                 <Text style={[styles.paymentInfoLabel, { color: theme.secondaryText }]}>Payment Time</Text>
@@ -1178,6 +1341,34 @@ export default function SolarProjectionScreen() {
               </View>
             )}
           </View>
+
+          {isV44 && (
+            <View style={{ marginTop: 12, marginBottom: 4 }}>
+              <TouchableOpacity
+                style={[
+                  styles.recalculateButton,
+                  {
+                    backgroundColor: theme.primaryButton,
+                    opacity: isRecalculating ? 0.7 : 1,
+                  },
+                ]}
+                onPress={recalculateV44Projection}
+                disabled={isRecalculating}
+              >
+                {isRecalculating ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Feather name="refresh-cw" size={16} color="#fff" style={{ marginRight: 8 }} />
+                )}
+                <Text style={styles.recalculateButtonText}>
+                  {isRecalculating ? 'Recalculating…' : 'Recalculate'}
+                </Text>
+              </TouchableOpacity>
+              <Text style={[styles.instructionText, { color: theme.secondaryText, marginTop: 6 }]}>
+                Change payment type, term or monthly cost above, then recalculate to update the table from the Inputs sheet.
+              </Text>
+            </View>
+          )}
           
           <View style={styles.summaryCards}>
             {/* Always show Lifetime Profit */}
@@ -1200,7 +1391,9 @@ export default function SolarProjectionScreen() {
               </View>
                <View style={styles.summaryContent}>
                  <View style={styles.summaryHeader}>
-                   <Text style={[styles.summaryLabel, { color: theme.secondaryText }]}>Yearly Saving</Text>
+                   <Text style={[styles.summaryLabel, { color: theme.secondaryText }]}>
+                     {isV44 ? 'Year 1 Benefit' : 'Yearly Saving'}
+                   </Text>
                    <TouchableOpacity
                      style={[styles.yearSelector, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: theme.cardBorder }]}
                      onPress={() => setShowSavingYearDropdown(true)}
@@ -1219,7 +1412,7 @@ export default function SolarProjectionScreen() {
 
             {/* Show Yearly Contribution only for Hometree and Finance - NOT for Cash */}
             {(() => {
-              const paymentType = safeGet(solarData, 'summary.paymentType', '').toLowerCase();
+              const paymentType = paymentTypeKey(safeGet(solarData, 'summary.paymentType', ''));
               const showContribution = paymentType === 'hometree' || paymentType === 'finance';
               
               return showContribution && (
@@ -1251,7 +1444,7 @@ export default function SolarProjectionScreen() {
           
           {/* Plan Cost Row - Only show for Hometree and Finance - NOT for Cash */}
           {(() => {
-            const paymentType = safeGet(solarData, 'summary.paymentType', '').toLowerCase();
+            const paymentType = paymentTypeKey(safeGet(solarData, 'summary.paymentType', ''));
             const showPlanCost = paymentType === 'hometree' || paymentType === 'finance';
             const hasPlanCost = safeGet(solarData, 'summary.monthlyPlanCost') || safeGet(solarData, 'summary.yearlyPlanCost');
             
@@ -1259,7 +1452,9 @@ export default function SolarProjectionScreen() {
               <View style={styles.planCostRow}>
                 {safeGet(solarData, 'summary.monthlyPlanCost') && (
                   <View style={[styles.planCostCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-                    <Text style={[styles.planCostLabel, { color: theme.secondaryText }]}>Monthly Plan Cost</Text>
+                    <Text style={[styles.planCostLabel, { color: theme.secondaryText }]}>
+                      {isV44 ? 'Regular Monthly Cost' : 'Monthly Plan Cost'}
+                    </Text>
                     <Text style={[styles.planCostValue, { color: theme.primaryText }]}>
                       {formatCurrency(safeGet(solarData, 'summary.monthlyPlanCost'))}
                     </Text>
@@ -1267,7 +1462,9 @@ export default function SolarProjectionScreen() {
                 )}
                 {safeGet(solarData, 'summary.yearlyPlanCost') && (
                   <View style={[styles.planCostCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-                    <Text style={[styles.planCostLabel, { color: theme.secondaryText }]}>Yearly Plan Cost</Text>
+                    <Text style={[styles.planCostLabel, { color: theme.secondaryText }]}>
+                      {isV44 ? 'Annual Payment (excl. deposit)' : 'Yearly Plan Cost'}
+                    </Text>
                     <Text style={[styles.planCostValue, { color: theme.primaryText }]}>
                       {formatCurrency(safeGet(solarData, 'summary.yearlyPlanCost'))}
                     </Text>
@@ -1681,7 +1878,10 @@ export default function SolarProjectionScreen() {
               removeClippedSubviews={true}
             >
               {['Cash', 'Hometree', 'Finance'].map((paymentMethod) => {
-                const isSelected = safeGet(solarData, 'summary.paymentType') === paymentMethod;
+                const current = isV44
+                  ? draftPaymentMethod
+                  : normalizePaymentTypeLabel(safeGet(solarData, 'summary.paymentType'));
+                const isSelected = current === paymentMethod;
                 const isUpdatingThis = isUpdatingPayment && isSelected;
                 
                 return (
@@ -1693,12 +1893,12 @@ export default function SolarProjectionScreen() {
                       isSelected && { backgroundColor: theme.primaryButton + '10' }
                     ]}
                     onPress={() => {
-                      if (!isUpdatingPayment) {
+                      if (!isUpdatingPayment && !isRecalculating) {
                         setShowPaymentMethodDropdown(false);
                         updatePaymentMethod(paymentMethod);
                       }
                     }}
-                    disabled={isUpdatingPayment}
+                    disabled={isUpdatingPayment || isRecalculating}
                     activeOpacity={0.6}
                     hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
                   >
@@ -1760,7 +1960,8 @@ export default function SolarProjectionScreen() {
               removeClippedSubviews={true}
             >
               {[5, 10, 15, 20, 25].map((term) => {
-                const isSelected = safeGet(solarData, 'summary.term') === term.toString();
+                const currentTerm = isV44 ? draftTerm : String(safeGet(solarData, 'summary.term') ?? '');
+                const isSelected = currentTerm === term.toString();
                 const isUpdatingThis = isUpdatingTerms && isSelected;
                 
                 return (
@@ -1772,12 +1973,12 @@ export default function SolarProjectionScreen() {
                       isSelected && { backgroundColor: theme.primaryButton + '10' }
                     ]}
                     onPress={() => {
-                      if (!isUpdatingTerms) {
+                      if (!isUpdatingTerms && !isRecalculating) {
                         setShowTermsDropdown(false);
                         updateTerms(term);
                       }
                     }}
-                    disabled={isUpdatingTerms}
+                    disabled={isUpdatingTerms || isRecalculating}
                     activeOpacity={0.6}
                     hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
                   >
@@ -1812,6 +2013,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   } as any,
+  recalculateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    minWidth: 160,
+  },
+  recalculateButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
   
   // Background Image
   backgroundImageStyle: {

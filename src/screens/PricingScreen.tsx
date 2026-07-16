@@ -775,12 +775,6 @@ export default function PricingScreen() {
     }, 400);
     return () => clearTimeout(t);
   }, [refreshHometreeQuote, calculatorType, paymentMethod]);
-    
-    // Auto-save the pricing data
-    setTimeout(() => {
-      // Auto-save is handled by the debounced save function
-    }, 100);
-  };
 
   const handleQuantityChange = (itemName: string, change: number) => {
     // Don't save if we're currently restoring progress

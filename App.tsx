@@ -293,7 +293,7 @@ export type RootStackParamList = {
   ContractSigningTest: undefined;
   SolarProjection: { 
     opportunityId: string; 
-    calculatorType?: 'flux' | 'off-peak' | 'epvs'; 
+    calculatorType?: 'flux' | 'off-peak' | 'epvs' | 'v44'; 
   };
   Payment: { opportunityId: string };
   WelcomeEmail: { opportunityId: string; opportunity?: any };
