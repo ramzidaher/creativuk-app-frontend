@@ -1291,7 +1291,7 @@ export default function SolarProjectionScreen() {
                   ]}
                 >
                   <View style={styles.compactField}>
-                    <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>Payment</Text>
+                    <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>Payment Type</Text>
                     <TouchableOpacity
                       style={[
                         styles.compactControl,
@@ -1309,7 +1309,7 @@ export default function SolarProjectionScreen() {
 
                   {showTerms && (
                     <View style={styles.compactField}>
-                      <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>Term</Text>
+                      <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>Payment Term</Text>
                       <TouchableOpacity
                         style={[
                           styles.compactControl,
@@ -1319,7 +1319,7 @@ export default function SolarProjectionScreen() {
                         disabled={isUpdatingTerms || isRecalculating}
                       >
                         <Text style={[styles.compactControlText, { color: theme.primaryText }]} numberOfLines={1}>
-                          {termDisplay ? `${termDisplay} yr` : 'Select'}
+                          {termDisplay ? `${termDisplay} years` : 'Select term'}
                         </Text>
                         <Feather name="chevron-down" size={14} color={theme.secondaryText} />
                       </TouchableOpacity>
@@ -1328,7 +1328,7 @@ export default function SolarProjectionScreen() {
 
                   {isV44 && paymentType === 'hometree' && (
                     <View style={styles.compactField}>
-                      <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>Monthly</Text>
+                      <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>Monthly Cost</Text>
                       <TextInput
                         style={[
                           styles.compactControl,
@@ -1387,45 +1387,61 @@ export default function SolarProjectionScreen() {
                     </Text>
                   </View>
 
-                  <View style={styles.compactMetric}>
-                    <View style={styles.compactMetricHeader}>
-                      <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>
-                        {isV44 ? 'Y1 Benefit' : 'Yearly Saving'}
+                  <View style={[styles.compactMetric, styles.compactMetricWide]}>
+                    <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>
+                      Benefit for year
+                    </Text>
+                    <TouchableOpacity
+                      style={[
+                        styles.compactYearDropdown,
+                        {
+                          backgroundColor: isDark ? '#1e293b' : '#f8fafc',
+                          borderColor: theme.primaryButton,
+                        },
+                      ]}
+                      onPress={() => setShowSavingYearDropdown(true)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={[styles.compactYearDropdownText, { color: theme.primaryText }]}>
+                        Year {selectedSavingYear}
                       </Text>
-                      <TouchableOpacity
-                        style={styles.compactYearChip}
-                        onPress={() => setShowSavingYearDropdown(true)}
-                      >
-                        <Text style={[styles.compactYearChipText, { color: theme.primaryText }]}>
-                          Y{selectedSavingYear}
-                        </Text>
-                        <Feather name="chevron-down" size={12} color={theme.secondaryText} />
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={[styles.compactMetricValue, { color: theme.primaryText }]} numberOfLines={1}>
+                      <Feather name="chevron-down" size={18} color={theme.primaryButton} />
+                    </TouchableOpacity>
+                    <Text style={[styles.compactMetricValue, { color: theme.primaryText, marginTop: 6 }]} numberOfLines={1}>
                       {formatCurrency(calculateYearlySaving(selectedSavingYear))}
                     </Text>
                   </View>
 
                   {showContribution && (
                     <View style={styles.compactMetric}>
-                      <View style={styles.compactMetricHeader}>
-                        <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>
-                          {isV44 ? 'Annual Payment' : 'Contribution'}
-                        </Text>
-                        {!isV44 && (
-                          <TouchableOpacity
-                            style={styles.compactYearChip}
-                            onPress={() => setShowContributionYearDropdown(true)}
-                          >
-                            <Text style={[styles.compactYearChipText, { color: theme.primaryText }]}>
-                              Y{selectedContributionYear}
-                            </Text>
-                            <Feather name="chevron-down" size={12} color={theme.secondaryText} />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                      <Text style={[styles.compactMetricValue, { color: theme.primaryText }]} numberOfLines={1}>
+                      <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>
+                        {isV44 ? 'Annual Payment' : 'Contribution for year'}
+                      </Text>
+                      {!isV44 && (
+                        <TouchableOpacity
+                          style={[
+                            styles.compactYearDropdown,
+                            {
+                              backgroundColor: isDark ? '#1e293b' : '#f8fafc',
+                              borderColor: theme.primaryButton,
+                            },
+                          ]}
+                          onPress={() => setShowContributionYearDropdown(true)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Text style={[styles.compactYearDropdownText, { color: theme.primaryText }]}>
+                            Year {selectedContributionYear}
+                          </Text>
+                          <Feather name="chevron-down" size={18} color={theme.primaryButton} />
+                        </TouchableOpacity>
+                      )}
+                      <Text
+                        style={[
+                          styles.compactMetricValue,
+                          { color: theme.primaryText, marginTop: isV44 ? 0 : 6 },
+                        ]}
+                        numberOfLines={1}
+                      >
                         {formatCurrency(
                           isV44
                             ? safeGet(solarData, 'summary.yearlyPlanCost') ||
@@ -1708,7 +1724,9 @@ export default function SolarProjectionScreen() {
             onPress={(e) => e.stopPropagation()}
           >
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.primaryText }]}>Select Year for Saving</Text>
+              <Text style={[styles.modalTitle, { color: theme.primaryText }]}>
+                Which year's benefit do you want to see?
+              </Text>
               <TouchableOpacity
                 style={[styles.closeButton, { backgroundColor: isDark ? '#1e293b' : '#f8fafc' }]}
                 onPress={() => setShowSavingYearDropdown(false)}
@@ -2291,6 +2309,26 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     marginVertical: 2,
   },
+  compactMetricWide: {
+    minWidth: 160,
+    flexBasis: 160,
+  },
+  compactYearDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 2,
+    minHeight: 48,
+    minWidth: 140,
+    gap: 8,
+  },
+  compactYearDropdownText: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
   compactYearChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2845,8 +2883,8 @@ const styles = StyleSheet.create({
   },
   yearDropdownModal: {
     width: '100%',
-    maxWidth: 300,
-    maxHeight: '70%',
+    maxWidth: 360,
+    maxHeight: '75%',
     borderRadius: 20,
     borderWidth: 1,
     shadowColor: 'rgba(0, 0, 0, 0.1)',
@@ -2866,6 +2904,8 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
+    flex: 1,
+    paddingRight: 12,
   },
   closeButton: {
     padding: 8,
@@ -2874,19 +2914,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   yearList: {
-    maxHeight: 300,
+    maxHeight: 380,
   },
   yearOption: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 18,
+    minHeight: 56,
     borderBottomWidth: 1,
   },
   yearOptionText: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 18,
+    fontWeight: '600',
   },
   // Zoom Controls
   zoomControls: {
