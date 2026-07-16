@@ -1266,220 +1266,195 @@ export default function SolarProjectionScreen() {
         ]}
       >
         <View style={styles.content}>
-        {/* Summary Cards */}
+        {/* Compact summary + controls — keep table visible without scrolling */}
         <View style={styles.summarySection}>
-          <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Lifetime Savings Projections</Text>
-          
-          {/* Payment Type, Term (conditional), and Payment Time */}
-          <View style={styles.paymentInfoRow}>
-            <View style={[styles.paymentInfoCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-              <Text style={[styles.paymentInfoLabel, { color: theme.secondaryText }]}>Payment Type</Text>
-              <TouchableOpacity
-                style={[styles.paymentDropdownButton, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: theme.cardBorder }]}
-                onPress={() => setShowPaymentMethodDropdown(true)}
-                disabled={isUpdatingPayment || isRecalculating}
-              >
-                <Text style={[styles.paymentDropdownText, { color: theme.primaryText }]}>
-                  {(isV44 ? draftPaymentMethod : safeGet(solarData, 'summary.paymentType')) || 'Select Payment'}
-                </Text>
-                <Feather name="chevron-down" size={16} color={theme.secondaryText} />
-                {isUpdatingPayment && (
-                  <ActivityIndicator size="small" color={theme.primaryButton} style={{ marginLeft: 8 }} />
-                )}
-              </TouchableOpacity>
-            </View>
-            {/* Only show Term for Hometree and Finance - NOT for Cash */}
-            {(() => {
-              const paymentType = paymentTypeKey(
-                isV44 ? draftPaymentMethod : safeGet(solarData, 'summary.paymentType', ''),
-              );
-              const showTerms = paymentType === 'hometree' || paymentType === 'finance';
-              
-              return showTerms && (
-                <View style={[styles.paymentInfoCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-                  <Text style={[styles.paymentInfoLabel, { color: theme.secondaryText }]}>Term</Text>
-                  <TouchableOpacity
-                    style={[styles.paymentDropdownButton, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: theme.cardBorder }]}
-                    onPress={() => setShowTermsDropdown(true)}
-                    disabled={isUpdatingTerms || isRecalculating}
-                  >
-                    <Text style={[styles.paymentDropdownText, { color: theme.primaryText }]}>
-                      {(() => {
-                        const term = isV44 ? draftTerm : safeGet(solarData, 'summary.term');
-                        return term ? `${term} years` : 'Select Term';
-                      })()}
-                    </Text>
-                    <Feather name="chevron-down" size={16} color={theme.secondaryText} />
-                    {isUpdatingTerms && (
-                      <ActivityIndicator size="small" color={theme.primaryButton} style={{ marginLeft: 8 }} />
-                    )}
-                  </TouchableOpacity>
-                </View>
-              );
-            })()}
-            {/* v4.4 HomeTree: editable Year 1 monthly (Inputs!I88) before Recalculate */}
-            {isV44 && paymentTypeKey(draftPaymentMethod) === 'hometree' && (
-              <View style={[styles.paymentInfoCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-                <Text style={[styles.paymentInfoLabel, { color: theme.secondaryText }]}>Regular Monthly Cost</Text>
-                <TextInput
-                  style={[
-                    styles.paymentDropdownButton,
-                    styles.paymentDropdownText,
-                    {
-                      backgroundColor: isDark ? '#1e293b' : '#f8fafc',
-                      borderColor: theme.cardBorder,
-                      color: theme.primaryText,
-                      paddingVertical: 10,
-                    },
-                  ]}
-                  value={draftMonthly}
-                  onChangeText={setDraftMonthly}
-                  keyboardType="decimal-pad"
-                  editable={!isRecalculating}
-                  placeholder="0.00"
-                  placeholderTextColor={theme.secondaryText}
-                />
-              </View>
-            )}
-            {safeGet(solarData, 'summary.paymentTerm') && (
-              <View style={[styles.paymentInfoCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-                <Text style={[styles.paymentInfoLabel, { color: theme.secondaryText }]}>Payment Time</Text>
-                <Text style={[styles.paymentInfoValue, { color: theme.primaryText }]}>
-                  {safeGet(solarData, 'summary.paymentTerm')} years
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {isV44 && (
-            <View style={{ marginTop: 12, marginBottom: 4 }}>
-              <TouchableOpacity
-                style={[
-                  styles.recalculateButton,
-                  {
-                    backgroundColor: theme.primaryButton,
-                    opacity: isRecalculating ? 0.7 : 1,
-                  },
-                ]}
-                onPress={recalculateV44Projection}
-                disabled={isRecalculating}
-              >
-                {isRecalculating ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Feather name="refresh-cw" size={16} color="#fff" style={{ marginRight: 8 }} />
-                )}
-                <Text style={styles.recalculateButtonText}>
-                  {isRecalculating ? 'Recalculating…' : 'Recalculate'}
-                </Text>
-              </TouchableOpacity>
-              <Text style={[styles.instructionText, { color: theme.secondaryText, marginTop: 6 }]}>
-                Change payment type, term or monthly cost above, then recalculate to update the table from the Inputs sheet.
-              </Text>
-            </View>
-          )}
-          
-          <View style={styles.summaryCards}>
-            {/* Always show Lifetime Profit */}
-            <View style={[styles.summaryCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-              <View style={[styles.summaryIcon, { backgroundColor: theme.successButton + '20' }]}>
-                <Feather name="trending-up" size={24} color={theme.successButton} />
-              </View>
-               <View style={styles.summaryContent}>
-                 <Text style={[styles.summaryLabel, { color: theme.secondaryText }]}>Your Lifetime Profit</Text>
-                 <Text style={[styles.summaryValue, { color: theme.primaryText }]}>
-                   {formatCurrency(safeGet(solarData, 'summary.lifetimeProfit'))}
-                 </Text>
-               </View>
-            </View>
-
-            {/* Always show Yearly Saving */}
-            <View style={[styles.summaryCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-              <View style={[styles.summaryIcon, { backgroundColor: theme.primaryButton + '20' }]}>
-                <Feather name="dollar-sign" size={24} color={theme.primaryButton} />
-              </View>
-               <View style={styles.summaryContent}>
-                 <View style={styles.summaryHeader}>
-                   <Text style={[styles.summaryLabel, { color: theme.secondaryText }]}>
-                     {isV44 ? 'Year 1 Benefit' : 'Yearly Saving'}
-                   </Text>
-                   <TouchableOpacity
-                     style={[styles.yearSelector, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: theme.cardBorder }]}
-                     onPress={() => setShowSavingYearDropdown(true)}
-                   >
-                     <Text style={[styles.yearSelectorText, { color: theme.primaryText }]}>
-                       Year {selectedSavingYear}
-                     </Text>
-                     <Feather name="chevron-down" size={14} color={theme.secondaryText} />
-                   </TouchableOpacity>
-                 </View>
-                 <Text style={[styles.summaryValue, { color: theme.primaryText }]}>
-                   {formatCurrency(calculateYearlySaving(selectedSavingYear))}
-                 </Text>
-               </View>
-            </View>
-
-            {/* Show Yearly Contribution only for Hometree and Finance - NOT for Cash */}
-            {(() => {
-              const paymentType = paymentTypeKey(safeGet(solarData, 'summary.paymentType', ''));
-              const showContribution = paymentType === 'hometree' || paymentType === 'finance';
-              
-              return showContribution && (
-                <View style={[styles.summaryCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-                  <View style={[styles.summaryIcon, { backgroundColor: '#f59e0b' + '20' }]}>
-                    <Feather name="credit-card" size={24} color="#f59e0b" />
-                  </View>
-                   <View style={styles.summaryContent}>
-                     <View style={styles.summaryHeader}>
-                       <Text style={[styles.summaryLabel, { color: theme.secondaryText }]}>Yearly Contribution</Text>
-                       <TouchableOpacity
-                         style={[styles.yearSelector, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: theme.cardBorder }]}
-                         onPress={() => setShowContributionYearDropdown(true)}
-                       >
-                         <Text style={[styles.yearSelectorText, { color: theme.primaryText }]}>
-                           Year {selectedContributionYear}
-                         </Text>
-                         <Feather name="chevron-down" size={14} color={theme.secondaryText} />
-                       </TouchableOpacity>
-                     </View>
-                     <Text style={[styles.summaryValue, { color: theme.primaryText }]}>
-                       {formatCurrency(calculateYearlyContribution(selectedContributionYear))}
-                     </Text>
-                   </View>
-                </View>
-              );
-            })()}
-          </View>
-          
-          {/* Plan Cost Row - Only show for Hometree and Finance - NOT for Cash */}
           {(() => {
-            const paymentType = paymentTypeKey(safeGet(solarData, 'summary.paymentType', ''));
-            const showPlanCost = paymentType === 'hometree' || paymentType === 'finance';
-            const hasPlanCost = safeGet(solarData, 'summary.monthlyPlanCost') || safeGet(solarData, 'summary.yearlyPlanCost');
-            
-            return showPlanCost && hasPlanCost && (
-              <View style={styles.planCostRow}>
-                {safeGet(solarData, 'summary.monthlyPlanCost') && (
-                  <View style={[styles.planCostCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-                    <Text style={[styles.planCostLabel, { color: theme.secondaryText }]}>
-                      {isV44 ? 'Regular Monthly Cost' : 'Monthly Plan Cost'}
-                    </Text>
-                    <Text style={[styles.planCostValue, { color: theme.primaryText }]}>
-                      {formatCurrency(safeGet(solarData, 'summary.monthlyPlanCost'))}
+            const paymentType = paymentTypeKey(
+              isV44 ? draftPaymentMethod : safeGet(solarData, 'summary.paymentType', ''),
+            );
+            const showTerms = paymentType === 'hometree' || paymentType === 'finance';
+            const showContribution = paymentType === 'hometree' || paymentType === 'finance';
+            const termDisplay = isV44
+              ? draftTerm
+              : safeGet(solarData, 'summary.term');
+            const paymentDisplay =
+              (isV44 ? draftPaymentMethod : safeGet(solarData, 'summary.paymentType')) ||
+              'Select Payment';
+
+            return (
+              <>
+                {/* Row 1 — payment controls */}
+                <View
+                  style={[
+                    styles.compactToolbar,
+                    { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder },
+                  ]}
+                >
+                  <View style={styles.compactField}>
+                    <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>Payment</Text>
+                    <TouchableOpacity
+                      style={[
+                        styles.compactControl,
+                        { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: theme.cardBorder },
+                      ]}
+                      onPress={() => setShowPaymentMethodDropdown(true)}
+                      disabled={isUpdatingPayment || isRecalculating}
+                    >
+                      <Text style={[styles.compactControlText, { color: theme.primaryText }]} numberOfLines={1}>
+                        {paymentDisplay}
+                      </Text>
+                      <Feather name="chevron-down" size={14} color={theme.secondaryText} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {showTerms && (
+                    <View style={styles.compactField}>
+                      <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>Term</Text>
+                      <TouchableOpacity
+                        style={[
+                          styles.compactControl,
+                          { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: theme.cardBorder },
+                        ]}
+                        onPress={() => setShowTermsDropdown(true)}
+                        disabled={isUpdatingTerms || isRecalculating}
+                      >
+                        <Text style={[styles.compactControlText, { color: theme.primaryText }]} numberOfLines={1}>
+                          {termDisplay ? `${termDisplay} yr` : 'Select'}
+                        </Text>
+                        <Feather name="chevron-down" size={14} color={theme.secondaryText} />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {isV44 && paymentType === 'hometree' && (
+                    <View style={styles.compactField}>
+                      <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>Monthly</Text>
+                      <TextInput
+                        style={[
+                          styles.compactControl,
+                          styles.compactControlText,
+                          {
+                            backgroundColor: isDark ? '#1e293b' : '#f8fafc',
+                            borderColor: theme.cardBorder,
+                            color: theme.primaryText,
+                          },
+                        ]}
+                        value={draftMonthly}
+                        onChangeText={setDraftMonthly}
+                        keyboardType="decimal-pad"
+                        editable={!isRecalculating}
+                        placeholder="0.00"
+                        placeholderTextColor={theme.secondaryText}
+                      />
+                    </View>
+                  )}
+
+                  {isV44 && (
+                    <TouchableOpacity
+                      style={[
+                        styles.compactRecalcButton,
+                        {
+                          backgroundColor: theme.primaryButton,
+                          opacity: isRecalculating ? 0.7 : 1,
+                        },
+                      ]}
+                      onPress={recalculateV44Projection}
+                      disabled={isRecalculating}
+                    >
+                      {isRecalculating ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <>
+                          <Feather name="refresh-cw" size={14} color="#fff" />
+                          <Text style={styles.compactRecalcText}>Recalculate</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Row 2 — key figures */}
+                <View
+                  style={[
+                    styles.compactMetrics,
+                    { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder },
+                  ]}
+                >
+                  <View style={styles.compactMetric}>
+                    <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>Lifetime Profit</Text>
+                    <Text style={[styles.compactMetricValue, { color: theme.successButton }]} numberOfLines={1}>
+                      {formatCurrency(safeGet(solarData, 'summary.lifetimeProfit'))}
                     </Text>
                   </View>
-                )}
-                {safeGet(solarData, 'summary.yearlyPlanCost') && (
-                  <View style={[styles.planCostCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-                    <Text style={[styles.planCostLabel, { color: theme.secondaryText }]}>
-                      {isV44 ? 'Annual Payment (excl. deposit)' : 'Yearly Plan Cost'}
-                    </Text>
-                    <Text style={[styles.planCostValue, { color: theme.primaryText }]}>
-                      {formatCurrency(safeGet(solarData, 'summary.yearlyPlanCost'))}
+
+                  <View style={styles.compactMetric}>
+                    <View style={styles.compactMetricHeader}>
+                      <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>
+                        {isV44 ? 'Y1 Benefit' : 'Yearly Saving'}
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.compactYearChip}
+                        onPress={() => setShowSavingYearDropdown(true)}
+                      >
+                        <Text style={[styles.compactYearChipText, { color: theme.primaryText }]}>
+                          Y{selectedSavingYear}
+                        </Text>
+                        <Feather name="chevron-down" size={12} color={theme.secondaryText} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={[styles.compactMetricValue, { color: theme.primaryText }]} numberOfLines={1}>
+                      {formatCurrency(calculateYearlySaving(selectedSavingYear))}
                     </Text>
                   </View>
-                )}
-              </View>
+
+                  {showContribution && (
+                    <View style={styles.compactMetric}>
+                      <View style={styles.compactMetricHeader}>
+                        <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>
+                          {isV44 ? 'Annual Payment' : 'Contribution'}
+                        </Text>
+                        {!isV44 && (
+                          <TouchableOpacity
+                            style={styles.compactYearChip}
+                            onPress={() => setShowContributionYearDropdown(true)}
+                          >
+                            <Text style={[styles.compactYearChipText, { color: theme.primaryText }]}>
+                              Y{selectedContributionYear}
+                            </Text>
+                            <Feather name="chevron-down" size={12} color={theme.secondaryText} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      <Text style={[styles.compactMetricValue, { color: theme.primaryText }]} numberOfLines={1}>
+                        {formatCurrency(
+                          isV44
+                            ? safeGet(solarData, 'summary.yearlyPlanCost') ||
+                                safeGet(solarData, 'summary.yearlyContributionYear1')
+                            : calculateYearlyContribution(selectedContributionYear),
+                        )}
+                      </Text>
+                    </View>
+                  )}
+
+                  {!isV44 && safeGet(solarData, 'summary.monthlyPlanCost') && (
+                    <View style={styles.compactMetric}>
+                      <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>Monthly</Text>
+                      <Text style={[styles.compactMetricValue, { color: theme.primaryText }]} numberOfLines={1}>
+                        {formatCurrency(safeGet(solarData, 'summary.monthlyPlanCost'))}
+                      </Text>
+                    </View>
+                  )}
+
+                  {!isV44 && safeGet(solarData, 'summary.yearlyPlanCost') && (
+                    <View style={styles.compactMetric}>
+                      <Text style={[styles.compactLabel, { color: theme.secondaryText }]}>Yearly Plan</Text>
+                      <Text style={[styles.compactMetricValue, { color: theme.primaryText }]} numberOfLines={1}>
+                        {formatCurrency(safeGet(solarData, 'summary.yearlyPlanCost'))}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </>
             );
           })()}
         </View>
@@ -1489,9 +1464,8 @@ export default function SolarProjectionScreen() {
           <View style={styles.tableHeader}>
             <View style={styles.tableHeaderTop}>
               <View style={styles.tableHeaderLeft}>
-                <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Yearly Projections</Text>
-                <Text style={[styles.instructionText, { color: theme.secondaryText }]}>
-                  Tap any cell to select it, or click and drag to select multiple cells (like Excel). Selected cells will be highlighted and their values will be summed automatically. Table is fully responsive and shows all data.
+                <Text style={[styles.sectionTitleCompact, { color: theme.primaryText }]}>
+                  Yearly Projections
                 </Text>
               </View>
               
@@ -1506,7 +1480,7 @@ export default function SolarProjectionScreen() {
                   onPress={handleZoomOut}
                   disabled={contentScale <= 0.5}
                 >
-                  <Ionicons name="remove-outline" size={20} color={contentScale <= 0.5 ? theme.secondaryText : theme.primaryText} />
+                  <Ionicons name="remove-outline" size={18} color={contentScale <= 0.5 ? theme.secondaryText : theme.primaryText} />
                 </TouchableOpacity>
                 
                 <TouchableOpacity
@@ -1530,7 +1504,7 @@ export default function SolarProjectionScreen() {
                   onPress={handleZoomIn}
                   disabled={contentScale >= 2}
                 >
-                  <Ionicons name="add-outline" size={20} color={contentScale >= 2 ? theme.secondaryText : theme.primaryText} />
+                  <Ionicons name="add-outline" size={18} color={contentScale >= 2 ? theme.secondaryText : theme.primaryText} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -2183,8 +2157,8 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   content: {
-    padding: width < 768 ? 16 : 24, // Smaller padding on tablet
-    paddingTop: 0,
+    padding: width < 768 ? 12 : 16,
+    paddingTop: 8,
     transformOrigin: 'center top',
   },
   
@@ -2226,7 +2200,110 @@ const styles = StyleSheet.create({
   
   // Summary Section
   summarySection: {
-    marginBottom: width < 768 ? 24 : 32, // Smaller margin on tablet
+    marginBottom: 10,
+    gap: 8,
+  },
+  compactToolbar: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  compactField: {
+    minWidth: 110,
+    flexGrow: 1,
+    flexBasis: 110,
+    maxWidth: 180,
+  },
+  compactLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  compactControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 36,
+    gap: 6,
+  },
+  compactControlText: {
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+  },
+  compactRecalcButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 8,
+    minHeight: 36,
+    alignSelf: 'flex-end',
+  },
+  compactRecalcText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  compactMetrics: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  compactMetric: {
+    flexGrow: 1,
+    flexBasis: 130,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    minWidth: 120,
+  },
+  compactMetricHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginBottom: 2,
+  },
+  compactMetricValue: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  compactMetricDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    marginVertical: 2,
+  },
+  compactYearChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  compactYearChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  sectionTitleCompact: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   paymentInfoRow: {
     flexDirection: 'row',
@@ -2341,10 +2418,10 @@ const styles = StyleSheet.create({
   
   // Table Section
   tableSection: {
-    marginBottom: width < 768 ? 24 : 32, // Smaller margin on tablet
+    marginBottom: 12,
   },
   tableHeader: {
-    marginBottom: 16,
+    marginBottom: 8,
   },
   tableHeaderTop: {
     flexDirection: 'row',
