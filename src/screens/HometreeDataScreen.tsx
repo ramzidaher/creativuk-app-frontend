@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { api, buildApiUrl, getStorage, presentationApi, workflowApi } from '../utils/api';
+import { ExcelSheetInfo } from '../utils/excelSheetVersion';
+import ExcelSheetPicker from '../components/ExcelSheetPicker';
 
 const HOMETREE_URL = 'https://hometreefinance.co.uk/dashboard/login';
 
@@ -23,14 +25,11 @@ interface RouteParams {
   opportunityId: string;
 }
 
-interface SheetInfo {
-  fileName: string;
+type SheetInfo = ExcelSheetInfo & {
   filePath: string;
   size: number;
   lastModified: string;
-  calculatorType: 'epvs' | 'off-peak' | 'flux';
-  version?: number;
-}
+};
 
 interface HometreeQuoteData {
   opportunityId: string;
@@ -81,28 +80,6 @@ interface HometreeQuoteData {
 }
 
 type Step = 'sheets' | 'data';
-
-/** Prefer trailing -vN.ext so EPVS-v4.4-...-v1.xlsm reads as V1, not V4 */
-function extractVersionFromFilename(fileName: string): number {
-  const trailing = fileName.match(/-v(\d+)\.(xlsm|xlsx|xls)$/i);
-  if (trailing) {
-    return parseInt(trailing[1], 10);
-  }
-  const matches = [...fileName.matchAll(/-v(\d+)/gi)];
-  if (matches.length > 0) {
-    return parseInt(matches[matches.length - 1][1], 10);
-  }
-  return 1;
-}
-
-function getVersionName(sheet: SheetInfo): string {
-  const baseName =
-    sheet.calculatorType === 'flux' || sheet.calculatorType === 'epvs'
-      ? 'Flux Calculator'
-      : 'Off Peak Calculator';
-  const version = sheet.version ?? extractVersionFromFilename(sheet.fileName);
-  return `${baseName} V${version}`;
-}
 
 function DataRow({
   label,
@@ -253,31 +230,6 @@ export default function HometreeDataScreen() {
   const [openingHometree, setOpeningHometree] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
-  const groupedSheets = useMemo(() => {
-    const groups = availableSheets.reduce(
-      (acc, sheet) => {
-        const type =
-          sheet.calculatorType === 'flux' || sheet.calculatorType === 'epvs'
-            ? 'flux'
-            : 'off-peak';
-        if (!acc[type]) acc[type] = [];
-        acc[type].push(sheet);
-        return acc;
-      },
-      {} as Record<string, SheetInfo[]>,
-    );
-
-    Object.keys(groups).forEach((type) => {
-      groups[type].sort((a, b) => {
-        const versionA = a.version ?? extractVersionFromFilename(a.fileName);
-        const versionB = b.version ?? extractVersionFromFilename(b.fileName);
-        return versionA - versionB;
-      });
-    });
-
-    return groups;
-  }, [availableSheets]);
-
   const loadAvailableSheets = useCallback(async () => {
     try {
       setLoadingSheets(true);
@@ -421,25 +373,15 @@ export default function HometreeDataScreen() {
       contentContainerStyle={styles.scrollContent}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
     >
-      <Text style={[styles.stepIntro, { color: theme.secondaryText }]}>
-        Select which calculator to use. Values come from your completed calculator — the same data
-        that will be used when you generate the contract in the next step.
-      </Text>
-
-      {loadingSheets ? (
-        <View style={styles.centeredInline}>
-          <ActivityIndicator size="large" color={theme.primaryButton} />
-          <Text style={[styles.loadingText, { color: theme.secondaryText }]}>
-            Loading calculators…
-          </Text>
-        </View>
-      ) : availableSheets.length === 0 ? (
-        <View style={[styles.emptyCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-          <Feather name="folder" size={40} color={theme.secondaryText} />
-          <Text style={[styles.emptyTitle, { color: theme.primaryText }]}>No calculator found</Text>
-          <Text style={[styles.emptyText, { color: theme.secondaryText }]}>
-            Complete the calculator step first, then return here to fill in Hometree.
-          </Text>
+      <ExcelSheetPicker
+        sheets={availableSheets}
+        selectedSheet={selectedSheet}
+        onSelect={(sheet) => setSelectedSheet(sheet as SheetInfo)}
+        loading={loadingSheets}
+        emptyTitle="No calculator found"
+        emptyMessage="Complete the calculator step first, then return here to fill in Hometree."
+        introText="Select which calculator to use. Values come from your completed calculator — the same data used when you generate the contract next."
+        emptyAction={
           <TouchableOpacity
             style={[styles.secondaryAction, { borderColor: theme.primaryButton }]}
             onPress={() => navigation.navigate('CalculatorTypeSelection', { opportunityId })}
@@ -449,89 +391,51 @@ export default function HometreeDataScreen() {
               Open Calculator
             </Text>
           </TouchableOpacity>
-        </View>
-      ) : (
-        <>
-          {Object.entries(groupedSheets).map(([type, sheets]) => (
-            <View key={type} style={styles.sheetGroup}>
-              <Text style={[styles.groupLabel, { color: theme.primaryText }]}>
-                {type === 'flux' ? 'Flux Calculator' : 'Off Peak Calculator'}
-              </Text>
-              {sheets.map((sheet) => {
-                const isSelected = selectedSheet?.fileName === sheet.fileName;
-                return (
-                  <TouchableOpacity
-                    key={sheet.fileName}
-                    style={[
-                      styles.sheetOption,
-                      {
-                        backgroundColor: theme.cardBackground,
-                        borderColor: isSelected ? theme.primaryButton : theme.cardBorder,
-                      },
-                      isSelected && {
-                        backgroundColor: isDark
-                          ? `${theme.primaryButton}20`
-                          : `${theme.primaryButton}10`,
-                      },
-                    ]}
-                    onPress={() => setSelectedSheet(sheet)}
-                  >
-                    <View style={styles.sheetOptionMain}>
-                      <Text style={[styles.sheetOptionTitle, { color: theme.primaryText }]}>
-                        {getVersionName(sheet)}
-                      </Text>
-                      <Text style={[styles.sheetOptionMeta, { color: theme.secondaryText }]}>
-                        {sheet.fileName}
-                      </Text>
-                    </View>
-                    {isSelected && <Feather name="check-circle" size={22} color={theme.primaryButton} />}
-                  </TouchableOpacity>
-                );
-              })}
+        }
+        footer={
+          availableSheets.length > 0 ? (
+            <View style={styles.sheetActions}>
+              <TouchableOpacity
+                style={[
+                  styles.secondaryAction,
+                  { borderColor: theme.cardBorder, opacity: selectedSheet ? 1 : 0.5 },
+                ]}
+                onPress={() => handleDownloadCalculator(selectedSheet)}
+                disabled={!selectedSheet || downloading}
+              >
+                {downloading ? (
+                  <ActivityIndicator size="small" color={theme.primaryButton} />
+                ) : (
+                  <>
+                    <Feather name="download" size={18} color={theme.primaryButton} />
+                    <Text style={[styles.secondaryActionText, { color: theme.primaryButton }]}>
+                      Download Calculator
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.primaryAction,
+                  { backgroundColor: theme.primaryButton, opacity: selectedSheet ? 1 : 0.5 },
+                ]}
+                onPress={() => selectedSheet && loadHometreeData(selectedSheet)}
+                disabled={!selectedSheet || loadingData}
+              >
+                {loadingData ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Feather name="arrow-right" size={18} color="#fff" />
+                    <Text style={styles.primaryActionText}>Load Hometree Data</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
-          ))}
-
-          <View style={styles.sheetActions}>
-            <TouchableOpacity
-              style={[
-                styles.secondaryAction,
-                { borderColor: theme.cardBorder, opacity: selectedSheet ? 1 : 0.5 },
-              ]}
-              onPress={() => handleDownloadCalculator(selectedSheet)}
-              disabled={!selectedSheet || downloading}
-            >
-              {downloading ? (
-                <ActivityIndicator size="small" color={theme.primaryButton} />
-              ) : (
-                <>
-                  <Feather name="download" size={18} color={theme.primaryButton} />
-                  <Text style={[styles.secondaryActionText, { color: theme.primaryButton }]}>
-                    Download Calculator
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.primaryAction,
-                { backgroundColor: theme.primaryButton, opacity: selectedSheet ? 1 : 0.5 },
-              ]}
-              onPress={() => selectedSheet && loadHometreeData(selectedSheet)}
-              disabled={!selectedSheet || loadingData}
-            >
-              {loadingData ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Feather name="arrow-right" size={18} color="#fff" />
-                  <Text style={styles.primaryActionText}>Load Hometree Data</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
+          ) : null
+        }
+      />
 
       {error ? <Text style={[styles.errorInline, { color: '#dc2626' }]}>{error}</Text> : null}
     </ScrollView>

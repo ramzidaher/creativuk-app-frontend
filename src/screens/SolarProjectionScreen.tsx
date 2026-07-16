@@ -18,8 +18,10 @@ import {
   View,
 } from 'react-native';
 import BottomNavigation from '../components/BottomNavigation';
+import ExcelSheetPicker from '../components/ExcelSheetPicker';
 import { useTheme } from '../context/ThemeContext';
 import { api } from '../utils/api';
+import { ExcelSheetInfo, getExcelSheetDisplayName, isV44Sheet } from '../utils/excelSheetVersion';
 
 const { width, height } = Dimensions.get('window');
 
@@ -28,20 +30,10 @@ interface RouteParams {
   calculatorType?: 'epvs' | 'off-peak' | 'flux' | 'v44';
 }
 
-interface SheetInfo {
-  fileName: string;
+type SheetInfo = ExcelSheetInfo & {
   filePath: string;
   size: number;
   lastModified: string;
-  calculatorType: 'epvs' | 'off-peak' | 'flux' | 'v44';
-  version?: number;
-}
-
-const isV44Sheet = (sheet?: SheetInfo | null) => {
-  if (!sheet) return false;
-  if (sheet.calculatorType === 'v44') return true;
-  const name = (sheet.fileName || '').toLowerCase();
-  return name.includes('v4.4') || name.includes('v44') || name.includes('epvs-v4');
 };
 
 const normalizePaymentTypeLabel = (raw: string | null | undefined): string => {
@@ -130,61 +122,6 @@ export default function SolarProjectionScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const [contentScale, setContentScale] = useState(1);
   const isV44 = isV44Sheet(selectedSheet) || routeCalculatorType === 'v44';
-
-  // Prefer trailing -vN.ext so EPVS-v4.4-...-v1.xlsm reads as V1, not V4
-  const extractVersionFromFilename = (fileName: string): number => {
-    const trailing = fileName.match(/-v(\d+)\.(xlsm|xlsx|xls)$/i);
-    if (trailing) {
-      return parseInt(trailing[1], 10);
-    }
-    const matches = [...fileName.matchAll(/-v(\d+)/gi)];
-    if (matches.length > 0) {
-      return parseInt(matches[matches.length - 1][1], 10);
-    }
-    return 1;
-  };
-
-  // Helper function to generate version name based on actual version
-  const getVersionName = (sheet: SheetInfo) => {
-    const baseName = isV44Sheet(sheet)
-      ? 'EPVS v4.4 Calculator'
-      : sheet.calculatorType === 'flux' || sheet.calculatorType === 'epvs'
-        ? 'Flux Calculator'
-        : 'Off Peak Calculator';
-    const version = sheet.version || extractVersionFromFilename(sheet.fileName);
-    console.log(`🔍 getVersionName for ${sheet.fileName}:`, {
-      calculatorType: sheet.calculatorType,
-      version: sheet.version,
-      extractedVersion: extractVersionFromFilename(sheet.fileName),
-      finalVersion: version,
-      baseName,
-      finalName: `${baseName} V${version}`
-    });
-    return `${baseName} V${version}`;
-  };
-
-  // Group sheets by calculator type
-  const groupedSheets = availableSheets.reduce((groups, sheet) => {
-    const type = isV44Sheet(sheet)
-      ? 'v44'
-      : sheet.calculatorType === 'flux' || sheet.calculatorType === 'epvs'
-        ? 'flux'
-        : 'off-peak';
-    if (!groups[type]) {
-      groups[type] = [];
-    }
-    groups[type].push(sheet);
-    return groups;
-  }, {} as Record<string, SheetInfo[]>);
-
-  // Sort sheets within each group by version
-  Object.keys(groupedSheets).forEach(type => {
-    groupedSheets[type].sort((a, b) => {
-      const versionA = a.version || extractVersionFromFilename(a.fileName);
-      const versionB = b.version || extractVersionFromFilename(b.fileName);
-      return versionA - versionB;
-    });
-  });
 
   useEffect(() => {
     loadAvailableSheets();
@@ -1003,132 +940,21 @@ export default function SolarProjectionScreen() {
           <View style={[styles.heroIcon, { backgroundColor: theme.primaryButton + '20' }]}>
             <Feather name="file-text" size={32} color={theme.primaryButton} />
           </View>
-          <Text style={[styles.heroTitle, { color: theme.primaryText }]}>Please select the calculator for solar projections</Text>
+          <Text style={[styles.heroTitle, { color: theme.primaryText }]}>
+            Select the calculator for solar projections
+          </Text>
         </View>
 
-        {/* Available Files */}
         <View style={[styles.formCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Available Files</Text>
-            <Text style={[styles.sectionSubtitle, { color: theme.secondaryText }]}>
-              Select the Excel file you want to use
-            </Text>
-          </View>
-
-            {loadingSheets ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={theme.primaryButton} />
-                <Text style={[styles.loadingText, { color: theme.secondaryText }]}>
-                  Loading available calculators...
-                </Text>
-              </View>
-            ) : availableSheets.length === 0 ? (
-              <View style={styles.noSheetsContainer}>
-                <Ionicons name="folder-open" size={48} color={theme.tertiaryText} />
-                <Text style={[styles.noSheetsText, { color: theme.secondaryText }]}>No calculators available</Text>
-                <Text style={[styles.noSheetsSubtext, { color: theme.tertiaryText }]}>Please complete the calculator step first</Text>
-              </View>
-            ) : (
-              <View style={styles.sheetsContainer}>
-                {Object.entries(groupedSheets).map(([type, sheets]) => (
-                  <View key={type} style={styles.calculatorGroup}>
-                    <View style={styles.groupHeader}>
-                      <View style={[
-                        styles.groupIcon,
-                        { 
-                          backgroundColor: type === 'v44' ? '#0d9488' : type === 'flux' ? '#10b981' : '#3b82f6',
-                          borderColor: type === 'v44' ? '#0f766e' : type === 'flux' ? '#059669' : '#2563eb'
-                        }
-                      ]}>
-                        <Feather 
-                          name={type === 'off-peak' ? 'settings' : 'zap'} 
-                          size={18} 
-                          color="#ffffff" 
-                        />
-                      </View>
-                      <Text style={[styles.groupTitle, { color: theme.primaryText }]}>
-                        {type === 'v44'
-                          ? 'EPVS v4.4 Calculator Files'
-                          : type === 'flux'
-                            ? 'Flux Calculator Files'
-                            : 'Off Peak Calculator Files'}
-                      </Text>
-                      <Text style={[styles.groupCount, { color: theme.secondaryText }]}>
-                        {sheets.length} file{sheets.length !== 1 ? 's' : ''}
-                      </Text>
-                    </View>
-                    
-                    {sheets.map((sheet, index) => {
-                      const versionName = getVersionName(sheet);
-                      const sheetIsV44 = isV44Sheet(sheet);
-                      const sheetIsEpvs = sheetIsV44 || sheet.calculatorType === 'epvs' || sheet.calculatorType === 'flux';
-                      
-                      return (
-                        <TouchableOpacity
-                          key={`${type}-${index}`}
-                          style={[
-                            styles.sheetOption,
-                            { 
-                              backgroundColor: theme.cardBackground,
-                              borderColor: theme.cardBorder
-                            },
-                            selectedSheet?.fileName === sheet.fileName && {
-                              borderColor: theme.primaryButton,
-                              backgroundColor: isDark 
-                                ? theme.primaryButton + '20' 
-                                : theme.primaryButton + '10'
-                            }
-                          ]}
-                          onPress={() => setSelectedSheet(sheet)}
-                          activeOpacity={0.7}
-                        >
-                          <View style={styles.sheetInfo}>
-                            <View style={styles.sheetHeader}>
-                              <View style={[
-                                styles.calculatorTypeBadge,
-                                { 
-                                  backgroundColor: sheetIsV44 ? '#0d9488' : sheetIsEpvs ? '#10b981' : '#3b82f6',
-                                  borderColor: sheetIsV44 ? '#0f766e' : sheetIsEpvs ? '#059669' : '#2563eb'
-                                }
-                              ]}>
-                                <Feather 
-                                  name={sheetIsEpvs ? 'zap' : 'settings'} 
-                                  size={16} 
-                                  color="#ffffff" 
-                                />
-                              </View>
-                              <View style={styles.sheetNameContainer}>
-                                <Text style={[styles.sheetName, { color: theme.primaryText }]}>
-                                  {versionName}
-                                </Text>
-                                <Text style={[
-                                  styles.calculatorTypeLabel,
-                                  { color: sheetIsV44 ? '#0f766e' : sheetIsEpvs ? '#059669' : '#2563eb' }
-                                ]}>
-                                  {sheetIsV44
-                                    ? 'EPVS v4.4 Calculator'
-                                    : sheetIsEpvs
-                                      ? 'EPVS/Flux Calculator'
-                                      : 'Off Peak Calculator'}
-                                </Text>
-                              </View>
-                            </View>
-                            <View style={styles.sheetDetails}>
-                              <Text style={[styles.sheetDate, { color: theme.secondaryText }]}>
-                                {new Date(sheet.lastModified).toLocaleString()}
-                              </Text>
-                            </View>
-                          </View>
-                          {selectedSheet?.fileName === sheet.fileName && (
-                            <Feather name="check-circle" size={24} color={theme.primaryButton} />
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                ))}
-              </View>
-            )}
+          <ExcelSheetPicker
+            sheets={availableSheets}
+            selectedSheet={selectedSheet}
+            onSelect={(sheet) => setSelectedSheet(sheet as SheetInfo)}
+            loading={loadingSheets}
+            emptyTitle="No calculators available"
+            emptyMessage="Complete the calculator step first, then come back here."
+            introText="Tap a calculator below. Files are listed from V1 to the latest."
+          />
         </View>
       </ScrollView>
       
@@ -1218,7 +1044,7 @@ export default function SolarProjectionScreen() {
             <View style={styles.headerTextContainer}>
               <Text style={[styles.headerTitle, { color: theme.primaryText }]}>Solar Projection</Text>
               <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
-                {selectedSheet ? getVersionName(selectedSheet) : 'Solar Projection'}
+                {selectedSheet ? getExcelSheetDisplayName(selectedSheet) : 'Solar Projection'}
               </Text>
             </View>
           </View>
