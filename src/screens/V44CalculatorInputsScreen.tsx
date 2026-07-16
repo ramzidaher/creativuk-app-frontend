@@ -54,6 +54,7 @@ export default function V44CalculatorInputsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { opportunityId } = route.params as RouteParams;
+  const routeCustomer = (route.params as RouteParams).customerDetails;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -64,7 +65,7 @@ export default function V44CalculatorInputsScreen() {
   const [equipment, setEquipment] = useState<Equipment | null>(null);
   const [radios, setRadios] = useState<Record<string, number>>({});
   const [inputs, setInputs] = useState<Record<string, string>>({});
-  const [customerDetails, setCustomerDetails] = useState<RouteParams['customerDetails']>();
+  const [customerDetails, setCustomerDetails] = useState<RouteParams['customerDetails']>(routeCustomer);
   const [dropdown, setDropdown] = useState<{
     fieldId: string;
     label: string;
@@ -378,6 +379,8 @@ export default function V44CalculatorInputsScreen() {
 
       navigation.navigate('SolarArraysInputs', {
         opportunityId,
+        customerDetails,
+        calculatorType: 'v44',
       });
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save');
@@ -413,7 +416,7 @@ export default function V44CalculatorInputsScreen() {
     <View
       style={[
         styles.container,
-        { backgroundColor: theme.background },
+        { backgroundColor: theme.primaryBackground },
         Platform.OS === 'web' && {
           height: '100vh' as any,
           maxHeight: '100vh' as any,
@@ -421,14 +424,47 @@ export default function V44CalculatorInputsScreen() {
         },
       ]}
     >
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
-            <Feather name="arrow-left" size={22} color={theme.primaryText} />
-          </TouchableOpacity>
-          <Text style={[styles.title, { color: theme.primaryText }]}>Calculator Inputs</Text>
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: theme.cardBackground, borderBottomColor: theme.cardBorder },
+        ]}
+      >
+        <View style={styles.headerTop}>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity
+              style={[styles.backButton, { backgroundColor: isDark ? '#1e293b' : '#f8fafc' }]}
+              onPress={() => navigation.goBack()}
+            >
+              <Feather name="arrow-left" size={20} color={theme.secondaryText} />
+            </TouchableOpacity>
+            <View style={styles.headerTextContainer}>
+              <Text style={[styles.headerTitle, { color: theme.primaryText }]}>
+                Calculator Inputs
+              </Text>
+              <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
+                Equipment, tariffs, and system details
+              </Text>
+            </View>
+          </View>
         </View>
+        <View style={[styles.customerInfoContainer, { borderTopColor: theme.cardBorder }]}>
+          <View style={styles.customerInfoLeft}>
+            <Feather name="user" size={16} color={theme.primaryButton} />
+            <Text style={[styles.customerName, { color: theme.primaryText }]}>
+              {customerDetails?.customerName || 'Customer'}
+            </Text>
+          </View>
+          <View style={styles.customerInfoRight}>
+            <Feather name="map-pin" size={16} color={theme.secondaryText} />
+            <Text style={[styles.customerPostcode, { color: theme.secondaryText }]}>
+              {customerDetails?.postcode || '—'}
+            </Text>
+          </View>
+        </View>
+      </View>
 
+      <SafeAreaView style={styles.safe} edges={['left', 'right', 'bottom']}>
         <ScrollView
           style={[
             styles.scrollView,
@@ -891,14 +927,82 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 24,
+    paddingHorizontal: 16,
+    backgroundColor: '#ffffff',
+    shadowColor: 'rgba(0, 0, 0, 0.12)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
+    flex: 1,
   },
-  back: { padding: 4 },
-  title: { fontSize: 20, fontWeight: '700', flex: 1 },
+  backButton: {
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: 'rgba(0, 0, 0, 0.08)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.04)',
+    marginRight: 16,
+  },
+  headerTextContainer: { flex: 1 },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+  },
+  headerSubtitle: {
+    fontSize: 15,
+    marginTop: 4,
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  customerInfoContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  customerInfoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  customerInfoRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  customerName: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  customerPostcode: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
   content: { padding: 16, paddingBottom: 40 },
   card: {
     borderWidth: 1,

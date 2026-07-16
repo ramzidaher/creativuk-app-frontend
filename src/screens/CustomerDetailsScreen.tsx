@@ -594,6 +594,8 @@ export default function CustomerDetailsScreen() {
       if (calculatorType === 'v44') {
         (navigation as any).navigate('CalculatorQuestions', {
           opportunityId,
+          customerDetails: details,
+          calculatorType: 'v44',
         });
       } else if (calculatorType === 'flux') {
         (navigation as any).navigate('FluxRadioButton', {
@@ -628,6 +630,8 @@ export default function CustomerDetailsScreen() {
       if (calcType === 'v44') {
         (navigation as any).navigate('CalculatorQuestions', {
           opportunityId,
+          customerDetails: details,
+          calculatorType: 'v44',
         });
       } else if (calcType === 'flux') {
         (navigation as any).navigate('Calculator', {
@@ -899,6 +903,8 @@ export default function CustomerDetailsScreen() {
                     if (calculatorType === 'v44') {
                       (navigation as any).navigate('CalculatorQuestions', {
                         opportunityId,
+                        customerDetails: details,
+                        calculatorType: 'v44',
                       });
                     } else if (calculatorType === 'flux') {
                       (navigation as any).navigate('FluxRadioButton', {
@@ -931,6 +937,8 @@ export default function CustomerDetailsScreen() {
                     if (calcType === 'v44') {
                       (navigation as any).navigate('CalculatorQuestions', {
                         opportunityId,
+                        customerDetails: details,
+                        calculatorType: 'v44',
                       });
                     } else if (calcType === 'flux') {
                       (navigation as any).navigate('Calculator', {

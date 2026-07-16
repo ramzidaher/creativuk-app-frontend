@@ -171,6 +171,7 @@ export default function SolarArraysInputsScreen() {
     (navigation as any).navigate('Pricing', {
       opportunityId,
       calculatorType,
+      customerDetails: customerDetails || routeParams.customerDetails,
     });
   };
 
@@ -927,7 +928,7 @@ export default function SolarArraysInputsScreen() {
         {
           backgroundColor: theme.cardBackground,
           borderBottomColor: theme.cardBorder,
-          paddingHorizontal: isNarrow ? 16 : 32,
+          paddingHorizontal: isNarrow ? 16 : 24,
         },
       ]}> 
         <View style={styles.headerTop}>
@@ -941,10 +942,9 @@ export default function SolarArraysInputsScreen() {
                 },
               ]}
               onPress={() => {
-                // Navigate directly to SolarWorkflowScreen instead of going back
                 (navigation as any).navigate('SolarWorkflow', { 
                   opportunityId: opportunityId,
-                  opportunity: null // Pass null as we don't have opportunity data here
+                  opportunity: null,
                 });
               }}
             >
@@ -971,24 +971,27 @@ export default function SolarArraysInputsScreen() {
             </TouchableOpacity>
           )}
         </View>
-        
-        {/* Customer Information */}
-        {customerInfo && (
-          <View style={styles.customerInfoContainer}>
-            <View style={styles.customerInfoLeft}>
-              <Feather name="user" size={16} color={theme.primaryButton} />
-              <Text style={[styles.customerName, { color: theme.primaryText }]}>
-                {customerInfo.name}
-              </Text>
-            </View>
-            <View style={styles.customerInfoRight}>
-              <Feather name="map-pin" size={16} color={theme.secondaryText} />
-              <Text style={[styles.customerPostcode, { color: theme.secondaryText }]}>
-                {customerInfo.postcode}
-              </Text>
-            </View>
+
+        <View style={[styles.customerInfoContainer, { borderTopColor: theme.cardBorder }]}>
+          <View style={styles.customerInfoLeft}>
+            <Feather name="user" size={16} color={theme.primaryButton} />
+            <Text style={[styles.customerName, { color: theme.primaryText }]}>
+              {customerInfo?.name ||
+                customerDetails?.customerName ||
+                routeParams.customerDetails?.customerName ||
+                'Customer'}
+            </Text>
           </View>
-        )}
+          <View style={styles.customerInfoRight}>
+            <Feather name="map-pin" size={16} color={theme.secondaryText} />
+            <Text style={[styles.customerPostcode, { color: theme.secondaryText }]}>
+              {customerInfo?.postcode ||
+                customerDetails?.postcode ||
+                routeParams.customerDetails?.postcode ||
+                '—'}
+            </Text>
+          </View>
+        </View>
       </View>
 
       <ScrollView 
@@ -1553,9 +1556,23 @@ const styles = StyleSheet.create({
   },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  backButton: { borderRadius: 16, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.04)', marginRight: 16 },
+  backButton: {
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: 'rgba(0, 0, 0, 0.08)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.04)',
+    marginRight: 16,
+  },
   headerTextContainer: { flex: 1 },
-  headerTitle: { fontWeight: '800', color: '#1e293b', letterSpacing: -0.8 },
+  headerTitle: { fontSize: 24, fontWeight: '800', color: '#1e293b', letterSpacing: -0.8 },
   headerSubtitle: { fontSize: 15, color: '#64748b', marginTop: 4, lineHeight: 20, fontWeight: '500' },
   customerInfoContainer: {
     flexDirection: 'row',
