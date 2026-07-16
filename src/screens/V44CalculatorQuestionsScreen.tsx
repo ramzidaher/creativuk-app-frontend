@@ -299,11 +299,29 @@ export default function V44CalculatorQuestionsScreen() {
                           />
                         ) : null}
                       </View>
-                    <Text style={[styles.optionLabel, { color: theme.primaryText }]}>
-                        {group.id === 'battery_savings' && opt.value === 3
-                          ? 'Octopus Flux'
-                          : opt.label}
-                      </Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.optionLabel, { color: theme.primaryText }]}>
+                          {group.id === 'battery_savings' && opt.value === 3
+                            ? 'Octopus Flux'
+                            : opt.label}
+                        </Text>
+                        {group.id === 'battery_savings' && opt.value === 2 ? (
+                          <Text
+                            style={[styles.optionHint, { color: theme.secondaryText }]}
+                          >
+                            Prefills New Electricity Tariff with 100Green rates
+                            (Single 27.73/7.00 · Dual 36.26/7.00) and 12p export
+                          </Text>
+                        ) : null}
+                        {group.id === 'battery_savings' && opt.value === 1 ? (
+                          <Text
+                            style={[styles.optionHint, { color: theme.secondaryText }]}
+                          >
+                            Copies current tariff into New Electricity Tariff · 12p
+                            export · night rate disabled
+                          </Text>
+                        ) : null}
+                      </View>
                     </TouchableOpacity>
                   );
                 })}
@@ -442,7 +460,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   radioInner: { width: 12, height: 12, borderRadius: 6 },
-  optionLabel: { fontSize: 15, flex: 1 },
+  optionLabel: { fontSize: 15, fontWeight: '600' },
+  optionHint: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 4,
+    fontWeight: '500',
+  },
   continue: {
     marginTop: 8,
     borderRadius: 12,

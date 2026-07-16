@@ -939,8 +939,31 @@ export default function V44CalculatorInputsScreen() {
               ]}
             >
               <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
-                {section.title}
+                {section.id === 'new_overnight' &&
+                (radios.battery_savings === 2 || radios.battery_savings === 5)
+                  ? 'New Electricity Tariff (100Green)'
+                  : section.title}
               </Text>
+
+              {section.id === 'new_overnight' &&
+              (radios.battery_savings === 2 || radios.battery_savings === 5) ? (
+                <View
+                  style={[
+                    styles.infoBanner,
+                    {
+                      backgroundColor: theme.primaryButton + '14',
+                      borderColor: theme.primaryButton + '40',
+                    },
+                  ]}
+                >
+                  <Feather name="zap" size={16} color={theme.primaryButton} />
+                  <Text style={[styles.infoBannerText, { color: theme.primaryText }]}>
+                    Pre-filled with 100Green overnight rates — Single 27.73p day /
+                    7.00p night, Dual 36.26p day / 7.00p night. Export defaults to
+                    12p.
+                  </Text>
+                </View>
+              ) : null}
 
               {section.id === 'new_overnight' || section.id === 'export_tariff' ? (
                 <View style={styles.overrideRow}>
@@ -952,8 +975,8 @@ export default function V44CalculatorInputsScreen() {
                       {section.id === 'new_overnight'
                         ? radios.battery_savings === 1
                           ? 'Locked to Current Electricity Tariff. Night rate is not used for self-consumption.'
-                          : 'Locked to 100Green (Single 27.73 / 7.00 · Dual 36.26 / 7.00).'
-                        : 'Locked to 12p/kWh export.'}
+                          : 'Locked to 100Green tariff defaults. Turn Override on to enter different rates.'
+                        : 'Locked to 12p/kWh export (100Green / SEG default).'}
                     </Text>
                   </View>
                   <Switch
@@ -1013,7 +1036,7 @@ export default function V44CalculatorInputsScreen() {
                   id: 'export_tariff_rate',
                   label: 'Export Tariff (pence per kWh)',
                   locked: !tariffOverride,
-                  badge: '12p default',
+                  badge: '12p · 100Green',
                 })
               ) : (
                 fields.map(renderField)
@@ -1171,6 +1194,22 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
   fluxHint: { fontSize: 13, lineHeight: 18, marginBottom: 10 },
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  infoBannerText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
   overrideRow: {
     flexDirection: 'row',
     alignItems: 'center',
