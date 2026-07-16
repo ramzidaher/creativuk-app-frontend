@@ -222,15 +222,19 @@ export default function SolarProjectionScreen() {
         })));
         setAvailableSheets(sheets);
 
-        // Deep-link / workflow with calculatorType=v44 → open the v4.4 file directly
+        // Prefer selecting the matching calculator type in the list, but always keep the picker
+        // so reps can choose between v4.4 / flux / off-peak versions for this opportunity.
         if (routeCalculatorType === 'v44') {
           const v44Sheet =
             sheets.find((s) => isV44Sheet(s)) ||
             sheets.find((s) => (s.fileName || '').toLowerCase().includes('v4.4'));
           if (v44Sheet) {
             setSelectedSheet(v44Sheet);
-            setStep('projection');
-            await loadSolarProjectionData(v44Sheet);
+          }
+        } else if (routeCalculatorType) {
+          const match = sheets.find((s) => s.calculatorType === routeCalculatorType);
+          if (match) {
+            setSelectedSheet(match);
           }
         }
       } else {
