@@ -67,10 +67,10 @@ export default function PricingScreen() {
   const [totalCost, setTotalCost] = useState<number>(0);
   
   // Payment method and related fields
-  // v4.4 Excel: Cash | Finance | Interest Free Loan | HomeTree (shape Lease)
+  // v4.4: Cash | HomeTree | Finance
   // Flux/Off-peak: Cash | Hometree | New Finance
   const [paymentMethod, setPaymentMethod] = useState<
-    'Cash' | 'Hometree' | 'New Finance' | 'Finance' | 'Interest Free Loan' | null
+    'Cash' | 'Hometree' | 'New Finance' | 'Finance' | null
   >(null);
   const [deposit, setDeposit] = useState<string>('');
   const [interestRate, setInterestRate] = useState<string>('');
@@ -246,14 +246,6 @@ export default function PricingScreen() {
             paymentTerm: true,
             leaseMonthlyPayment: false,
           };
-        case 'Interest Free Loan':
-          return {
-            deposit: true,
-            interestRate: false,
-            interestRateType: false,
-            paymentTerm: true,
-            leaseMonthlyPayment: false,
-          };
         case 'Hometree':
           return {
             deposit: true,
@@ -310,15 +302,14 @@ export default function PricingScreen() {
   };
 
   const paymentMethodOptions: Array<{
-    value: 'Cash' | 'Hometree' | 'New Finance' | 'Finance' | 'Interest Free Loan';
+    value: 'Cash' | 'Hometree' | 'New Finance' | 'Finance';
     label: string;
   }> =
     calculatorType === 'v44'
       ? [
           { value: 'Cash', label: 'Cash' },
-          { value: 'Interest Free Loan', label: 'Interest Free Loan' },
-          { value: 'Finance', label: 'Finance' },
           { value: 'Hometree', label: 'HomeTree' },
+          { value: 'Finance', label: 'Finance' },
         ]
       : [
           { value: 'Cash', label: 'Cash' },
@@ -721,7 +712,7 @@ export default function PricingScreen() {
   };
 
   const selectPaymentMethodRadioButton = async (
-    paymentMethod: 'Cash' | 'Hometree' | 'New Finance' | 'Finance' | 'Interest Free Loan',
+    paymentMethod: 'Cash' | 'Hometree' | 'New Finance' | 'Finance',
   ) => {
     // Save payment method to JSON silently in the background (NO COM call - Excel update happens on final submit)
     try {
@@ -787,10 +778,6 @@ export default function PricingScreen() {
         setPaymentTerm('');
         setLeaseMonthlyPayment('');
       } else if (method === 'Finance') {
-        setLeaseMonthlyPayment('');
-      } else if (method === 'Interest Free Loan') {
-        setInterestRate('');
-        setInterestRateType('');
         setLeaseMonthlyPayment('');
       } else if (method === 'Hometree') {
         setInterestRate('');
