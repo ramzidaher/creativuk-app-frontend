@@ -8,6 +8,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -22,6 +23,8 @@ import {
   V44Field,
   V44RadioGroup,
   V44Section,
+  V44_100GREEN_RATES,
+  V44_EXPORT_TARIFF_DEFAULT,
   applyCascadeClear,
   applyNewTariffDefaults,
   fieldsClearedByRadioChange,
@@ -73,6 +76,8 @@ export default function V44CalculatorInputsScreen() {
   } | null>(null);
   const [fluxRatesStatus, setFluxRatesStatus] = useState<string | null>(null);
   const [fluxRatesLoading, setFluxRatesLoading] = useState(false);
+  /** When false, New Electricity Tariff / Export stay locked to auto defaults */
+  const [tariffOverride, setTariffOverride] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -110,8 +115,33 @@ export default function V44CalculatorInputsScreen() {
         restoredInputs.address = c.address || '';
         restoredInputs.postcode = c.postcode || '';
       }
-      // Prefill 100Green / export 12 / SC copy when empty (keep saved overrides)
-      setInputs(applyNewTariffDefaults(restoredRadios, restoredInputs, { force: false }));
+      // Always apply 100Green / SC / export defaults on load so reps see values immediately.
+      // Saved non-default overrides are kept when tariffOverride was previously used
+      // (detected if saved rates differ from the auto defaults for the current radios).
+      const withDefaults = applyNewTariffDefaults(restoredRadios, restoredInputs, {
+        force: true,
+      });
+      const savings = restoredRadios.battery_savings;
+      const tariff = restoredRadios.current_tariff ?? 1;
+      const green =
+        tariff === 2 ? V44_100GREEN_RATES.dual : V44_100GREEN_RATES.single;
+      const savedPeak = String(restoredInputs.new_peak_rate ?? '').trim();
+      const savedNight = String(restoredInputs.new_offpeak_rate ?? '').trim();
+      const savedExport = String(restoredInputs.export_tariff_rate ?? '').trim();
+      let keepOverride = false;
+      if (savings === 2 || savings === 5) {
+        keepOverride =
+          (savedPeak && savedPeak !== green.day) ||
+          (savedNight && savedNight !== green.night) ||
+          (savedExport && savedExport !== V44_EXPORT_TARIFF_DEFAULT);
+      } else if (savings === 1) {
+        const currentDay = String(restoredInputs.current_rate_1 ?? '').trim();
+        keepOverride =
+          (savedPeak && currentDay && savedPeak !== currentDay) ||
+          (savedExport && savedExport !== V44_EXPORT_TARIFF_DEFAULT);
+      }
+      setTariffOverride(keepOverride);
+      setInputs(keepOverride ? { ...withDefaults, ...restoredInputs } : withDefaults);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
@@ -243,7 +273,8 @@ export default function V44CalculatorInputsScreen() {
         cleared.forEach((id) => delete copy[id]);
         // Re-apply New Electricity Tariff / export defaults when savings or tariff type changes
         const forceDefaults =
-          groupId === 'battery_savings' || groupId === 'current_tariff';
+          !tariffOverride &&
+          (groupId === 'battery_savings' || groupId === 'current_tariff');
         return applyNewTariffDefaults(next, copy, { force: forceDefaults });
       });
       return next;
@@ -256,19 +287,82 @@ export default function V44CalculatorInputsScreen() {
       next = applyCascadeClear(fieldId, next);
       next[fieldId] = value;
       // Self-consumption: keep New day rate in sync when Current day rate changes
-      // only if new_peak was empty or still matched the previous current rate
+      // only while rates are locked to defaults (not overridden)
       if (
         fieldId === 'current_rate_1' &&
-        radios.battery_savings === 1
+        radios.battery_savings === 1 &&
+        !tariffOverride
       ) {
-        const prevCurrent = String(prev.current_rate_1 ?? '').trim();
-        const prevNew = String(prev.new_peak_rate ?? '').trim();
-        if (!prevNew || prevNew === prevCurrent) {
-          next.new_peak_rate = value;
-        }
+        next.new_peak_rate = value;
       }
       return next;
     });
+  };
+
+  const toggleTariffOverride = (enabled: boolean) => {
+    setTariffOverride(enabled);
+    if (!enabled) {
+      setInputs((prev) => applyNewTariffDefaults(radios, prev, { force: true }));
+    }
+  };
+
+  const renderTariffNumberField = (opts: {
+    id: string;
+    label: string;
+    locked: boolean;
+    lockedReason?: string;
+    badge?: string;
+  }) => {
+    const value = inputs[opts.id] || '';
+    const locked = opts.locked;
+    return (
+      <View key={opts.id} style={styles.field}>
+        <View style={styles.labelRow}>
+          <Text style={[styles.label, { color: theme.secondaryText, flex: 1 }]}>
+            {opts.label}
+          </Text>
+          {opts.badge ? (
+            <View style={[styles.badge, { backgroundColor: theme.primaryButton + '22' }]}>
+              <Text style={[styles.badgeText, { color: theme.primaryButton }]}>
+                {opts.badge}
+              </Text>
+            </View>
+          ) : null}
+          {locked ? (
+            <View style={styles.lockRow}>
+              <Feather name="lock" size={14} color={theme.secondaryText} />
+              <Text style={[styles.lockText, { color: theme.secondaryText }]}>
+                Locked
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <TextInput
+          style={[
+            styles.input,
+            {
+              backgroundColor: locked
+                ? (isDark ? '#1e293b' : '#f1f5f9')
+                : theme.inputBackground,
+              borderColor: theme.cardBorder,
+              color: locked ? theme.secondaryText : theme.primaryText,
+              opacity: locked ? 0.85 : 1,
+            },
+          ]}
+          value={value}
+          onChangeText={(t) => setInput(opts.id, t)}
+          editable={!locked}
+          keyboardType="decimal-pad"
+          placeholder={opts.lockedReason || '—'}
+          placeholderTextColor={theme.secondaryText}
+        />
+        {opts.lockedReason ? (
+          <Text style={[styles.fieldHint, { color: theme.secondaryText }]}>
+            {opts.lockedReason}
+          </Text>
+        ) : null}
+      </View>
+    );
   };
 
   const dropdownOptions = useCallback(
@@ -847,19 +941,83 @@ export default function V44CalculatorInputsScreen() {
               <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
                 {section.title}
               </Text>
+
+              {section.id === 'new_overnight' || section.id === 'export_tariff' ? (
+                <View style={styles.overrideRow}>
+                  <View style={{ flex: 1, paddingRight: 12 }}>
+                    <Text style={[styles.overrideTitle, { color: theme.primaryText }]}>
+                      Override rates
+                    </Text>
+                    <Text style={[styles.fluxHint, { color: theme.secondaryText, marginBottom: 0 }]}>
+                      {section.id === 'new_overnight'
+                        ? radios.battery_savings === 1
+                          ? 'Locked to Current Electricity Tariff. Night rate is not used for self-consumption.'
+                          : 'Locked to 100Green (Single 27.73 / 7.00 · Dual 36.26 / 7.00).'
+                        : 'Locked to 12p/kWh export.'}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={tariffOverride}
+                    onValueChange={toggleTariffOverride}
+                    trackColor={{ false: '#cbd5e1', true: theme.primaryButton }}
+                    thumbColor="#ffffff"
+                  />
+                </View>
+              ) : null}
+
               {section.id === 'new_overnight' ? (
-                <Text style={[styles.fluxHint, { color: theme.secondaryText }]}>
+                <>
+                  {renderTariffNumberField({
+                    id: 'new_peak_rate',
+                    label: 'Peak / Day Rate (pence per kWh)',
+                    locked: !tariffOverride,
+                    badge:
+                      radios.battery_savings === 1
+                        ? 'From current tariff'
+                        : '100Green',
+                  })}
                   {radios.battery_savings === 1
-                    ? 'Pre-filled from Current Electricity Tariff (night rate not used for self-consumption). You can override.'
-                    : 'Pre-filled with 100Green rates (Single 27.73 / 7.00 · Dual 36.26 / 7.00). You can override.'}
-                </Text>
-              ) : null}
-              {section.id === 'export_tariff' ? (
-                <Text style={[styles.fluxHint, { color: theme.secondaryText }]}>
-                  Pre-filled at 12p/kWh. You can override.
-                </Text>
-              ) : null}
-              {fields.map(renderField)}
+                    ? renderTariffNumberField({
+                        id: 'new_offpeak_rate_locked',
+                        label: 'Off-Peak / Night Rate (pence per kWh)',
+                        locked: true,
+                        lockedReason: 'Not applicable for self-consumption',
+                        badge: 'Disabled',
+                      })
+                    : (
+                      <>
+                        {renderTariffNumberField({
+                          id: 'new_offpeak_rate',
+                          label: 'Off-Peak / Night Rate (pence per kWh)',
+                          locked: !tariffOverride,
+                          badge: '100Green',
+                        })}
+                        {fields
+                          .filter(
+                            (f) =>
+                              f.id === 'new_offpeak_hours' ||
+                              f.id === 'new_standing_charge',
+                          )
+                          .map((f) =>
+                            renderTariffNumberField({
+                              id: f.id,
+                              label: resolveFieldLabel(f, radios, true),
+                              locked: !tariffOverride,
+                            }),
+                          )}
+                      </>
+                    )}
+                </>
+              ) : section.id === 'export_tariff' ? (
+                renderTariffNumberField({
+                  id: 'export_tariff_rate',
+                  label: 'Export Tariff (pence per kWh)',
+                  locked: !tariffOverride,
+                  badge: '12p default',
+                })
+              ) : (
+                fields.map(renderField)
+              )}
             </View>
           );
         })}
@@ -1013,6 +1171,48 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
   fluxHint: { fontSize: 13, lineHeight: 18, marginBottom: 10 },
+  overrideRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+  },
+  overrideTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  lockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  lockText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  fieldHint: {
+    fontSize: 12,
+    marginTop: 6,
+    lineHeight: 16,
+  },
   fluxPullRow: { marginBottom: 12, gap: 8 },
   fluxPullBtn: {
     alignSelf: 'flex-start',
