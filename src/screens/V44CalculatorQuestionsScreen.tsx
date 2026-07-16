@@ -112,6 +112,7 @@ export default function V44CalculatorQuestionsScreen() {
       setSaving(true);
       const toSave = {
         ...radios,
+        existing_solar: 2,
         installing_new_solar: 1,
         inverter_new: 1,
       };

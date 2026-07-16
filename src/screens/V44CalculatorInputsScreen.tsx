@@ -362,6 +362,7 @@ export default function V44CalculatorInputsScreen() {
       setSaving(true);
       const toSaveRadios = {
         ...radios,
+        existing_solar: 2,
         installing_new_solar: 1,
         inverter_new: 1,
       };

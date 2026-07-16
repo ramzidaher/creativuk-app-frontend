@@ -46,7 +46,6 @@ export type V44Section = {
 
 /** Questions page radio group ids — Excel Inputs sheet order (top → bottom) */
 export const V44_QUESTIONS_GROUP_IDS = [
-  'existing_solar',
   'battery_savings',
   'current_tariff',
   'usage_known',
@@ -269,6 +268,7 @@ export function defaultRadios(groups: V44RadioGroup[]): Record<string, number> {
     radios[g.id] = g.defaultValue;
   }
   // Meeting / plan defaults
+  radios.existing_solar = 2; // No existing system — question removed from UI
   radios.installing_new_solar = 1;
   radios.inverter_new = 1;
   radios.usage_known = 1;
