@@ -12,7 +12,8 @@ export const DEVELOPMENT_CONFIG = {
 
     // Windows Excel server — DEV Nest (creativ-backend-dev on 3010)
     // Prod on that box stays on 3000 and is untouched.
-    WINDOWS_DEV: 'http://10.0.0.4:3010/',
+    // Public IP (Azure); LAN was 10.0.0.4 — use public when not on that network.
+    WINDOWS_DEV: 'http://172.187.217.251:3010/',
     
     // Relative path (for production build testing)
     RELATIVE: '/api/',
