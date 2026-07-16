@@ -43,12 +43,13 @@ export interface CalculatorProgressData {
     selectedBatteryType: '5kW' | '10kW';
     selectedNumberOfPanels: number;
     additionalItemQuantities: Record<string, number>;
-    paymentMethod: 'Cash' | 'Hometree' | 'New Finance' | null;
+    paymentMethod: 'Cash' | 'Hometree' | 'New Finance' | 'Finance' | 'Interest Free Loan' | null;
     totalSystemCost?: string; // Total system cost (total_system_cost)
     deposit: string;
     interestRate: string;
     interestRateType: string;
     paymentTerm: string;
+    leaseMonthlyPayment?: string;
   };
   
   // Customer Details

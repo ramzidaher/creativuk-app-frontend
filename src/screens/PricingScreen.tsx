@@ -67,11 +67,16 @@ export default function PricingScreen() {
   const [totalCost, setTotalCost] = useState<number>(0);
   
   // Payment method and related fields
-  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Hometree' | 'New Finance' | null>(null);
+  // v4.4 Excel: Cash | Finance | Interest Free Loan | HomeTree (shape Lease)
+  // Flux/Off-peak: Cash | Hometree | New Finance
+  const [paymentMethod, setPaymentMethod] = useState<
+    'Cash' | 'Hometree' | 'New Finance' | 'Finance' | 'Interest Free Loan' | null
+  >(null);
   const [deposit, setDeposit] = useState<string>('');
   const [interestRate, setInterestRate] = useState<string>('');
   const [interestRateType, setInterestRateType] = useState<string>('');
   const [paymentTerm, setPaymentTerm] = useState<string>('');
+  const [leaseMonthlyPayment, setLeaseMonthlyPayment] = useState<string>('');
   const [interestRateTypeOptions, setInterestRateTypeOptions] = useState<string[]>([]);
   const [loadingDropdownOptions, setLoadingDropdownOptions] = useState(false);
   const [showDropdownModal, setShowDropdownModal] = useState(false);
@@ -116,7 +121,8 @@ export default function PricingScreen() {
       deposit,
       interestRate,
       interestRateType,
-      paymentTerm
+      paymentTerm,
+      leaseMonthlyPayment,
     });
     console.log('🔍 Saved pricing data:', savedPricingData);
     
@@ -137,7 +143,9 @@ export default function PricingScreen() {
       (enabledFields.deposit && deposit !== savedPricingData.deposit) ||
       (enabledFields.interestRate && interestRate !== savedPricingData.interestRate) ||
       (enabledFields.interestRateType && interestRateType !== savedPricingData.interestRateType) ||
-      (enabledFields.paymentTerm && paymentTerm !== savedPricingData.paymentTerm)
+      (enabledFields.paymentTerm && paymentTerm !== savedPricingData.paymentTerm) ||
+      (enabledFields.leaseMonthlyPayment &&
+        leaseMonthlyPayment !== (savedPricingData.leaseMonthlyPayment || ''))
     );
     
     const hasChangesResult = basicChanges || paymentMethodChanges;
@@ -155,7 +163,7 @@ export default function PricingScreen() {
     }
     
     return hasChangesResult;
-  }, [selectedBatteryType, selectedNumberOfPanels, additionalItemQuantities, paymentMethod, deposit, interestRate, interestRateType, paymentTerm, savedPricingData]);
+  }, [selectedBatteryType, selectedNumberOfPanels, additionalItemQuantities, paymentMethod, deposit, interestRate, interestRateType, paymentTerm, leaseMonthlyPayment, savedPricingData]);
 
   // Pricing structure based on the image
   const pricingOptions: PricingOption[] = [
@@ -218,38 +226,105 @@ export default function PricingScreen() {
   ];
 
   // Determine which fields should be enabled based on payment method
+  // v4.4 mirrors Excel TogglePaymentMethod / Inputs yellow cells (screenshot SYSTEM COSTS)
   const getEnabledFields = () => {
+    if (calculatorType === 'v44') {
+      switch (paymentMethod) {
+        case 'Cash':
+          return {
+            deposit: false,
+            interestRate: false,
+            interestRateType: false,
+            paymentTerm: false,
+            leaseMonthlyPayment: false,
+          };
+        case 'Finance':
+          return {
+            deposit: true,
+            interestRate: true,
+            interestRateType: true,
+            paymentTerm: true,
+            leaseMonthlyPayment: false,
+          };
+        case 'Interest Free Loan':
+          return {
+            deposit: true,
+            interestRate: false,
+            interestRateType: false,
+            paymentTerm: true,
+            leaseMonthlyPayment: false,
+          };
+        case 'Hometree':
+          return {
+            deposit: true,
+            interestRate: false,
+            interestRateType: false,
+            paymentTerm: true,
+            leaseMonthlyPayment: true,
+          };
+        default:
+          return {
+            deposit: false,
+            interestRate: false,
+            interestRateType: false,
+            paymentTerm: false,
+            leaseMonthlyPayment: false,
+          };
+      }
+    }
+
     switch (paymentMethod) {
       case 'Cash':
         return {
-          deposit: true,        // Cash shows deposit field
-          interestRate: false,  // No interest rate for cash
-          interestRateType: false, // No interest rate type for cash
-          paymentTerm: false    // No payment terms for cash
+          deposit: true,
+          interestRate: false,
+          interestRateType: false,
+          paymentTerm: false,
+          leaseMonthlyPayment: false,
         };
       case 'Hometree':
         return {
-          deposit: false,       // Hometree doesn't show deposit
-          interestRate: false,  // Hometree doesn't show interest rate
-          interestRateType: false, // Hometree doesn't show interest rate type
-          paymentTerm: true     // Hometree shows payment terms
+          deposit: false,
+          interestRate: false,
+          interestRateType: false,
+          paymentTerm: true,
+          leaseMonthlyPayment: false,
         };
       case 'New Finance':
         return {
-          deposit: true,        // New Finance shows all fields
-          interestRate: true,   // New Finance shows interest rate
-          interestRateType: true, // New Finance shows interest rate type
-          paymentTerm: true     // New Finance shows payment terms
+          deposit: true,
+          interestRate: true,
+          interestRateType: true,
+          paymentTerm: true,
+          leaseMonthlyPayment: false,
         };
       default:
         return {
           deposit: false,
           interestRate: false,
           interestRateType: false,
-          paymentTerm: false
+          paymentTerm: false,
+          leaseMonthlyPayment: false,
         };
     }
   };
+
+  const paymentMethodOptions: Array<{
+    value: 'Cash' | 'Hometree' | 'New Finance' | 'Finance' | 'Interest Free Loan';
+    label: string;
+  }> =
+    calculatorType === 'v44'
+      ? [
+          { value: 'Cash', label: 'Cash' },
+          { value: 'Interest Free Loan', label: 'Interest Free Loan' },
+          { value: 'Finance', label: 'Finance' },
+          { value: 'Hometree', label: 'HomeTree' },
+        ]
+      : [
+          { value: 'Cash', label: 'Cash' },
+          { value: 'Hometree', label: 'Hometree' },
+          { value: 'New Finance', label: 'New Finance' },
+        ];
 
   const checkForSavedProgress = useCallback(async () => {
     if (isInitialized || isRestoring) return;
@@ -339,6 +414,9 @@ export default function PricingScreen() {
           }
           if (progress.pricingData.paymentTerm) {
             setPaymentTerm(progress.pricingData.paymentTerm);
+          }
+          if (progress.pricingData.leaseMonthlyPayment) {
+            setLeaseMonthlyPayment(progress.pricingData.leaseMonthlyPayment);
           }
           
           // Reset the flag immediately
@@ -452,6 +530,7 @@ export default function PricingScreen() {
         interestRate,
         interestRateType,
         paymentTerm,
+        leaseMonthlyPayment,
       };
 
       const progressDataToSave: any = {
@@ -487,7 +566,7 @@ export default function PricingScreen() {
     } catch (error) {
       console.error('❌ Error saving progress:', error);
     }
-  }, [opportunityId, calculatorType, selectedBatteryType, selectedNumberOfPanels, additionalItemQuantities, paymentMethod, deposit, interestRate, interestRateType, paymentTerm, totalCost, templateFileName, isRestoring]);
+  }, [opportunityId, calculatorType, selectedBatteryType, selectedNumberOfPanels, additionalItemQuantities, paymentMethod, deposit, interestRate, interestRateType, paymentTerm, leaseMonthlyPayment, totalCost, templateFileName, isRestoring]);
 
   // Debounced save function
   const debouncedSave = useCallback(() => {
@@ -519,7 +598,7 @@ export default function PricingScreen() {
     if (isInitialized && !isRestoring && hasRestoredProgress) {
       debouncedSave();
     }
-  }, [selectedBatteryType, selectedNumberOfPanels, additionalItemQuantities, paymentMethod, deposit, interestRate, interestRateType, paymentTerm, isInitialized, isRestoring, hasRestoredProgress, debouncedSave]);
+  }, [selectedBatteryType, selectedNumberOfPanels, additionalItemQuantities, paymentMethod, deposit, interestRate, interestRateType, paymentTerm, leaseMonthlyPayment, isInitialized, isRestoring, hasRestoredProgress, debouncedSave]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -635,7 +714,9 @@ export default function PricingScreen() {
     }, 100);
   };
 
-  const selectPaymentMethodRadioButton = async (paymentMethod: 'Cash' | 'Hometree' | 'New Finance') => {
+  const selectPaymentMethodRadioButton = async (
+    paymentMethod: 'Cash' | 'Hometree' | 'New Finance' | 'Finance' | 'Interest Free Loan',
+  ) => {
     // Save payment method to JSON silently in the background (NO COM call - Excel update happens on final submit)
     try {
       // Get existing progress to preserve customer details
@@ -653,6 +734,7 @@ export default function PricingScreen() {
           interestRate: interestRate || '',
           interestRateType: interestRateType || '',
           paymentTerm: paymentTerm || '',
+          leaseMonthlyPayment: leaseMonthlyPayment || '',
         },
       };
       
@@ -674,7 +756,9 @@ export default function PricingScreen() {
     }
   };
 
-  const handlePaymentMethodChange = (method: 'Cash' | 'Hometree' | 'New Finance') => {
+  const handlePaymentMethodChange = (
+    method: 'Cash' | 'Hometree' | 'New Finance' | 'Finance' | 'Interest Free Loan',
+  ) => {
     // Don't save if we're currently restoring progress
     if (isRestoringProgress.current) {
       return;
@@ -687,6 +771,26 @@ export default function PricingScreen() {
 
     // Immediately update the UI (instant feedback, no loading state)
     setPaymentMethod(method);
+
+    // Clear fields that the new method disables (match Excel grey cells)
+    if (calculatorType === 'v44') {
+      if (method === 'Cash') {
+        setDeposit('');
+        setInterestRate('');
+        setInterestRateType('');
+        setPaymentTerm('');
+        setLeaseMonthlyPayment('');
+      } else if (method === 'Finance') {
+        setLeaseMonthlyPayment('');
+      } else if (method === 'Interest Free Loan') {
+        setInterestRate('');
+        setInterestRateType('');
+        setLeaseMonthlyPayment('');
+      } else if (method === 'Hometree') {
+        setInterestRate('');
+        setInterestRateType('');
+      }
+    }
     
     // Save to JSON in the background silently (no visual feedback)
     selectPaymentMethodRadioButton(method).catch((error) => {
@@ -982,6 +1086,28 @@ export default function PricingScreen() {
         return;
       }
 
+      const enabled = getEnabledFields();
+      if (enabled.deposit && !deposit.trim()) {
+        Alert.alert('Required', 'Please enter the Deposit / Upfront Payment.');
+        return;
+      }
+      if (enabled.interestRate && !interestRate.trim()) {
+        Alert.alert('Required', 'Please enter the Interest Rate.');
+        return;
+      }
+      if (enabled.interestRateType && !interestRateType.trim()) {
+        Alert.alert('Required', 'Please select the Interest Rate Type.');
+        return;
+      }
+      if (enabled.paymentTerm && !paymentTerm.trim()) {
+        Alert.alert('Required', 'Please enter the Payment Term (years).');
+        return;
+      }
+      if (enabled.leaseMonthlyPayment && !leaseMonthlyPayment.trim()) {
+        Alert.alert('Required', 'Please enter the Year 1 Monthly HomeTree Payment.');
+        return;
+      }
+
       // Check if existing files exist
       const hasExisting = await checkForExistingFiles();
       setHasExistingFile(hasExisting);
@@ -1083,6 +1209,10 @@ export default function PricingScreen() {
         inputs['payment_term'] = paymentTerm;
       }
 
+      if (enabledFields.leaseMonthlyPayment && leaseMonthlyPayment) {
+        inputs['lease_monthly_payment'] = leaseMonthlyPayment;
+      }
+
       console.log('Inputs to save:', inputs);
 
         // Save pricing data to JSON (NO COM call - Excel update happens on final submit)
@@ -1108,6 +1238,7 @@ export default function PricingScreen() {
               interestRate: interestRate || '',
               interestRateType: interestRateType || '',
               paymentTerm: paymentTerm || '',
+              leaseMonthlyPayment: leaseMonthlyPayment || '',
             },
           };
           
@@ -1217,7 +1348,8 @@ export default function PricingScreen() {
             deposit: deposit,
             interestRate: interestRate,
             interestRateType: interestRateType,
-            paymentTerm: paymentTerm
+            paymentTerm: paymentTerm,
+            leaseMonthlyPayment: leaseMonthlyPayment,
           });
           
           console.log('✅ Pricing step marked as completed:', result);
@@ -1457,37 +1589,40 @@ export default function PricingScreen() {
         {/* Payment Method Selection */}
         <View style={[styles.sectionCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
           <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
-            Payment Method
+            {calculatorType === 'v44' ? 'System Costs — Payment Method' : 'Payment Method'}
           </Text>
           <Text style={[styles.sectionSubtitle, { color: theme.secondaryText }]}>
-            What payment method is the customer using? (Please select even if you have saved data)
+            What payment method is the customer using?
+            {calculatorType === 'v44'
+              ? ' Fields below match the calculator (yellow = required for that method).'
+              : ' (Please select even if you have saved data)'}
           </Text>
           <View style={styles.paymentMethodContainer}>
-            {(['Cash', 'Hometree', 'New Finance'] as const).map((method) => (
+            {paymentMethodOptions.map((method) => (
               <TouchableOpacity
-                key={method}
+                key={method.value}
                 style={[
                   styles.paymentMethodButton,
-                  paymentMethod === method && { 
+                  paymentMethod === method.value && { 
                     backgroundColor: theme.primaryButton + '20',
                     borderColor: theme.primaryButton 
                   }
                 ]}
-                onPress={() => handlePaymentMethodChange(method)}
+                onPress={() => handlePaymentMethodChange(method.value)}
               >
                 <View style={styles.paymentMethodContent}>
                   <View style={[
                     styles.radioCircle,
-                    paymentMethod === method && styles.radioCircleSelected
+                    paymentMethod === method.value && styles.radioCircleSelected
                   ]}>
-                    {paymentMethod === method && (
+                    {paymentMethod === method.value && (
                       <View style={styles.radioCircleInner} />
                     )}
                   </View>
                   <Text style={[
                     styles.paymentMethodText,
-                    paymentMethod === method && { color: theme.primaryButton }
-                  ]}>{method}</Text>
+                    paymentMethod === method.value && { color: theme.primaryButton }
+                  ]}>{method.label}</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -1495,13 +1630,15 @@ export default function PricingScreen() {
         </View>
 
         {/* Payment Details - Show based on payment method */}
-        {(getEnabledFields().deposit || getEnabledFields().interestRate || getEnabledFields().interestRateType || getEnabledFields().paymentTerm) && (
+        {(getEnabledFields().deposit || getEnabledFields().interestRate || getEnabledFields().interestRateType || getEnabledFields().paymentTerm || getEnabledFields().leaseMonthlyPayment) && (
           <View style={[styles.sectionCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
             <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Payment Details</Text>
             <View style={styles.paymentDetailsContainer}>
               {getEnabledFields().deposit && (
                 <View style={styles.inputField}>
-                  <Text style={[styles.inputLabel, { color: theme.primaryText }]}>Deposit</Text>
+                  <Text style={[styles.inputLabel, { color: theme.primaryText }]}>
+                    {calculatorType === 'v44' ? 'Deposit / Upfront Payment' : 'Deposit'}
+                  </Text>
                   <View style={[styles.inputContainer, { borderColor: theme.cardBorder, backgroundColor: theme.secondaryBackground }]}>
                     <Text style={[styles.currencySymbol, { color: theme.secondaryText }]}>£</Text>
                     <TextInput
@@ -1605,7 +1742,35 @@ export default function PricingScreen() {
                           }, 500);
                         }
                       }}
-                      placeholder="e.g., 10, 15, 20"
+                      placeholder={
+                        calculatorType === 'v44' && paymentMethod === 'Hometree'
+                          ? 'e.g., 25'
+                          : 'e.g., 10, 15, 20'
+                      }
+                      placeholderTextColor={theme.secondaryText}
+                      keyboardType="numeric"
+                      editable={true}
+                    />
+                  </View>
+                </View>
+              )}
+
+              {getEnabledFields().leaseMonthlyPayment && (
+                <View style={styles.inputField}>
+                  <Text style={[styles.inputLabel, { color: theme.primaryText }]}>
+                    Year 1 Monthly HomeTree Payment
+                  </Text>
+                  <View style={[styles.inputContainer, { borderColor: theme.cardBorder, backgroundColor: theme.secondaryBackground }]}>
+                    <Text style={[styles.currencySymbol, { color: theme.secondaryText }]}>£</Text>
+                    <TextInput
+                      style={[styles.textInput, { color: theme.primaryText }]}
+                      value={leaseMonthlyPayment}
+                      onChangeText={(text) => {
+                        if (!isRestoringProgress.current) {
+                          setLeaseMonthlyPayment(text);
+                        }
+                      }}
+                      placeholder="e.g., 80.00"
                       placeholderTextColor={theme.secondaryText}
                       keyboardType="numeric"
                       editable={true}
@@ -1724,7 +1889,9 @@ export default function PricingScreen() {
             (!enabledFields.deposit || (enabledFields.deposit && deposit.trim() !== '')) &&
             (!enabledFields.interestRate || (enabledFields.interestRate && interestRate.trim() !== '')) &&
             (!enabledFields.interestRateType || (enabledFields.interestRateType && interestRateType.trim() !== '')) &&
-            (!enabledFields.paymentTerm || (enabledFields.paymentTerm && paymentTerm.trim() !== ''))
+            (!enabledFields.paymentTerm || (enabledFields.paymentTerm && paymentTerm.trim() !== '')) &&
+            (!enabledFields.leaseMonthlyPayment ||
+              (enabledFields.leaseMonthlyPayment && leaseMonthlyPayment.trim() !== ''))
           );
           
           const canSkip = hasPaymentMethod && hasRequiredFields && hasRestoredProgress && savedPricingData && !hasChanges();
@@ -1741,7 +1908,8 @@ export default function PricingScreen() {
               deposit: deposit.trim(),
               interestRate: interestRate.trim(),
               interestRateType: interestRateType.trim(),
-              paymentTerm: paymentTerm.trim()
+              paymentTerm: paymentTerm.trim(),
+              leaseMonthlyPayment: leaseMonthlyPayment.trim(),
             }
           });
           
