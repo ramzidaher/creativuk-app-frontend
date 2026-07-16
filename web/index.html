@@ -17,15 +17,25 @@
       html,
       body {
         height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
       }
       /* These styles disable body scrolling if you are using <ScrollView> */
       body {
         overflow: hidden;
       }
-      /* These styles make the root element full-height */
+      /* These styles make the root element fill the viewport */
       #root {
         display: flex;
         height: 100%;
+        width: 100%;
+        flex: 1;
+        max-width: 100%;
+      }
+      #root > div {
+        width: 100%;
+        max-width: 100%;
         flex: 1;
       }
     </style>

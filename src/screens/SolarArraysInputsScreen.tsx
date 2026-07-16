@@ -1,12 +1,10 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Dimensions, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import BottomNavigation from '../components/BottomNavigation';
 import { useTheme } from '../context/ThemeContext';
 import CalculatorProgressService from '../services/CalculatorProgressService';
-
-const { width } = Dimensions.get('window');
 
 type ArrayRow = {
   id: number;
@@ -30,6 +28,8 @@ export default function SolarArraysInputsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
   const { theme, isDark } = useTheme();
+  const { width } = useWindowDimensions();
+  const isNarrow = width < 768;
   const routeParams = route.params as RouteParams;
   const opportunityId = routeParams.opportunityId;
 
@@ -916,14 +916,30 @@ export default function SolarArraysInputsScreen() {
       Platform.OS === 'web' && {
         height: '100vh' as any,
         maxHeight: '100vh' as any,
+        width: '100%' as any,
+        maxWidth: '100%' as any,
+        alignSelf: 'stretch' as any,
         overflow: 'hidden',
       }
     ]}> 
-      <View style={[styles.header, { backgroundColor: theme.cardBackground, borderBottomColor: theme.cardBorder }]}> 
+      <View style={[
+        styles.header,
+        {
+          backgroundColor: theme.cardBackground,
+          borderBottomColor: theme.cardBorder,
+          paddingHorizontal: isNarrow ? 16 : 32,
+        },
+      ]}> 
         <View style={styles.headerTop}>
           <View style={styles.headerLeft}>
             <TouchableOpacity
-              style={[styles.backButton, { backgroundColor: isDark ? '#1e293b' : '#f8fafc' }]}
+              style={[
+                styles.backButton,
+                {
+                  backgroundColor: isDark ? '#1e293b' : '#f8fafc',
+                  padding: isNarrow ? 12 : 14,
+                },
+              ]}
               onPress={() => {
                 // Navigate directly to SolarWorkflowScreen instead of going back
                 (navigation as any).navigate('SolarWorkflow', { 
@@ -935,7 +951,10 @@ export default function SolarArraysInputsScreen() {
               <Feather name="arrow-left" size={20} color={theme.secondaryText} />
             </TouchableOpacity>
             <View style={styles.headerTextContainer}>
-              <Text style={[styles.headerTitle, { color: theme.primaryText }]}>SAP Calculations</Text>
+              <Text style={[
+                styles.headerTitle,
+                { color: theme.primaryText, fontSize: isNarrow ? 24 : 28 },
+              ]}>SAP Calculations</Text>
               <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
                 Solar arrays — same layout as the calculator
               </Text>
@@ -976,9 +995,14 @@ export default function SolarArraysInputsScreen() {
         ref={scrollViewRef}
         style={[
           styles.scroll,
+          {
+            paddingHorizontal: isNarrow ? 16 : 32,
+          },
           Platform.OS === 'web' && {
             height: '100%',
             maxHeight: '100%',
+            width: '100%' as any,
+            alignSelf: 'stretch' as any,
           }
         ]}
         showsVerticalScrollIndicator={Platform.OS === 'web' ? true : false}
@@ -989,10 +1013,11 @@ export default function SolarArraysInputsScreen() {
         keyboardShouldPersistTaps="handled"
         removeClippedSubviews={Platform.OS !== 'web'}
         contentContainerStyle={[
-          { paddingBottom: 100 },
+          { paddingBottom: 100, width: '100%' as any, flexGrow: 1 },
           Platform.OS === 'web' && {
-            minHeight: '100vh' as any,
+            minHeight: '100%' as any,
             paddingBottom: 140,
+            maxWidth: '100%' as any,
           }
         ]}
       >
@@ -1077,11 +1102,23 @@ export default function SolarArraysInputsScreen() {
           <View
             style={[
               styles.sapTable,
-              { borderColor: theme.cardBorder, marginTop: 16 },
+              { borderColor: theme.cardBorder, marginTop: 16, width: '100%' as any },
             ]}
           >
-            <ScrollView horizontal showsHorizontalScrollIndicator>
-              <View style={{ minWidth: width < 768 ? 720 : '100%' as any }}>
+            <ScrollView
+              horizontal={isNarrow}
+              scrollEnabled={isNarrow}
+              showsHorizontalScrollIndicator={isNarrow}
+              style={{ width: '100%' as any }}
+              contentContainerStyle={!isNarrow ? { width: '100%' as any, flexGrow: 1 } : undefined}
+            >
+              <View
+                style={
+                  isNarrow
+                    ? { minWidth: 720 }
+                    : { width: '100%' as any, flex: 1 }
+                }
+              >
             <View
               style={[
                 styles.sapHeaderRow,
@@ -1089,10 +1126,10 @@ export default function SolarArraysInputsScreen() {
               ]}
             >
               <Text style={[styles.sapHeaderCell, styles.sapColArray]}>Array</Text>
-              <Text style={[styles.sapHeaderCell, styles.sapColField]}>No. of Panels</Text>
-              <Text style={[styles.sapHeaderCell, styles.sapColField]}>Orientation (° from south)</Text>
-              <Text style={[styles.sapHeaderCell, styles.sapColField]}>Pitch (° from flat)</Text>
-              <Text style={[styles.sapHeaderCell, styles.sapColField]}>Shading (e.g. 0.96)</Text>
+              <Text style={[styles.sapHeaderCell, isNarrow ? styles.sapColFieldFixed : styles.sapColFieldFlex]}>No. of Panels</Text>
+              <Text style={[styles.sapHeaderCell, isNarrow ? styles.sapColFieldFixed : styles.sapColFieldFlex]}>Orientation (° from south)</Text>
+              <Text style={[styles.sapHeaderCell, isNarrow ? styles.sapColFieldFixed : styles.sapColFieldFlex]}>Pitch (° from flat)</Text>
+              <Text style={[styles.sapHeaderCell, isNarrow ? styles.sapColFieldFixed : styles.sapColFieldFlex]}>Shading (e.g. 0.96)</Text>
             </View>
 
             {rows
@@ -1129,7 +1166,7 @@ export default function SolarArraysInputsScreen() {
                       <TextInput
                         style={[
                           styles.sapInput,
-                          styles.sapColField,
+                          isNarrow ? styles.sapColFieldFixed : styles.sapColFieldFlex,
                           {
                             backgroundColor: editable
                               ? theme.secondaryBackground
@@ -1151,7 +1188,7 @@ export default function SolarArraysInputsScreen() {
                       <TextInput
                         style={[
                           styles.sapInput,
-                          styles.sapColField,
+                          isNarrow ? styles.sapColFieldFixed : styles.sapColFieldFlex,
                           {
                             backgroundColor: editable
                               ? theme.secondaryBackground
@@ -1174,7 +1211,7 @@ export default function SolarArraysInputsScreen() {
                       <TextInput
                         style={[
                           styles.sapInput,
-                          styles.sapColField,
+                          isNarrow ? styles.sapColFieldFixed : styles.sapColFieldFlex,
                           {
                             backgroundColor: editable
                               ? theme.secondaryBackground
@@ -1196,7 +1233,7 @@ export default function SolarArraysInputsScreen() {
                       <TextInput
                         style={[
                           styles.sapInput,
-                          styles.sapColField,
+                          isNarrow ? styles.sapColFieldFixed : styles.sapColFieldFlex,
                           {
                             backgroundColor: editable
                               ? theme.secondaryBackground
@@ -1254,7 +1291,15 @@ export default function SolarArraysInputsScreen() {
 
       </ScrollView>
 
-      <View style={[styles.footer, { backgroundColor: theme.cardBackground, borderTopColor: theme.cardBorder }]}> 
+      <View style={[
+        styles.footer,
+        {
+          backgroundColor: theme.cardBackground,
+          borderTopColor: theme.cardBorder,
+          paddingHorizontal: isNarrow ? 16 : 32,
+          width: '100%' as any,
+        },
+      ]}> 
         {hasUnsavedChanges && (
           <View style={styles.unsavedIndicator}>
             <Feather name="alert-circle" size={16} color="#f59e0b" />
@@ -1492,11 +1537,10 @@ function Field({ label, value, editable, onChange, onBlur, isOverride = false }:
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, width: '100%' as any, alignSelf: 'stretch' },
   header: {
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingBottom: 24,
-    paddingHorizontal: width < 768 ? 16 : 24,
     backgroundColor: '#ffffff',
     shadowColor: 'rgba(0, 0, 0, 0.12)',
     shadowOffset: { width: 0, height: 8 },
@@ -1505,12 +1549,13 @@ const styles = StyleSheet.create({
     elevation: 8,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 0, 0, 0.06)',
+    width: '100%' as any,
   },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  backButton: { padding: width < 768 ? 12 : 14, borderRadius: 16, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.04)', marginRight: 16 },
+  backButton: { borderRadius: 16, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.04)', marginRight: 16 },
   headerTextContainer: { flex: 1 },
-  headerTitle: { fontSize: width < 768 ? 24 : 28, fontWeight: '800', color: '#1e293b', letterSpacing: -0.8 },
+  headerTitle: { fontWeight: '800', color: '#1e293b', letterSpacing: -0.8 },
   headerSubtitle: { fontSize: 15, color: '#64748b', marginTop: 4, lineHeight: 20, fontWeight: '500' },
   customerInfoContainer: {
     flexDirection: 'row',
@@ -1544,7 +1589,7 @@ const styles = StyleSheet.create({
   importButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#16a34a', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
   importButtonDisabled: { opacity: 0.6 },
   importButtonText: { color: '#ffffff', fontWeight: '600', fontSize: 13 },
-  scroll: { paddingHorizontal: width < 768 ? 16 : 24, paddingTop: 20 },
+  scroll: { paddingTop: 20, width: '100%' as any, alignSelf: 'stretch' },
   noteBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#ecfdf5', borderColor: '#10b981', borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
   importReminderBanner: {
     flexDirection: 'row',
@@ -1571,9 +1616,12 @@ const styles = StyleSheet.create({
     borderWidth: 1, 
     padding: 16, 
     marginBottom: 16,
+    width: '100%' as any,
+    alignSelf: 'stretch',
     ...(Platform.OS === 'web' && {
       marginBottom: 24, // Extra spacing for web
       minHeight: 80, // Ensure cards have minimum height
+      maxWidth: '100%' as any,
     }),
   },
   cardTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
@@ -1619,8 +1667,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     gap: 6,
   },
-  sapColArray: { width: 56 },
+  sapColArray: { width: 56, flexShrink: 0 },
   sapColField: { width: 140, flexGrow: 1 },
+  sapColFieldFixed: { width: 140, flexShrink: 0 },
+  sapColFieldFlex: { flex: 1, minWidth: 120 },
   sapArrayCell: {
     flexDirection: 'row',
     alignItems: 'center',
