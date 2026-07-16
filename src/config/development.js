@@ -9,6 +9,10 @@ export const DEVELOPMENT_CONFIG = {
     
     // Local Nest backend (port 3010 — avoids conflict with other apps on :3000)
     LOCAL: 'http://127.0.0.1:3010/',
+
+    // Windows Excel server — DEV Nest (creativ-backend-dev on 3010)
+    // Prod on that box stays on 3000 and is untouched.
+    WINDOWS_DEV: 'http://10.0.0.4:3010/',
     
     // Relative path (for production build testing)
     RELATIVE: '/api/',
@@ -18,13 +22,13 @@ export const DEVELOPMENT_CONFIG = {
   },
   
   // Current active URL - change this to switch backends
-  ACTIVE_URL: 'LOCAL', // Options: PRODUCTION, LOCAL, RELATIVE, CUSTOM
+  ACTIVE_URL: 'WINDOWS_DEV', // Options: PRODUCTION, LOCAL, WINDOWS_DEV, RELATIVE, CUSTOM
   
   // Development mode settings
   DEV_MODE: true,
   
   // Auto-detect working URL on startup
-  AUTO_DETECT: true,
+  AUTO_DETECT: false,
   
   // Show debug logs
   DEBUG: true

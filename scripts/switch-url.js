@@ -23,6 +23,7 @@ const configPath = path.join(__dirname, '..', 'src', 'config', 'development.js')
 const URL_OPTIONS = {
   production: 'https://app.creativuk.co.uk/api/',
   local: 'http://127.0.0.1:3010/',
+  windows_dev: 'http://10.0.0.4:3010/',
   relative: '/api/',
   custom: null // Will be set by user
 };
@@ -64,14 +65,16 @@ function showUsage() {
   console.log('  node scripts/switch-url.js <option> [custom-url]');
   console.log('');
   console.log('Options:');
-  console.log('  production  - Use production backend (https://app.creativuk.co.uk/api/)');
-  console.log('  local       - Use local backend (http://127.0.0.1:3010/)');
-  console.log('  relative    - Use relative path (/api/)');
-  console.log('  custom      - Use custom URL (provide URL as second argument)');
+  console.log('  production   - Use production backend (https://app.creativuk.co.uk/api/)');
+  console.log('  local        - Use local backend (http://127.0.0.1:3010/)');
+  console.log('  windows_dev  - Use Windows Excel DEV backend (http://10.0.0.4:3010/)');
+  console.log('  relative     - Use relative path (/api/)');
+  console.log('  custom       - Use custom URL (provide URL as second argument)');
   console.log('');
   console.log('Examples:');
   console.log('  node scripts/switch-url.js production');
   console.log('  node scripts/switch-url.js local');
+  console.log('  node scripts/switch-url.js windows_dev');
   console.log('  node scripts/switch-url.js custom https://my-backend.com/api/');
   console.log('');
 }
@@ -114,6 +117,7 @@ function main() {
     console.log('💡 You can also switch URLs at runtime using the browser console:');
     console.log('   CreativSolarConfig.switchBackendUrl("PRODUCTION")');
     console.log('   CreativSolarConfig.switchBackendUrl("LOCAL")');
+    console.log('   CreativSolarConfig.switchBackendUrl("WINDOWS_DEV")');
     console.log('   CreativSolarConfig.switchBackendUrl("RELATIVE")');
   } else {
     process.exit(1);
