@@ -82,9 +82,17 @@ interface HometreeQuoteData {
 
 type Step = 'sheets' | 'data';
 
+/** Prefer trailing -vN.ext so EPVS-v4.4-...-v1.xlsm reads as V1, not V4 */
 function extractVersionFromFilename(fileName: string): number {
-  const versionMatch = fileName.match(/-v(\d+)/i);
-  return versionMatch ? parseInt(versionMatch[1], 10) : 1;
+  const trailing = fileName.match(/-v(\d+)\.(xlsm|xlsx|xls)$/i);
+  if (trailing) {
+    return parseInt(trailing[1], 10);
+  }
+  const matches = [...fileName.matchAll(/-v(\d+)/gi)];
+  if (matches.length > 0) {
+    return parseInt(matches[matches.length - 1][1], 10);
+  }
+  return 1;
 }
 
 function getVersionName(sheet: SheetInfo): string {

@@ -63,14 +63,17 @@ export default function PresentationScreen() {
   const [generating, setGenerating] = useState(false);
   const [availableSheets, setAvailableSheets] = useState<SheetInfo[]>([]);
 
-  // Helper function to extract version from filename
+  // Prefer trailing -vN.ext so EPVS-v4.4-...-v1.xlsm reads as V1, not V4
   const extractVersionFromFilename = (fileName: string): number => {
-    // Look for patterns like "-v3", "-v2", etc.
-    const versionMatch = fileName.match(/-v(\d+)/i);
-    if (versionMatch) {
-      return parseInt(versionMatch[1], 10);
+    const trailing = fileName.match(/-v(\d+)\.(xlsm|xlsx|xls)$/i);
+    if (trailing) {
+      return parseInt(trailing[1], 10);
     }
-    return 1; // Default to version 1 if no version found
+    const matches = [...fileName.matchAll(/-v(\d+)/gi)];
+    if (matches.length > 0) {
+      return parseInt(matches[matches.length - 1][1], 10);
+    }
+    return 1;
   };
 
   // Helper function to generate version name based on actual version

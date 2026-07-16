@@ -39,21 +39,21 @@ export default function ContractGenerationScreen() {
   const { opportunityId } = route.params as RouteParams;
   const { theme, isDark, toggleTheme } = useTheme();
 
-  // Helper function to extract version from filename
+  // Prefer trailing -vN.ext so EPVS-v4.4-...-v1.xlsm reads as V1, not V4
   const extractVersionFromFileName = (fileName: string): number | null => {
-    // Look for version pattern like -v14, -v1, v14, v1, etc.
-    // Try multiple patterns: -v14, v14, _v14, .v14
+    const trailing = fileName.match(/-v(\d+)\.(xlsm|xlsx|xls)$/i);
+    if (trailing?.[1]) {
+      return parseInt(trailing[1], 10);
+    }
     const patterns = [
-      /-v(\d+)/i,      // -v14
-      /_v(\d+)/i,      // _v14
-      /\.v(\d+)/i,     // .v14
-      /v(\d+)/i,       // v14 (must be after others to avoid false matches)
+      /-v(\d+)/gi,
+      /_v(\d+)/gi,
+      /\.v(\d+)/gi,
     ];
-    
     for (const pattern of patterns) {
-      const match = fileName.match(pattern);
-      if (match && match[1]) {
-        return parseInt(match[1], 10);
+      const matches = [...fileName.matchAll(pattern)];
+      if (matches.length > 0) {
+        return parseInt(matches[matches.length - 1][1], 10);
       }
     }
     return null;
