@@ -23,6 +23,7 @@ import {
   V44RadioGroup,
   V44Section,
   applyCascadeClear,
+  applyNewTariffDefaults,
   fieldsClearedByRadioChange,
   isConsumptionField,
   isFieldVisible,
@@ -108,7 +109,8 @@ export default function V44CalculatorInputsScreen() {
         restoredInputs.address = c.address || '';
         restoredInputs.postcode = c.postcode || '';
       }
-      setInputs(restoredInputs);
+      // Prefill 100Green / export 12 / SC copy when empty (keep saved overrides)
+      setInputs(applyNewTariffDefaults(restoredRadios, restoredInputs, { force: false }));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
@@ -235,13 +237,14 @@ export default function V44CalculatorInputsScreen() {
         next,
         consumptionMatrix,
       );
-      if (cleared.length) {
-        setInputs((inp) => {
-          const copy = { ...inp };
-          cleared.forEach((id) => delete copy[id]);
-          return copy;
-        });
-      }
+      setInputs((inp) => {
+        const copy = { ...inp };
+        cleared.forEach((id) => delete copy[id]);
+        // Re-apply New Electricity Tariff / export defaults when savings or tariff type changes
+        const forceDefaults =
+          groupId === 'battery_savings' || groupId === 'current_tariff';
+        return applyNewTariffDefaults(next, copy, { force: forceDefaults });
+      });
       return next;
     });
   };
@@ -251,6 +254,18 @@ export default function V44CalculatorInputsScreen() {
       let next = { ...prev, [fieldId]: value };
       next = applyCascadeClear(fieldId, next);
       next[fieldId] = value;
+      // Self-consumption: keep New day rate in sync when Current day rate changes
+      // only if new_peak was empty or still matched the previous current rate
+      if (
+        fieldId === 'current_rate_1' &&
+        radios.battery_savings === 1
+      ) {
+        const prevCurrent = String(prev.current_rate_1 ?? '').trim();
+        const prevNew = String(prev.new_peak_rate ?? '').trim();
+        if (!prevNew || prevNew === prevCurrent) {
+          next.new_peak_rate = value;
+        }
+      }
       return next;
     });
   };
@@ -795,6 +810,18 @@ export default function V44CalculatorInputsScreen() {
               <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
                 {section.title}
               </Text>
+              {section.id === 'new_overnight' ? (
+                <Text style={[styles.fluxHint, { color: theme.secondaryText }]}>
+                  {radios.battery_savings === 1
+                    ? 'Pre-filled from Current Electricity Tariff (night rate not used for self-consumption). You can override.'
+                    : 'Pre-filled with 100Green rates (Single 27.73 / 7.00 · Dual 36.26 / 7.00). You can override.'}
+                </Text>
+              ) : null}
+              {section.id === 'export_tariff' ? (
+                <Text style={[styles.fluxHint, { color: theme.secondaryText }]}>
+                  Pre-filled at 12p/kWh. You can override.
+                </Text>
+              ) : null}
               {fields.map(renderField)}
             </View>
           );

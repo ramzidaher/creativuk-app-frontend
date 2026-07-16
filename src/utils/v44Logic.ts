@@ -40,6 +40,7 @@ export type V44Section = {
   id: string;
   title: string;
   visibleWhen?: VisibilityRule[];
+  note?: string;
   fields: V44Field[];
 };
 
@@ -55,7 +56,75 @@ export const V44_QUESTIONS_GROUP_IDS = [
 export const V44_REP_BATTERY_SAVINGS = [1, 3, 2];
 
 export const V44_TEMPLATE_FILE =
-  'EPVS Member Calculator v4.4 - (Creativ) 15th June 2026 (1).xlsm';
+  'EPVS Member Calculator v4.4.1 - (Creativ) 15th July 2026 Main.xlsm';
+
+/** Default export tariff (pence) — pre-filled, user may override */
+export const V44_EXPORT_TARIFF_DEFAULT = '12';
+
+/**
+ * 100Green overnight / new tariff defaults (pence per kWh).
+ * Applied when Battery Charging Overnight is selected.
+ */
+export const V44_100GREEN_RATES = {
+  single: { day: '27.73', night: '7.00' },
+  dual: { day: '36.26', night: '7.00' },
+} as const;
+
+/**
+ * Pre-fill New Electricity Tariff + Export based on battery savings basis.
+ * - Overnight (2) / Levelise (5): 100Green day/night from Single vs Dual current tariff
+ * - Self-Consumption (1): copy current day rate; clear night rate; export 12
+ * - Export (SC / Overnight / Cosy / None / Levelise): default 12p
+ *
+ * When `force` is true (e.g. savings basis just changed), overwrite the target fields.
+ * Otherwise only fill empty fields so user overrides stick.
+ */
+export function applyNewTariffDefaults(
+  radios: Record<string, number>,
+  inputs: Record<string, string>,
+  options?: { force?: boolean },
+): Record<string, string> {
+  const force = options?.force === true;
+  const next = { ...inputs };
+  const savings = radios.battery_savings;
+  const tariff = radios.current_tariff ?? 1;
+
+  const setIf = (key: string, value: string) => {
+    if (force || !String(next[key] ?? '').trim()) {
+      next[key] = value;
+    }
+  };
+
+  // Export always defaults to 12p when that section is in play
+  if (savings === 1 || savings === 2 || savings === 5 || savings === 6 || savings === 7) {
+    setIf('export_tariff_rate', V44_EXPORT_TARIFF_DEFAULT);
+  }
+
+  if (savings === 2 || savings === 5) {
+    const green =
+      tariff === 2 ? V44_100GREEN_RATES.dual : V44_100GREEN_RATES.single;
+    setIf('new_peak_rate', green.day);
+    setIf('new_offpeak_rate', green.night);
+  }
+
+  if (savings === 1) {
+    // Copy current day/peak into New Electricity Tariff; night not applicable
+    const currentDay = String(next.current_rate_1 ?? '').trim();
+    if (force) {
+      if (currentDay) next.new_peak_rate = currentDay;
+      delete next.new_offpeak_rate;
+      delete next.new_offpeak_hours;
+    } else {
+      if (currentDay) setIf('new_peak_rate', currentDay);
+      // Ensure night stays clear for SC
+      if (!String(next.new_offpeak_rate ?? '').trim()) {
+        delete next.new_offpeak_rate;
+      }
+    }
+  }
+
+  return next;
+}
 
 export function rulesPass(
   rules: VisibilityRule[] | undefined,
