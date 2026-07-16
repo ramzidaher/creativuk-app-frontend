@@ -61,7 +61,7 @@ export default function PricingScreen() {
   // });
   
   const [selectedBatteryType, setSelectedBatteryType] = useState<'5kW' | '10kW'>('5kW');
-  const [selectedNumberOfPanels, setSelectedNumberOfPanels] = useState<number>(12);
+  const [selectedNumberOfPanels, setSelectedNumberOfPanels] = useState<number | null>(null);
   const [additionalItemQuantities, setAdditionalItemQuantities] = useState<{[key: string]: number}>({});
   const [loading, setLoading] = useState(false);
   const [totalCost, setTotalCost] = useState<number>(0);
@@ -522,7 +522,7 @@ export default function PricingScreen() {
       
       const pricingData = {
         selectedBatteryType,
-        selectedNumberOfPanels,
+        selectedNumberOfPanels: selectedNumberOfPanels ?? 0,
         additionalItemQuantities,
         paymentMethod,
         totalSystemCost: totalCost.toString(),
@@ -627,11 +627,19 @@ export default function PricingScreen() {
 
   const calculateTotalCost = () => {
     // Get base price for selected configuration
+    if (selectedNumberOfPanels == null) {
+      setTotalCost(0);
+      return;
+    }
+
     const baseOption = pricingOptions.find(
       option => option.batteryType === selectedBatteryType && option.numberOfPanels === selectedNumberOfPanels
     );
     
-    if (!baseOption) return;
+    if (!baseOption) {
+      setTotalCost(0);
+      return;
+    }
 
     let total = baseOption.retailPrice;
 
@@ -654,19 +662,17 @@ export default function PricingScreen() {
       return;
     }
 
-    setSelectedBatteryType(batteryType);
-    // Reset to first available panel count for the new battery type
-    const firstOption = pricingOptions.find(option => option.batteryType === batteryType);
-    if (firstOption) {
-      setSelectedNumberOfPanels(firstOption.numberOfPanels);
+    // Switching battery always clears panel count — rep must pick again
+    if (batteryType !== selectedBatteryType) {
+      setSelectedBatteryType(batteryType);
+      setSelectedNumberOfPanels(null);
+      setTotalCost(0);
+    } else {
+      setSelectedBatteryType(batteryType);
     }
+
     // Auto-save progress with debouncing
     debouncedSave();
-    
-    // Auto-save the pricing data
-    setTimeout(() => {
-      // Auto-save is handled by the debounced save function
-    }, 100);
   };
 
   const handlePanelCountChange = (numberOfPanels: number) => {
@@ -726,7 +732,7 @@ export default function PricingScreen() {
         currentStep: 'pricing' as const,
         pricingData: {
           selectedBatteryType,
-          selectedNumberOfPanels,
+          selectedNumberOfPanels: selectedNumberOfPanels ?? 0,
           additionalItemQuantities,
           paymentMethod: paymentMethod,
           totalSystemCost: totalCost.toString(),
@@ -1086,6 +1092,11 @@ export default function PricingScreen() {
         return;
       }
 
+      if (selectedNumberOfPanels == null) {
+        Alert.alert('Required', 'Please select the number of panels for the chosen battery.');
+        return;
+      }
+
       const enabled = getEnabledFields();
       if (enabled.deposit && !deposit.trim()) {
         Alert.alert('Required', 'Please enter the Deposit / Upfront Payment.');
@@ -1176,7 +1187,7 @@ export default function PricingScreen() {
       
       // Save component details
       inputs['selected_battery_type'] = selectedBatteryType;
-      inputs['selected_number_of_panels'] = selectedNumberOfPanels.toString();
+      inputs['selected_number_of_panels'] = String(selectedNumberOfPanels ?? '');
       
       // Save additional items quantities
       Object.entries(additionalItemQuantities).forEach(([itemName, quantity]) => {
@@ -1230,7 +1241,7 @@ export default function PricingScreen() {
             },
             pricingData: {
               selectedBatteryType,
-              selectedNumberOfPanels,
+              selectedNumberOfPanels: selectedNumberOfPanels ?? 0,
               additionalItemQuantities,
               paymentMethod,
               totalSystemCost: totalCost.toString(),
@@ -1539,6 +1550,11 @@ export default function PricingScreen() {
         {/* Panel Count Selection */}
         <View style={[styles.sectionCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
           <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Number of Panels</Text>
+          {selectedNumberOfPanels == null ? (
+            <Text style={[styles.sectionSubtitle, { color: theme.secondaryText }]}>
+              Select a panel count for the {selectedBatteryType} battery
+            </Text>
+          ) : null}
           <View style={styles.panelCountContainer}>
             {getAvailablePanelCounts(selectedBatteryType).map(panelCount => (
               <TouchableOpacity
@@ -1570,7 +1586,9 @@ export default function PricingScreen() {
               £{getBasePrice().toLocaleString()}
             </Text>
             <Text style={[styles.priceDescription, { color: theme.secondaryText }]}>
-              {selectedNumberOfPanels} Panels + {selectedBatteryType} Battery
+              {selectedNumberOfPanels != null
+                ? `${selectedNumberOfPanels} Panels + ${selectedBatteryType} Battery`
+                : `Select number of panels for ${selectedBatteryType} battery`}
             </Text>
           </View>
         </View>
