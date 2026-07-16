@@ -664,8 +664,15 @@ export default function ContractGenerationScreen() {
       console.log('🔍 ABOUT TO CALL API - selectedSheetFileName:', selectedSheetFileName);
 
       let pdfResponse;
-      if (calculatorType === 'flux' || calculatorType === 'epvs') {
-        // Generate Flux/EPVS PDF
+      const isEpvsFamily =
+        calculatorType === 'flux' ||
+        calculatorType === 'epvs' ||
+        calculatorType === 'v44' ||
+        String(selectedSheetFileName || '').toLowerCase().includes('v4.4') ||
+        String(selectedSheetFileName || '').toLowerCase().includes('epvs-v4');
+
+      if (isEpvsFamily) {
+        // Generate Flux / EPVS / v4.4 PDF (v4.4 uses PrintProposal VBA on the server)
         console.log('🔍 Using EPVS automation service for calculator type:', calculatorType);
         console.log('🔍 Calling POST /epvs-automation/generate-pdf with:', {
           opportunityId,
