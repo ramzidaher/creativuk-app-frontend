@@ -754,7 +754,7 @@ export default function PricingScreen() {
   };
 
   const handlePaymentMethodChange = (
-    method: 'Cash' | 'Hometree' | 'New Finance' | 'Finance' | 'Interest Free Loan',
+    method: 'Cash' | 'Hometree' | 'New Finance' | 'Finance',
   ) => {
     // Don't save if we're currently restoring progress
     if (isRestoringProgress.current) {
