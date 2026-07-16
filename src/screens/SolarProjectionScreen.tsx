@@ -988,10 +988,10 @@ export default function SolarProjectionScreen() {
         keyboardShouldPersistTaps="handled"
         removeClippedSubviews={Platform.OS !== 'web'}
         contentContainerStyle={[
-          { paddingBottom: 40 },
+          { paddingBottom: 140 },
           Platform.OS === 'web' && {
             minHeight: '100vh' as any,
-            paddingBottom: 100,
+            paddingBottom: 160,
           }
         ]}
       >
@@ -1076,7 +1076,7 @@ export default function SolarProjectionScreen() {
                                 : theme.primaryButton + '10'
                             }
                           ]}
-                          onPress={() => handleSheetSelect(sheet)}
+                          onPress={() => setSelectedSheet(sheet)}
                           activeOpacity={0.7}
                         >
                           <View style={styles.sheetInfo}>
@@ -1131,10 +1131,15 @@ export default function SolarProjectionScreen() {
       
       {selectedSheet && (
         <TouchableOpacity 
-          style={[styles.viewProjectionsButton, { backgroundColor: theme.primaryButton }]} 
+          style={[
+            styles.viewProjectionsButton,
+            { backgroundColor: theme.primaryButton },
+          ]} 
           onPress={() => handleSheetSelect(selectedSheet)}
         >
-          <Text style={[styles.viewProjectionsButtonText, { color: '#ffffff' }]}>View Solar Projections</Text>
+          <Text style={[styles.viewProjectionsButtonText, { color: '#ffffff' }]}>
+            View Solar Projections
+          </Text>
         </TouchableOpacity>
       )}
 
@@ -2714,16 +2719,19 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   viewProjectionsButton: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 88,
+    zIndex: 1100,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
-    marginHorizontal: 16,
-    marginBottom: 20,
     shadowColor: 'rgba(0, 0, 0, 0.1)',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 8,
   },
   viewProjectionsButtonText: {
     fontSize: 18,
