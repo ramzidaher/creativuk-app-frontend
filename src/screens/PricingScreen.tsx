@@ -77,6 +77,13 @@ export default function PricingScreen() {
   const [interestRateType, setInterestRateType] = useState<string>('');
   const [paymentTerm, setPaymentTerm] = useState<string>('');
   const [leaseMonthlyPayment, setLeaseMonthlyPayment] = useState<string>('');
+  const [hometreeUpfrontOptions, setHometreeUpfrontOptions] = useState<number[]>([]);
+  const [hometreeTermOptions, setHometreeTermOptions] = useState<number[]>([
+    5, 10, 15, 20, 25,
+  ]);
+  const [hometreeQuoteStatus, setHometreeQuoteStatus] = useState<string | null>(null);
+  const [hometreeQuoteLoading, setHometreeQuoteLoading] = useState(false);
+  const [hometreeDepositMatched, setHometreeDepositMatched] = useState<number | null>(null);
   const [interestRateTypeOptions, setInterestRateTypeOptions] = useState<string[]>([]);
   const [loadingDropdownOptions, setLoadingDropdownOptions] = useState(false);
   const [showDropdownModal, setShowDropdownModal] = useState(false);
@@ -675,6 +682,99 @@ export default function PricingScreen() {
     setSelectedNumberOfPanels(numberOfPanels);
     // Auto-save progress with debouncing
     debouncedSave();
+  };
+
+  /** Pull Year-1 monthly from HomeTree public pricing page via backend scrape */
+  const refreshHometreeQuote = useCallback(async () => {
+    if (calculatorType !== 'v44' || paymentMethod !== 'Hometree') {
+      return;
+    }
+    if (!totalCost || totalCost < 6000) {
+      setHometreeQuoteStatus('Select battery + panels so system cost is at least £6,000.');
+      setLeaseMonthlyPayment('');
+      return;
+    }
+    const termYears = Number(paymentTerm);
+    if (!Number.isFinite(termYears) || termYears <= 0) {
+      setHometreeQuoteStatus('Enter a payment term (5, 10, 15, 20 or 25 years).');
+      setLeaseMonthlyPayment('');
+      return;
+    }
+
+    try {
+      setHometreeQuoteLoading(true);
+      setHometreeQuoteStatus('Looking up HomeTree pricing…');
+      const { api } = await import('../utils/api');
+      const depositNum = Number(String(deposit).replace(/[^0-9.]/g, '')) || 0;
+      const res = await api.get<{
+        success: boolean;
+        data?: {
+          monthlyYear1: number | null;
+          depositMatched: number;
+          termYearsMatched: number | null;
+          upfrontOptions: number[];
+          termOptionsYears: number[];
+          sourceUrl: string;
+        };
+        message?: string;
+      }>(
+        `/pricing/hometree/quote?priceNet=${encodeURIComponent(String(totalCost))}` +
+          `&deposit=${encodeURIComponent(String(depositNum))}` +
+          `&termYears=${encodeURIComponent(String(termYears))}`,
+      );
+
+      const body = res.data;
+      if (!res.success || !body?.success || !body.data) {
+        throw new Error(body?.message || 'HomeTree quote failed');
+      }
+
+      const quote = body.data;
+      setHometreeUpfrontOptions(quote.upfrontOptions || []);
+      setHometreeTermOptions(quote.termOptionsYears || [5, 10, 15, 20, 25]);
+      setHometreeDepositMatched(quote.depositMatched);
+
+      if (quote.monthlyYear1 == null) {
+        setLeaseMonthlyPayment('');
+        setHometreeQuoteStatus('No HomeTree offer for this deposit/term combination.');
+        return;
+      }
+
+      setLeaseMonthlyPayment(String(quote.monthlyYear1));
+      const matchedNote =
+        quote.depositMatched !== depositNum
+          ? ` (matched HomeTree upfront £${quote.depositMatched.toLocaleString()})`
+          : '';
+      setHometreeQuoteStatus(
+        `From HomeTree: £${quote.monthlyYear1}/month Year 1` +
+          ` for £${totalCost.toLocaleString()} / ${quote.termYearsMatched}yr` +
+          matchedNote,
+      );
+    } catch (e) {
+      setLeaseMonthlyPayment('');
+      setHometreeQuoteStatus(
+        e instanceof Error ? e.message : 'Failed to fetch HomeTree pricing',
+      );
+    } finally {
+      setHometreeQuoteLoading(false);
+    }
+  }, [
+    calculatorType,
+    paymentMethod,
+    totalCost,
+    deposit,
+    paymentTerm,
+  ]);
+
+  useEffect(() => {
+    if (calculatorType !== 'v44' || paymentMethod !== 'Hometree') {
+      setHometreeQuoteStatus(null);
+      return;
+    }
+    const t = setTimeout(() => {
+      refreshHometreeQuote();
+    }, 400);
+    return () => clearTimeout(t);
+  }, [refreshHometreeQuote, calculatorType, paymentMethod]);
     
     // Auto-save the pricing data
     setTimeout(() => {
@@ -1633,6 +1733,48 @@ export default function PricingScreen() {
                   <Text style={[styles.inputLabel, { color: theme.primaryText }]}>
                     {calculatorType === 'v44' ? 'Deposit / Upfront Payment' : 'Deposit'}
                   </Text>
+                  {calculatorType === 'v44' &&
+                  paymentMethod === 'Hometree' &&
+                  hometreeUpfrontOptions.length > 0 ? (
+                    <View style={styles.hometreeChipRow}>
+                      {hometreeUpfrontOptions.map((amount) => {
+                        const selected =
+                          Number(String(deposit).replace(/[^0-9.]/g, '')) === amount;
+                        return (
+                          <TouchableOpacity
+                            key={amount}
+                            style={[
+                              styles.hometreeChip,
+                              {
+                                borderColor: selected
+                                  ? theme.primaryButton
+                                  : theme.cardBorder,
+                                backgroundColor: selected
+                                  ? theme.primaryButton + '20'
+                                  : theme.secondaryBackground,
+                              },
+                            ]}
+                            onPress={() => {
+                              if (!isRestoringProgress.current) {
+                                setDeposit(String(amount));
+                              }
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: selected
+                                  ? theme.primaryButton
+                                  : theme.primaryText,
+                                fontWeight: '600',
+                              }}
+                            >
+                              £{amount.toLocaleString()}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : null}
                   <View style={[styles.inputContainer, { borderColor: theme.cardBorder, backgroundColor: theme.secondaryBackground }]}>
                     <Text style={[styles.currencySymbol, { color: theme.secondaryText }]}>£</Text>
                     <TextInput
@@ -1641,10 +1783,6 @@ export default function PricingScreen() {
                       onChangeText={(text) => {
                         if (!isRestoringProgress.current) {
                           setDeposit(text);
-                          // Auto-save the pricing data
-                          setTimeout(() => {
-                            // Auto-save is handled by the debounced save function
-                          }, 500);
                         }
                       }}
                       placeholder="0.00"
@@ -1653,6 +1791,12 @@ export default function PricingScreen() {
                       editable={true}
                     />
                   </View>
+                  {calculatorType === 'v44' && paymentMethod === 'Hometree' ? (
+                    <Text style={[styles.fieldHint, { color: theme.secondaryText }]}>
+                      HomeTree offers fixed upfront tiers for the system price — pick one
+                      above or enter an amount (we match the nearest tier).
+                    </Text>
+                  ) : null}
                 </View>
               )}
 
@@ -1723,29 +1867,61 @@ export default function PricingScreen() {
               {getEnabledFields().paymentTerm && (
                 <View style={styles.inputField}>
                   <Text style={[styles.inputLabel, { color: theme.primaryText }]}>Payment Term (years)</Text>
-                  <View style={[styles.inputContainer, { borderColor: theme.cardBorder, backgroundColor: theme.secondaryBackground }]}>
-                    <TextInput
-                      style={[styles.textInput, { color: theme.primaryText }]}
-                      value={paymentTerm}
-                      onChangeText={(text) => {
-                        if (!isRestoringProgress.current) {
-                          setPaymentTerm(text);
-                          // Auto-save the pricing data
-                          setTimeout(() => {
-                            // Auto-save is handled by the debounced save function
-                          }, 500);
-                        }
-                      }}
-                      placeholder={
-                        calculatorType === 'v44' && paymentMethod === 'Hometree'
-                          ? 'e.g., 25'
-                          : 'e.g., 10, 15, 20'
-                      }
-                      placeholderTextColor={theme.secondaryText}
-                      keyboardType="numeric"
-                      editable={true}
-                    />
-                  </View>
+                  {calculatorType === 'v44' && paymentMethod === 'Hometree' ? (
+                    <View style={styles.hometreeChipRow}>
+                      {hometreeTermOptions.map((years) => {
+                        const selected = Number(paymentTerm) === years;
+                        return (
+                          <TouchableOpacity
+                            key={years}
+                            style={[
+                              styles.hometreeChip,
+                              {
+                                borderColor: selected
+                                  ? theme.primaryButton
+                                  : theme.cardBorder,
+                                backgroundColor: selected
+                                  ? theme.primaryButton + '20'
+                                  : theme.secondaryBackground,
+                              },
+                            ]}
+                            onPress={() => {
+                              if (!isRestoringProgress.current) {
+                                setPaymentTerm(String(years));
+                              }
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: selected
+                                  ? theme.primaryButton
+                                  : theme.primaryText,
+                                fontWeight: '600',
+                              }}
+                            >
+                              {years} years
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    <View style={[styles.inputContainer, { borderColor: theme.cardBorder, backgroundColor: theme.secondaryBackground }]}>
+                      <TextInput
+                        style={[styles.textInput, { color: theme.primaryText }]}
+                        value={paymentTerm}
+                        onChangeText={(text) => {
+                          if (!isRestoringProgress.current) {
+                            setPaymentTerm(text);
+                          }
+                        }}
+                        placeholder="e.g., 10, 15, 20"
+                        placeholderTextColor={theme.secondaryText}
+                        keyboardType="numeric"
+                        editable={true}
+                      />
+                    </View>
+                  )}
                 </View>
               )}
 
@@ -1754,22 +1930,48 @@ export default function PricingScreen() {
                   <Text style={[styles.inputLabel, { color: theme.primaryText }]}>
                     Year 1 Monthly HomeTree Payment
                   </Text>
-                  <View style={[styles.inputContainer, { borderColor: theme.cardBorder, backgroundColor: theme.secondaryBackground }]}>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      {
+                        borderColor: theme.cardBorder,
+                        backgroundColor: isDark ? '#1e293b' : '#f1f5f9',
+                        opacity: 0.95,
+                      },
+                    ]}
+                  >
                     <Text style={[styles.currencySymbol, { color: theme.secondaryText }]}>£</Text>
                     <TextInput
-                      style={[styles.textInput, { color: theme.primaryText }]}
-                      value={leaseMonthlyPayment}
-                      onChangeText={(text) => {
-                        if (!isRestoringProgress.current) {
-                          setLeaseMonthlyPayment(text);
-                        }
-                      }}
-                      placeholder="e.g., 80.00"
+                      style={[styles.textInput, { color: theme.secondaryText }]}
+                      value={
+                        hometreeQuoteLoading
+                          ? ''
+                          : leaseMonthlyPayment
+                      }
+                      editable={false}
+                      placeholder={hometreeQuoteLoading ? 'Calculating…' : '—'}
                       placeholderTextColor={theme.secondaryText}
                       keyboardType="numeric"
-                      editable={true}
+                    />
+                    <Feather
+                      name="lock"
+                      size={16}
+                      color={theme.secondaryText}
+                      style={{ marginRight: 10 }}
                     />
                   </View>
+                  {hometreeQuoteStatus ? (
+                    <Text style={[styles.fieldHint, { color: theme.secondaryText }]}>
+                      {hometreeQuoteStatus}
+                      {hometreeDepositMatched != null && deposit
+                        ? ''
+                        : ''}
+                    </Text>
+                  ) : (
+                    <Text style={[styles.fieldHint, { color: theme.secondaryText }]}>
+                      Calculated from HomeTree pricing for this system cost, deposit and term.
+                    </Text>
+                  )}
                 </View>
               )}
             </View>
@@ -2790,6 +2992,23 @@ const styles = StyleSheet.create({
   // Payment Details Styles
   paymentDetailsContainer: {
     gap: 20,
+  },
+  hometreeChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 4,
+  },
+  hometreeChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  fieldHint: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 4,
   },
   inputField: {
     gap: 8,
