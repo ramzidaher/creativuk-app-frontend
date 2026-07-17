@@ -286,15 +286,6 @@ export default function V44CalculatorInputsScreen() {
       let next = { ...prev, [fieldId]: value };
       next = applyCascadeClear(fieldId, next);
       next[fieldId] = value;
-      // Self-consumption: keep New day rate in sync when Current day rate changes
-      // only while rates are locked to defaults (not overridden)
-      if (
-        fieldId === 'current_rate_1' &&
-        radios.battery_savings === 1 &&
-        !tariffOverride
-      ) {
-        next.new_peak_rate = value;
-      }
       return next;
     });
   };
@@ -441,6 +432,9 @@ export default function V44CalculatorInputsScreen() {
     return sortSectionsByExcelOrder(sections).filter((s) => {
       if (s.id === 'system_costs') return false; // Pricing owns costs
       if (s.id === 'customer') return false; // already on Customer Details
+      // Self-Consumption keeps the current tariff — no New Electricity Tariff.
+      // Guard here too so it stays hidden even before the backend schema redeploys.
+      if (s.id === 'new_overnight' && radios.battery_savings === 1) return false;
       return isSectionVisible(s, radios);
     });
   }, [sections, radios]);
@@ -973,9 +967,7 @@ export default function V44CalculatorInputsScreen() {
                     </Text>
                     <Text style={[styles.fluxHint, { color: theme.secondaryText, marginBottom: 0 }]}>
                       {section.id === 'new_overnight'
-                        ? radios.battery_savings === 1
-                          ? 'Locked to Current Electricity Tariff. Night rate is not used for self-consumption.'
-                          : 'Locked to 100Green tariff defaults. Turn Override on to enter different rates.'
+                        ? 'Locked to 100Green tariff defaults. Turn Override on to enter different rates.'
                         : 'Locked to 12p/kWh export (100Green / SEG default).'}
                     </Text>
                   </View>
@@ -994,41 +986,26 @@ export default function V44CalculatorInputsScreen() {
                     id: 'new_peak_rate',
                     label: 'Peak / Day Rate (pence per kWh)',
                     locked: !tariffOverride,
-                    badge:
-                      radios.battery_savings === 1
-                        ? 'From current tariff'
-                        : '100Green',
+                    badge: '100Green',
                   })}
-                  {radios.battery_savings === 1
-                    ? renderTariffNumberField({
-                        id: 'new_offpeak_rate_locked',
-                        label: 'Off-Peak / Night Rate (pence per kWh)',
-                        locked: true,
-                        lockedReason: 'Not applicable for self-consumption',
-                        badge: 'Disabled',
-                      })
-                    : (
-                      <>
-                        {renderTariffNumberField({
-                          id: 'new_offpeak_rate',
-                          label: 'Off-Peak / Night Rate (pence per kWh)',
-                          locked: !tariffOverride,
-                          badge: '100Green',
-                        })}
-                        {fields
-                          .filter(
-                            (f) =>
-                              f.id === 'new_offpeak_hours' ||
-                              f.id === 'new_standing_charge',
-                          )
-                          .map((f) =>
-                            renderTariffNumberField({
-                              id: f.id,
-                              label: resolveFieldLabel(f, radios, true),
-                              locked: !tariffOverride,
-                            }),
-                          )}
-                      </>
+                  {renderTariffNumberField({
+                    id: 'new_offpeak_rate',
+                    label: 'Off-Peak / Night Rate (pence per kWh)',
+                    locked: !tariffOverride,
+                    badge: '100Green',
+                  })}
+                  {fields
+                    .filter(
+                      (f) =>
+                        f.id === 'new_offpeak_hours' ||
+                        f.id === 'new_standing_charge',
+                    )
+                    .map((f) =>
+                      renderTariffNumberField({
+                        id: f.id,
+                        label: resolveFieldLabel(f, radios, true),
+                        locked: !tariffOverride,
+                      }),
                     )}
                 </>
               ) : section.id === 'export_tariff' ? (

@@ -72,7 +72,7 @@ export const V44_100GREEN_RATES = {
 /**
  * Pre-fill New Electricity Tariff + Export based on battery savings basis.
  * - Overnight (2) / Levelise (5): 100Green day/night from Single vs Dual current tariff
- * - Self-Consumption (1): copy current day rate; clear night rate; export 12
+ * - Self-Consumption (1): NO new tariff (customer stays on current tariff); export 12
  * - Export (SC / Overnight / Cosy / None / Levelise): default 12p
  *
  * When `force` is true (e.g. savings basis just changed), overwrite the target fields.
@@ -106,20 +106,13 @@ export function applyNewTariffDefaults(
     setIf('new_offpeak_rate', green.night);
   }
 
+  // Self-Consumption (1) has no New Electricity Tariff — clear any stale values
+  // so hidden fields aren't submitted to the workbook.
   if (savings === 1) {
-    // Copy current day/peak into New Electricity Tariff; night not applicable
-    const currentDay = String(next.current_rate_1 ?? '').trim();
-    if (force) {
-      if (currentDay) next.new_peak_rate = currentDay;
-      delete next.new_offpeak_rate;
-      delete next.new_offpeak_hours;
-    } else {
-      if (currentDay) setIf('new_peak_rate', currentDay);
-      // Ensure night stays clear for SC
-      if (!String(next.new_offpeak_rate ?? '').trim()) {
-        delete next.new_offpeak_rate;
-      }
-    }
+    delete next.new_peak_rate;
+    delete next.new_offpeak_rate;
+    delete next.new_offpeak_hours;
+    delete next.new_standing_charge;
   }
 
   return next;
