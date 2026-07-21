@@ -439,6 +439,10 @@ export function questionGroupOptions(
   if (group.id === 'usage_known') {
     return group.options.filter((o) => o.value === 1 || o.value === 2);
   }
+  if (group.id === 'current_tariff') {
+    // Octopus Cosy (3) hidden for now — Single / Dual only.
+    return group.options.filter((o) => o.value === 1 || o.value === 2);
+  }
   return group.options.filter((o) => !o.hiddenFromReps);
 }
 

@@ -80,6 +80,10 @@ export default function V44CalculatorQuestionsScreen() {
         const batteryGroup = allGroups.find((g) => g.id === 'battery_savings');
         restored.battery_savings = batteryGroup?.defaultValue ?? 1;
       }
+      // Octopus Cosy tariff (3) is hidden — fall back to Single Rate
+      if (restored.current_tariff === 3) {
+        restored.current_tariff = 1;
+      }
       setRadios(restored);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
