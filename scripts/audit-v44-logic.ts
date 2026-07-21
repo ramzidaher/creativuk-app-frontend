@@ -33,8 +33,6 @@ const tariffOptions = [
 const usageOptions = [
   [1, 'Yes'],
   [2, 'No'],
-  [3, 'Split by Spend (£)'],
-  [4, 'Split by Usage (kWh)'],
 ] as const;
 
 for (const [savings, savingsLabel] of savingsOptions) {
