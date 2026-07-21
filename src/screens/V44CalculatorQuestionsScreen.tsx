@@ -84,6 +84,13 @@ export default function V44CalculatorQuestionsScreen() {
       if (restored.current_tariff === 3) {
         restored.current_tariff = 1;
       }
+      // Split options are only valid for Dual Rate
+      if (
+        restored.current_tariff !== 2 &&
+        (restored.usage_known === 3 || restored.usage_known === 4)
+      ) {
+        restored.usage_known = 1;
+      }
       setRadios(restored);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
@@ -101,7 +108,19 @@ export default function V44CalculatorQuestionsScreen() {
   );
 
   const setRadio = (groupId: string, value: number) => {
-    setRadios((prev) => ({ ...prev, [groupId]: value }));
+    setRadios((prev) => {
+      const next = { ...prev, [groupId]: value };
+      // Split by Spend/Usage (3/4) only exist for Dual Rate — reset to Yes
+      // when switching back to Single Rate.
+      if (
+        groupId === 'current_tariff' &&
+        value !== 2 &&
+        (next.usage_known === 3 || next.usage_known === 4)
+      ) {
+        next.usage_known = 1;
+      }
+      return next;
+    });
   };
 
   const onContinue = async () => {
@@ -265,7 +284,7 @@ export default function V44CalculatorQuestionsScreen() {
           </Text>
 
           {questionGroups.map((group) => {
-            const options = questionGroupOptions(group);
+            const options = questionGroupOptions(group, radios);
             const selected = radios[group.id] ?? group.defaultValue;
             return (
               <View

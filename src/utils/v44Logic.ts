@@ -423,9 +423,10 @@ export function radiosToProgress(
   return out;
 }
 
-/** Filter options for Questions page */
+/** Filter options for Questions page. Depends on other answers (Excel parity). */
 export function questionGroupOptions(
   group: V44RadioGroup,
+  radios: Record<string, number> = {},
 ): V44RadioOption[] {
   if (group.id === 'battery_savings') {
     return group.options
@@ -437,7 +438,11 @@ export function questionGroupOptions(
       );
   }
   if (group.id === 'usage_known') {
-    return group.options.filter((o) => o.value === 1 || o.value === 2);
+    // Excel: Calculate Split (£ / kWh) options apply to Dual Rate (and Cosy,
+    // currently hidden) only. Single Rate gets Yes / No.
+    const allowed =
+      radios.current_tariff === 2 ? [1, 2, 3, 4] : [1, 2];
+    return group.options.filter((o) => allowed.includes(o.value));
   }
   if (group.id === 'current_tariff') {
     // Octopus Cosy (3) hidden for now — Single / Dual only.
