@@ -225,6 +225,18 @@ const LoginScreen: React.FC = () => {
                   <Text style={styles.registerLink}>Contact Administrator</Text>
                 </TouchableOpacity>
               </View>
+
+              {__DEV__ && (
+                <TouchableOpacity
+                  style={styles.devCalculatorLink}
+                  onPress={() => navigation.navigate('CalculatorTestingPublic')}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.devCalculatorLinkText}>
+                    Dev: Calculator Testing v4.4 (no login)
+                  </Text>
+                </TouchableOpacity>
+              )}
               
               </View>
             </Animated.View>
@@ -417,6 +429,22 @@ const styles = StyleSheet.create({
     color: '#22c55e',
     fontSize: 14,
     fontWeight: '600',
+  },
+  devCalculatorLink: {
+    marginTop: 18,
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.45)',
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+  },
+  devCalculatorLinkText: {
+    color: '#86efac',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   // Background image styles for small screens
   backgroundImageContainer: {

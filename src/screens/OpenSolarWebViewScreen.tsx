@@ -466,7 +466,10 @@ export default function OpenSolarProjectScreen() {
         
         // Navigate directly to the next step without showing alert
         // This provides a smoother user experience
-        navigation.navigate('CalculatorTypeSelection', { opportunityId });
+        navigation.navigate('CustomerDetails', {
+          opportunityId,
+          calculatorType: 'v44',
+        });
         console.log('🔍 Navigation call completed');
       } else {
         console.error('❌ Step completion failed:', result);

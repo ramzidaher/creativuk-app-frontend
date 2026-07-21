@@ -54,6 +54,102 @@ export const V44_QUESTIONS_GROUP_IDS = [
 /** Rep-visible battery savings options in Excel visual order (SC, Flux, Overnight) */
 export const V44_REP_BATTERY_SAVINGS = [1, 3, 2];
 
+/**
+ * Shown but not selectable by reps. Octopus Flux (3) stays visible while we
+ * confirm whether it remains available at launch.
+ */
+export const V44_REP_DISABLED_BATTERY_SAVINGS = [3];
+
+export function isBatterySavingsOptionDisabled(value: number): boolean {
+  return V44_REP_DISABLED_BATTERY_SAVINGS.includes(value);
+}
+
+/**
+ * Panels reps can sell. The Excel catalog lists every EPVS panel; reps only
+ * see what we currently install. The confirmed panel is the Eurener Nexa Matte
+ * TOPCon N-type (460W-500W range) sold at 475W. Update at launch if the
+ * supported model changes.
+ */
+export const V44_SUPPORTED_PANELS = {
+  manufacturers: ['Eurener'],
+  /** Case-insensitive substrings — a model must match one to be shown */
+  modelIncludes: ['Nexa Matte'],
+  /** Only wattages on sale — blocks manual 460W / 500W selection */
+  wattages: ['475'],
+} as const;
+
+export function isSupportedPanelManufacturer(manufacturer: string): boolean {
+  return V44_SUPPORTED_PANELS.manufacturers.some(
+    (m) => m.toLowerCase() === manufacturer.trim().toLowerCase(),
+  );
+}
+
+export function isSupportedPanelModel(model: string): boolean {
+  return V44_SUPPORTED_PANELS.modelIncludes.some((s) =>
+    model.toLowerCase().includes(s.toLowerCase()),
+  );
+}
+
+/**
+ * Batteries currently available to sales reps. Keep the full Excel/backend
+ * catalog intact; this allowlist controls only the rep-facing v4.4 inputs.
+ */
+export const V44_SUPPORTED_BATTERY = {
+  manufacturer: 'EcoFlow',
+  model: 'PowerOcean LFP',
+} as const;
+
+export function isSupportedBatteryManufacturer(manufacturer: string): boolean {
+  return (
+    manufacturer.trim().toLowerCase() ===
+    V44_SUPPORTED_BATTERY.manufacturer.toLowerCase()
+  );
+}
+
+export function isSupportedBatteryModel(model: string): boolean {
+  return model.trim().toLowerCase() === V44_SUPPORTED_BATTERY.model.toLowerCase();
+}
+
+/**
+ * Original/current EcoFlow PowerOcean inverter range exposed to reps.
+ * The workbook retains all models, including OCEAN 2 and unsupported sizes.
+ * Excel calls the smallest model 3.68kW; the rep-facing label is 3.6 kW.
+ */
+export const V44_SUPPORTED_INVERTER = {
+  manufacturer: 'EcoFlow',
+  capacitiesKw: [3.68, 5, 6],
+} as const;
+
+export function isSupportedInverterManufacturer(manufacturer: string): boolean {
+  return (
+    manufacturer.trim().toLowerCase() ===
+    V44_SUPPORTED_INVERTER.manufacturer.toLowerCase()
+  );
+}
+
+export function isSupportedInverter(
+  manufacturer: string,
+  model: string,
+  capacityKw: number | null,
+): boolean {
+  return (
+    isSupportedInverterManufacturer(manufacturer) &&
+    /^PowerOcean\s/i.test(model.trim()) &&
+    capacityKw != null &&
+    V44_SUPPORTED_INVERTER.capacitiesKw.some(
+      (supported) => Math.abs(supported - capacityKw) < 0.001,
+    )
+  );
+}
+
+export function inverterDisplayName(model: string): string {
+  const match = model.match(/^PowerOcean\s+([\d.]+)\s*kW$/i);
+  if (!match) return model;
+  const size = Number(match[1]);
+  const label = Math.abs(size - 3.68) < 0.001 ? '3.6' : String(size);
+  return `PowerOcean ${label} kW`;
+}
+
 export const V44_TEMPLATE_FILE =
   'EPVS Member Calculator v4.4.1 - (Creativ) 15th July 2026 Main.xlsm';
 
@@ -63,11 +159,22 @@ export const V44_EXPORT_TARIFF_DEFAULT = '12';
 /**
  * 100Green overnight / new tariff defaults (pence per kWh).
  * Applied when Battery Charging Overnight is selected.
+ * Dual day rate (36.26) still needs confirming against the approved tariff
+ * sheet before launch.
  */
 export const V44_100GREEN_RATES = {
   single: { day: '27.73', night: '7.00' },
   dual: { day: '36.26', night: '7.00' },
 } as const;
+
+/** 100Green off-peak duration (hours) — same for single and dual rate */
+export const V44_100GREEN_OFFPEAK_HOURS = '7';
+
+/**
+ * Standard standing charge in pence/day. EPVS confirmed this does not affect
+ * savings or benefit calculations, so reps do not need to enter it.
+ */
+export const V44_STANDING_CHARGE_DEFAULT = '47.5';
 
 /**
  * Pre-fill New Electricity Tariff + Export based on battery savings basis.
@@ -88,6 +195,9 @@ export function applyNewTariffDefaults(
   const savings = radios.battery_savings;
   const tariff = radios.current_tariff ?? 1;
 
+  // Always replace stale/customer-specific values with the agreed standard.
+  next.standing_charge = V44_STANDING_CHARGE_DEFAULT;
+
   const setIf = (key: string, value: string) => {
     if (force || !String(next[key] ?? '').trim()) {
       next[key] = value;
@@ -104,6 +214,17 @@ export function applyNewTariffDefaults(
       tariff === 2 ? V44_100GREEN_RATES.dual : V44_100GREEN_RATES.single;
     setIf('new_peak_rate', green.day);
     setIf('new_offpeak_rate', green.night);
+    setIf('new_offpeak_hours', V44_100GREEN_OFFPEAK_HOURS);
+    next.new_standing_charge = V44_STANDING_CHARGE_DEFAULT;
+  }
+
+  // These modes are not currently selectable by reps, but keep their hidden
+  // workbook values consistent if an existing record uses them.
+  if (savings === 3 || savings === 8) {
+    next.flux_standing_charge = V44_STANDING_CHARGE_DEFAULT;
+  }
+  if (savings === 4) {
+    next.if_standing_charge = V44_STANDING_CHARGE_DEFAULT;
   }
 
   // Self-Consumption (1) has no New Electricity Tariff — clear any stale values

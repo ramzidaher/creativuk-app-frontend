@@ -73,6 +73,20 @@ export default function CustomAlert({
       justifyContent: 'center',
       alignItems: 'center',
       padding: 20,
+      // On web, RN <Modal> renders its overlay as position:static in normal
+      // document flow below the full-height app root, so `flex: 1` collapses and
+      // the modal is pushed off-screen (invisible). Pin it to the viewport.
+      ...(Platform.OS === 'web'
+        ? ({
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: '100vh',
+            zIndex: 9999,
+          } as any)
+        : {}),
     },
     container: {
       backgroundColor: isDark ? '#1F2937' : '#FFFFFF',

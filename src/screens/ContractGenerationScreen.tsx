@@ -791,19 +791,22 @@ export default function ContractGenerationScreen() {
               
               if (blob.size === 0) {
                 console.warn('⚠️ PDF Viewer: Blob is empty (0 bytes). PDF may still be generating.');
-                console.log('✅ PDF Viewer: Will use direct URL - authentication should work via cookies/session');
-                setPdfBlobUrl(null); // Don't use blob URL, use direct URL
-                setPdfLoadError(null);
+                setPdfBlobUrl(null);
+                setPdfLoadError('PDF file is still empty. Please wait a moment and retry.');
               } else if (!blob.type.includes('pdf') && !blob.type.includes('application/octet-stream')) {
                 console.warn('⚠️ PDF Viewer: Unexpected blob type:', blob.type);
                 const text = await blob.text();
                 console.error('❌ PDF Viewer: Response text:', text.substring(0, 200));
                 throw new Error(`Unexpected content type: ${blob.type}. Response: ${text.substring(0, 100)}`);
               } else {
-                // PDF is valid, but use direct URL instead of blob URL since direct URL works
-                console.log('✅ PDF Viewer: PDF is valid (size:', blob.size, 'bytes). Using direct URL instead of blob URL.');
-                console.log('✅ PDF Viewer: Direct URL works when copied, so using it directly:', fullPdfUrl);
-                setPdfBlobUrl(null); // Don't create blob URL, use direct URL
+                // Use blob URL for iframe preview — avoids X-Frame-Options on /api proxy
+                // and mixed-content blocks when the PDF is served cross-origin.
+                const objectUrl = URL.createObjectURL(blob);
+                console.log('✅ PDF Viewer: PDF is valid (size:', blob.size, 'bytes). Using blob URL for preview.');
+                setPdfBlobUrl((prev) => {
+                  if (prev) URL.revokeObjectURL(prev);
+                  return objectUrl;
+                });
                 setPdfLoadError(null);
               }
             } else {
@@ -1348,28 +1351,27 @@ export default function ContractGenerationScreen() {
                     </View>
                   ) : (
                     <>
-                      {/* Use direct URL - it works when copied, so use it directly in iframe/object */}
-                      {pdfUrl ? (
+                      {/* Prefer blob URL (same-origin) so iframe isn't blocked by X-Frame-Options on /api */}
+                      {(pdfBlobUrl || pdfUrl) ? (
                         <>
                           <object
-                            data={pdfUrl}
+                            data={pdfBlobUrl || pdfUrl}
                             type="application/pdf"
                             style={styles.pdfIframe as any}
                             onLoad={() => {
-                              console.log('✅ PDF Viewer: Object loaded successfully with direct URL:', pdfUrl);
+                              console.log('✅ PDF Viewer: Object loaded:', pdfBlobUrl || pdfUrl);
                             }}
                             onError={(e) => {
                               console.error('❌ PDF Viewer: Object error:', e);
                               console.log('⚠️ PDF Viewer: Object failed, will try iframe fallback');
                             }}
                           >
-                            {/* Fallback iframe if object doesn't work */}
                             <iframe
-                              src={pdfUrl}
+                              src={pdfBlobUrl || pdfUrl}
                               style={styles.pdfIframe as any}
                               title="Contract PDF Viewer"
                               onLoad={() => {
-                                console.log('✅ PDF Viewer: Fallback iframe loaded with direct URL:', pdfUrl);
+                                console.log('✅ PDF Viewer: Fallback iframe loaded:', pdfBlobUrl || pdfUrl);
                               }}
                             />
                           </object>

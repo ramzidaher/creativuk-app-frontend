@@ -3,7 +3,6 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   Modal,
   Platform,
@@ -18,6 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import CalculatorProgressService from '../services/CalculatorProgressService';
 import BottomNavigation from '../components/BottomNavigation';
 import ExcelSheetPicker from '../components/ExcelSheetPicker';
+import { showAlert } from '../utils/crossPlatformAlert';
 import {
   ExcelSheetInfo,
   getSheetGroupKey,
@@ -261,7 +261,8 @@ export default function PricingScreen() {
             interestRate: false,
             interestRateType: false,
             paymentTerm: true,
-            leaseMonthlyPayment: true,
+            // Monthly comes after COM submit + Year 1 savings → HomeTree → I88 + recalc
+            leaseMonthlyPayment: false,
           };
         default:
           return {
@@ -686,28 +687,27 @@ export default function PricingScreen() {
     debouncedSave();
   };
 
-  /** Pull Year-1 monthly from HomeTree public pricing page via backend scrape */
+  /** Pull HomeTree upfront/term tiers for chips only (monthly is applied after calculator submit). */
   const refreshHometreeQuote = useCallback(async () => {
     if (calculatorType !== 'v44' || paymentMethod !== 'Hometree') {
       return;
     }
     if (!totalCost || totalCost < 6000) {
       setHometreeQuoteStatus('Select battery + panels so system cost is at least £6,000.');
-      setLeaseMonthlyPayment('');
       return;
     }
     const termYears = Number(paymentTerm);
     if (!Number.isFinite(termYears) || termYears <= 0) {
-      setHometreeQuoteStatus('Enter a payment term (5, 10, 15, 20 or 25 years).');
-      setLeaseMonthlyPayment('');
+      setHometreeQuoteStatus('Select a payment term (5, 10, 15, 20 or 25 years).');
       return;
     }
 
     try {
       setHometreeQuoteLoading(true);
-      setHometreeQuoteStatus('Looking up HomeTree pricing…');
+      setHometreeQuoteStatus('Loading HomeTree deposit options…');
       const { api } = await import('../utils/api');
       const depositNum = Number(String(deposit).replace(/[^0-9.]/g, '')) || 0;
+      // Indicative tiers only — accurate monthly needs Year 1 savings after Excel recalc
       const res = await api.get<{
         success: boolean;
         data?: {
@@ -734,27 +734,14 @@ export default function PricingScreen() {
       setHometreeUpfrontOptions(quote.upfrontOptions || []);
       setHometreeTermOptions(quote.termOptionsYears || [5, 10, 15, 20, 25]);
       setHometreeDepositMatched(quote.depositMatched);
-
-      if (quote.monthlyYear1 == null) {
-        setLeaseMonthlyPayment('');
-        setHometreeQuoteStatus('No HomeTree offer for this deposit/term combination.');
-        return;
-      }
-
-      setLeaseMonthlyPayment(String(quote.monthlyYear1));
-      const matchedNote =
-        quote.depositMatched !== depositNum
-          ? ` (matched HomeTree upfront £${quote.depositMatched.toLocaleString()})`
-          : '';
-      setHometreeQuoteStatus(
-        `From HomeTree: £${quote.monthlyYear1}/month Year 1` +
-          ` for £${totalCost.toLocaleString()} / ${quote.termYearsMatched}yr` +
-          matchedNote,
-      );
-    } catch (e) {
+      // Do not set leaseMonthlyPayment here — backend applies it after submit + recalc
       setLeaseMonthlyPayment('');
       setHometreeQuoteStatus(
-        e instanceof Error ? e.message : 'Failed to fetch HomeTree pricing',
+        'HomeTree monthly is calculated after Save & Submit (needs Year 1 savings from the calculator).',
+      );
+    } catch (e) {
+      setHometreeQuoteStatus(
+        e instanceof Error ? e.message : 'Failed to fetch HomeTree deposit options',
       );
     } finally {
       setHometreeQuoteLoading(false);
@@ -936,7 +923,7 @@ export default function PricingScreen() {
       }
     } catch (error) {
       console.error('Error loading sheets:', error);
-      Alert.alert('Error', 'Failed to load available Excel files');
+      showAlert('Error', 'Failed to load available Excel files');
     } finally {
       setLoadingSheets(false);
     }
@@ -953,7 +940,7 @@ export default function PricingScreen() {
         const token = storage ? await storage.getItem('accessToken') : null;
         
         if (!token) {
-          Alert.alert('Error', 'Authentication required to download file');
+          showAlert('Error', 'Authentication required to download file');
           return;
         }
         
@@ -1024,7 +1011,7 @@ export default function PricingScreen() {
           // If size difference is significant (> 10%), warn user
           const sizeDiffPercent = Math.abs(blob.size - expectedSize) / expectedSize;
           if (sizeDiffPercent > 0.1) {
-            Alert.alert(
+            showAlert(
               'Warning',
               `Downloaded file size (${(blob.size / 1024 / 1024).toFixed(2)} MB) differs from server size (${(expectedSize / 1024 / 1024).toFixed(2)} MB). The file may be corrupted.`,
               [{ text: 'OK' }]
@@ -1055,7 +1042,7 @@ export default function PricingScreen() {
         const token = storage ? await storage.getItem('accessToken') : null;
         
         if (!token) {
-          Alert.alert('Error', 'Authentication required to download file');
+          showAlert('Error', 'Authentication required to download file');
           return;
         }
         
@@ -1094,11 +1081,11 @@ export default function PricingScreen() {
         
         // For mobile, you might want to use FileSystem API or Linking
         console.log('Downloaded file:', sheet.fileName, `Size: ${mobileArrayBuffer.byteLength} bytes`);
-        Alert.alert('Download', `File downloaded successfully: ${sheet.fileName}. Mobile file system integration required.`);
+        showAlert('Download', `File downloaded successfully: ${sheet.fileName}. Mobile file system integration required.`);
       }
     } catch (error: any) {
       console.error('Error downloading sheet:', error);
-      Alert.alert('Error', error.message || 'Failed to download Excel file');
+      showAlert('Error', error.message || 'Failed to download Excel file');
     }
   };
 
@@ -1131,7 +1118,7 @@ export default function PricingScreen() {
             setSelectedSheetForEdit(null);
           }
           
-          Alert.alert('Success', 'Sheet deleted successfully');
+          showAlert('Success', 'Sheet deleted successfully');
           console.log('✅ Sheet deleted successfully:', sheetToDelete.fileName);
         } else {
           throw new Error(responseData.message || 'Failed to delete sheet');
@@ -1141,7 +1128,7 @@ export default function PricingScreen() {
       }
     } catch (error: any) {
       console.error('Error deleting sheet:', error);
-      Alert.alert('Error', error.message || 'Failed to delete Excel file');
+      showAlert('Error', error.message || 'Failed to delete Excel file');
     } finally {
       setDeletingSheet(false);
       setShowDeleteModal(false);
@@ -1153,34 +1140,34 @@ export default function PricingScreen() {
     try {
       // Validate that a payment method is selected
       if (!paymentMethod) {
-        Alert.alert('⚠️ Payment Method Required', 'Please select a payment method before saving.');
+        showAlert('⚠️ Payment Method Required', 'Please select a payment method before saving.');
         return;
       }
 
       if (selectedNumberOfPanels == null) {
-        Alert.alert('Required', 'Please select the number of panels for the chosen battery.');
+        showAlert('Required', 'Please select the number of panels for the chosen battery.');
         return;
       }
 
       const enabled = getEnabledFields();
       if (enabled.deposit && !deposit.trim()) {
-        Alert.alert('Required', 'Please enter the Deposit / Upfront Payment.');
+        showAlert('Required', 'Please enter the Deposit / Upfront Payment.');
         return;
       }
       if (enabled.interestRate && !interestRate.trim()) {
-        Alert.alert('Required', 'Please enter the Interest Rate.');
+        showAlert('Required', 'Please enter the Interest Rate.');
         return;
       }
       if (enabled.interestRateType && !interestRateType.trim()) {
-        Alert.alert('Required', 'Please select the Interest Rate Type.');
+        showAlert('Required', 'Please select the Interest Rate Type.');
         return;
       }
       if (enabled.paymentTerm && !paymentTerm.trim()) {
-        Alert.alert('Required', 'Please enter the Payment Term (years).');
+        showAlert('Required', 'Please enter the Payment Term (years).');
         return;
       }
       if (enabled.leaseMonthlyPayment && !leaseMonthlyPayment.trim()) {
-        Alert.alert('Required', 'Please enter the Year 1 Monthly HomeTree Payment.');
+        showAlert('Required', 'Please enter the Year 1 Monthly HomeTree Payment.');
         return;
       }
 
@@ -1200,7 +1187,7 @@ export default function PricingScreen() {
       setShowSubmitModal(true);
     } catch (error) {
       console.error('Error preparing submit:', error);
-      Alert.alert('Error', 'Failed to prepare submission. Please try again.');
+      showAlert('Error', 'Failed to prepare submission. Please try again.');
     }
   };
 
@@ -1382,7 +1369,7 @@ export default function PricingScreen() {
           
           if (!submitResult.success) {
             console.error('❌ Calculator submission failed:', submitResult.message);
-            Alert.alert(
+            showAlert(
               '⚠️ Submission Failed',
               submitResult.message || 'Failed to submit calculator to Excel. Please try again.',
               [{ text: 'OK' }]
@@ -1393,7 +1380,7 @@ export default function PricingScreen() {
           
           console.log('✅ Calculator submitted successfully to Excel:', submitResult.filePath);
           if (calculatorType === 'v44' && submitResult.filePath) {
-            Alert.alert(
+            showAlert(
               'Calculator file created',
               `Saved to:\n${submitResult.filePath}\n\n(Flux/EPVS files go in epvs-opportunities — same as production)`,
               [{ text: 'OK' }],
@@ -1401,7 +1388,7 @@ export default function PricingScreen() {
           }
         } catch (submitError) {
           console.error('❌ Error submitting calculator:', submitError);
-          Alert.alert(
+          showAlert(
             '⚠️ Submission Error',
             'Failed to submit calculator to Excel. The pricing data was saved, but the Excel file was not created. Please try again.',
             [{ text: 'OK' }]
@@ -1442,15 +1429,15 @@ export default function PricingScreen() {
             console.log('🔍 Navigation call completed');
           } else {
             console.error('❌ Step completion failed:', result);
-            Alert.alert('Error', 'Failed to complete pricing step. Please try again.');
+            showAlert('Error', 'Failed to complete pricing step. Please try again.');
           }
         } catch (workflowError) {
           console.error('Error marking pricing step as completed:', workflowError);
-          Alert.alert('Error', 'Failed to complete pricing step. Please try again.');
+          showAlert('Error', 'Failed to complete pricing step. Please try again.');
         }
       } catch (saveError) {
         console.error('❌ Error saving pricing data to JSON:', saveError);
-        Alert.alert(
+        showAlert(
           '⚠️ Save Failed',
           'Failed to save pricing data. Please check your connection and try again.'
         );
@@ -1460,7 +1447,7 @@ export default function PricingScreen() {
 
     } catch (error) {
       console.error('Error saving pricing:', error);
-      Alert.alert('❌ Network Error', 'Failed to save pricing. Please check your connection and try again.');
+      showAlert('❌ Network Error', 'Failed to save pricing. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -1816,7 +1803,7 @@ export default function PricingScreen() {
                       console.log('🔍 Options length:', interestRateTypeOptions.length);
                       
                       if (loadingDropdownOptions) {
-                        Alert.alert('Loading', 'Please wait while dropdown options are loading...');
+                        showAlert('Loading', 'Please wait while dropdown options are loading...');
                         return;
                       }
                       
@@ -1902,6 +1889,15 @@ export default function PricingScreen() {
                   )}
                 </View>
               )}
+
+              {calculatorType === 'v44' && paymentMethod === 'Hometree' ? (
+                <Text style={[styles.fieldHint, { color: theme.secondaryText }]}>
+                  {hometreeQuoteLoading
+                    ? 'Loading HomeTree deposit options…'
+                    : hometreeQuoteStatus ||
+                      'Year 1 monthly is calculated after Save & Submit once the calculator has Year 1 savings — then always recalculated into the sheet.'}
+                </Text>
+              ) : null}
 
               {getEnabledFields().leaseMonthlyPayment && (
                 <View style={styles.inputField}>
@@ -2135,7 +2131,7 @@ export default function PricingScreen() {
                 navigation.navigate('Presentation', { opportunityId });
               } catch (error) {
                 console.error('Error skipping pricing step:', error);
-                Alert.alert('Error', 'Failed to skip pricing step. Please try again.');
+                showAlert('Error', 'Failed to skip pricing step. Please try again.');
               }
             }}
             activeOpacity={0.8}
@@ -2454,7 +2450,7 @@ export default function PricingScreen() {
                   if (selectedSheetForEdit) {
                     await performSubmit(true, selectedSheetForEdit.fileName);
                   } else {
-                    Alert.alert('Selection Required', 'Please select a file to edit.');
+                    showAlert('Selection Required', 'Please select a file to edit.');
                   }
                 }}
                 disabled={!selectedSheetForEdit}
@@ -3034,6 +3030,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
+    // On web, RN <Modal> renders its overlay as position:static in normal
+    // document flow below the full-height app root, so `flex: 1` collapses and
+    // the modal is pushed off-screen (invisible). Pin it to the viewport.
+    ...(Platform.OS === 'web'
+      ? ({
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: '100vh',
+          zIndex: 9999,
+        } as any)
+      : {}),
   },
   modalContent: {
     width: '100%',

@@ -1,9 +1,8 @@
 import { Feather } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Platform,
   ScrollView,
@@ -19,18 +18,25 @@ import BottomNavigation from '../components/BottomNavigation';
 import { useTheme } from '../context/ThemeContext';
 import CalculatorProgressService from '../services/CalculatorProgressService';
 import { api } from '../utils/api';
+import { showAlert } from '../utils/crossPlatformAlert';
 import {
   V44Field,
   V44RadioGroup,
   V44Section,
-  V44_100GREEN_RATES,
-  V44_EXPORT_TARIFF_DEFAULT,
+  V44_SUPPORTED_PANELS,
   applyCascadeClear,
   applyNewTariffDefaults,
   fieldsClearedByRadioChange,
+  inverterDisplayName,
   isConsumptionField,
   isFieldVisible,
   isSectionVisible,
+  isSupportedBatteryManufacturer,
+  isSupportedBatteryModel,
+  isSupportedInverter,
+  isSupportedInverterManufacturer,
+  isSupportedPanelManufacturer,
+  isSupportedPanelModel,
   radiosFromProgress,
   radiosToProgress,
   resolveFieldLabel,
@@ -40,7 +46,12 @@ import {
 type Equipment = {
   panels: Array<{ manufacturer: string; model: string; minWattage: number | null; maxWattage: number | null }>;
   batteries: Array<{ manufacturer: string; model: string; repVisible?: boolean }>;
-  inverters: Array<{ manufacturer: string; model: string; repVisible?: boolean }>;
+  inverters: Array<{
+    manufacturer: string;
+    model: string;
+    capacityKw: number | null;
+    repVisible?: boolean;
+  }>;
 };
 
 type RouteParams = {
@@ -48,6 +59,13 @@ type RouteParams = {
   customerDetails?: { customerName: string; address: string; postcode: string };
   calculatorType?: 'v44';
 };
+
+const REP_HIDDEN_STANDING_CHARGE_FIELDS = new Set([
+  'standing_charge',
+  'new_standing_charge',
+  'flux_standing_charge',
+  'if_standing_charge',
+]);
 
 /**
  * v4.4 Inputs — schema-driven show/hide/clear (Excel Toggle logic in the app).
@@ -115,33 +133,67 @@ export default function V44CalculatorInputsScreen() {
         restoredInputs.address = c.address || '';
         restoredInputs.postcode = c.postcode || '';
       }
-      // Always apply 100Green / SC / export defaults on load so reps see values immediately.
-      // Saved non-default overrides are kept when tariffOverride was previously used
-      // (detected if saved rates differ from the auto defaults for the current radios).
-      const withDefaults = applyNewTariffDefaults(restoredRadios, restoredInputs, {
-        force: true,
-      });
-      const savings = restoredRadios.battery_savings;
-      const tariff = restoredRadios.current_tariff ?? 1;
-      const green =
-        tariff === 2 ? V44_100GREEN_RATES.dual : V44_100GREEN_RATES.single;
-      const savedPeak = String(restoredInputs.new_peak_rate ?? '').trim();
-      const savedNight = String(restoredInputs.new_offpeak_rate ?? '').trim();
-      const savedExport = String(restoredInputs.export_tariff_rate ?? '').trim();
-      let keepOverride = false;
-      if (savings === 2 || savings === 5) {
-        keepOverride =
-          (savedPeak && savedPeak !== green.day) ||
-          (savedNight && savedNight !== green.night) ||
-          (savedExport && savedExport !== V44_EXPORT_TARIFF_DEFAULT);
-      } else if (savings === 1) {
-        const currentDay = String(restoredInputs.current_rate_1 ?? '').trim();
-        keepOverride =
-          (savedPeak && currentDay && savedPeak !== currentDay) ||
-          (savedExport && savedExport !== V44_EXPORT_TARIFF_DEFAULT);
+      // Clear stale panel selections that are no longer supported
+      // (only Eurener Nexa 475W is sold — see V44_SUPPORTED_PANELS)
+      const savedPanelMfr = String(restoredInputs.panel_manufacturer ?? '').trim();
+      const savedPanelModel = String(restoredInputs.panel_model ?? '').trim();
+      const savedPanelWattage = String(restoredInputs.panel_wattage ?? '').trim();
+      if (
+        (savedPanelMfr && !isSupportedPanelManufacturer(savedPanelMfr)) ||
+        (savedPanelModel && !isSupportedPanelModel(savedPanelModel)) ||
+        (savedPanelWattage &&
+          !(V44_SUPPORTED_PANELS.wattages as readonly string[]).includes(savedPanelWattage))
+      ) {
+        delete restoredInputs.panel_manufacturer;
+        delete restoredInputs.panel_model;
+        delete restoredInputs.panel_wattage;
       }
-      setTariffOverride(keepOverride);
-      setInputs(keepOverride ? { ...withDefaults, ...restoredInputs } : withDefaults);
+      // Keep unsupported/upcoming battery models in the backend catalog, but
+      // never restore them into the sales-rep flow.
+      const savedBatteryMfr = String(
+        restoredInputs.battery_manufacturer ?? '',
+      ).trim();
+      const savedBatteryModel = String(restoredInputs.battery_model ?? '').trim();
+      if (
+        (savedBatteryMfr &&
+          !isSupportedBatteryManufacturer(savedBatteryMfr)) ||
+        (savedBatteryModel && !isSupportedBatteryModel(savedBatteryModel))
+      ) {
+        delete restoredInputs.battery_manufacturer;
+        delete restoredInputs.battery_model;
+        delete restoredInputs.battery_modules;
+      }
+      const savedInverterMfr = String(
+        restoredInputs.inverter_manufacturer ?? '',
+      ).trim();
+      const savedInverterModel = String(
+        restoredInputs.inverter_model ?? '',
+      ).trim();
+      const savedInverter = equipmentRes.data.inverters.find(
+        (inverter) =>
+          inverter.manufacturer === savedInverterMfr &&
+          inverter.model === savedInverterModel,
+      );
+      if (
+        (savedInverterMfr &&
+          !isSupportedInverterManufacturer(savedInverterMfr)) ||
+        (savedInverterModel &&
+          (!savedInverter ||
+            !isSupportedInverter(
+              savedInverter.manufacturer,
+              savedInverter.model,
+              savedInverter.capacityKw,
+            )))
+      ) {
+        delete restoredInputs.inverter_manufacturer;
+        delete restoredInputs.inverter_model;
+        delete restoredInputs.inverter_devices;
+      }
+      // Always reset the new tariff / export rates to the approved defaults for
+      // the selected tariff. Old saved rates (including stale test data) are
+      // discarded — reps must switch Override on per session to enter custom rates.
+      setTariffOverride(false);
+      setInputs(applyNewTariffDefaults(restoredRadios, restoredInputs, { force: true }));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
@@ -149,9 +201,14 @@ export default function V44CalculatorInputsScreen() {
     }
   }, [opportunityId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Reload whenever the screen gains focus so changes made on the Questions
+  // page (e.g. switching tariff type) are picked up immediately when the rep
+  // navigates back and forth — no manual refresh needed.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   const pullOctopusFluxRates = useCallback(
     async (force = false) => {
@@ -167,8 +224,8 @@ export default function V44CalculatorInputsScreen() {
       const variant = batterySavings === 4 ? 'intelligent' : 'standard';
       const alreadyFilled =
         variant === 'standard'
-          ? !!(inputs.flux_day_rate_import && inputs.flux_standing_charge)
-          : !!(inputs.if_peak_rate_import && inputs.if_standing_charge);
+          ? !!inputs.flux_day_rate_import
+          : !!inputs.if_peak_rate_import;
       if (!force && alreadyFilled) return;
 
       try {
@@ -180,7 +237,6 @@ export default function V44CalculatorInputsScreen() {
             parsed_rates?: {
               import?: { day: number; flux: number; peak: number };
               export?: { day: number; flux: number; peak: number };
-              standing_charge?: number;
             };
           };
           error?: string;
@@ -209,9 +265,6 @@ export default function V44CalculatorInputsScreen() {
             next.flux_day_rate_export = round(rates.export.day);
             next.flux_flux_rate_export = round(rates.export.flux);
             next.flux_peak_rate_export = round(rates.export.peak);
-            if (rates.standing_charge != null) {
-              next.flux_standing_charge = round(rates.standing_charge);
-            }
           } else if (variant === 'intelligent' && rates.import && rates.export) {
             next.if_peak_rate_import = round(rates.import.peak);
             next.if_offpeak_rate_import = round(
@@ -221,11 +274,8 @@ export default function V44CalculatorInputsScreen() {
             next.if_offpeak_rate_export = round(
               rates.export.flux ?? rates.export.day,
             );
-            if (rates.standing_charge != null) {
-              next.if_standing_charge = round(rates.standing_charge);
-            }
           }
-          return next;
+          return applyNewTariffDefaults(radios, next, { force: true });
         });
 
         setFluxRatesStatus(`Octopus Flux rates loaded for ${postcode}`);
@@ -241,9 +291,7 @@ export default function V44CalculatorInputsScreen() {
       radios.battery_savings,
       customerDetails?.postcode,
       inputs.flux_day_rate_import,
-      inputs.flux_standing_charge,
       inputs.if_peak_rate_import,
-      inputs.if_standing_charge,
     ],
   );
 
@@ -301,8 +349,6 @@ export default function V44CalculatorInputsScreen() {
     id: string;
     label: string;
     locked: boolean;
-    lockedReason?: string;
-    badge?: string;
   }) => {
     const value = inputs[opts.id] || '';
     const locked = opts.locked;
@@ -312,13 +358,6 @@ export default function V44CalculatorInputsScreen() {
           <Text style={[styles.label, { color: theme.secondaryText, flex: 1 }]}>
             {opts.label}
           </Text>
-          {opts.badge ? (
-            <View style={[styles.badge, { backgroundColor: theme.primaryButton + '22' }]}>
-              <Text style={[styles.badgeText, { color: theme.primaryButton }]}>
-                {opts.badge}
-              </Text>
-            </View>
-          ) : null}
           {locked ? (
             <View style={styles.lockRow}>
               <Feather name="lock" size={14} color={theme.secondaryText} />
@@ -344,14 +383,9 @@ export default function V44CalculatorInputsScreen() {
           onChangeText={(t) => setInput(opts.id, t)}
           editable={!locked}
           keyboardType="decimal-pad"
-          placeholder={opts.lockedReason || '—'}
+          placeholder="—"
           placeholderTextColor={theme.secondaryText}
         />
-        {opts.lockedReason ? (
-          <Text style={[styles.fieldHint, { color: theme.secondaryText }]}>
-            {opts.lockedReason}
-          </Text>
-        ) : null}
       </View>
     );
   };
@@ -362,12 +396,32 @@ export default function V44CalculatorInputsScreen() {
       if (!equipment || !field.dropdownSource) return [];
       switch (field.dropdownSource) {
         case 'panel_manufacturer':
-          return [...new Set(equipment.panels.map((p) => p.manufacturer))].sort();
+          // Reps only see panels we currently sell (Eurener Nexa 475W)
+          return [
+            ...new Set(
+              equipment.panels
+                .filter((p) => isSupportedPanelManufacturer(p.manufacturer))
+                .map((p) => p.manufacturer),
+            ),
+          ].sort();
         case 'panel_model': {
           const mfr = inputs.panel_manufacturer;
           return [
             ...new Set(
-              equipment.panels.filter((p) => p.manufacturer === mfr).map((p) => p.model),
+              equipment.panels
+                .filter((p) => {
+                  if (p.manufacturer !== mfr || !isSupportedPanelModel(p.model)) {
+                    return false;
+                  }
+                  // Model must offer a wattage we sell (475W)
+                  const min = p.minWattage ?? 0;
+                  const max = p.maxWattage ?? min;
+                  return V44_SUPPORTED_PANELS.wattages.some((w) => {
+                    const n = Number(w);
+                    return n >= min && n <= max;
+                  });
+                })
+                .map((p) => p.model),
             ),
           ].sort();
         }
@@ -380,16 +434,21 @@ export default function V44CalculatorInputsScreen() {
           if (!panel) return [];
           const min = panel.minWattage ?? 0;
           const max = panel.maxWattage ?? min;
-          const opts: string[] = [];
-          for (let w = min; w <= max; w += 5) opts.push(String(w));
-          if (!opts.length && min) opts.push(String(min));
-          return opts;
+          // Only wattages currently sold (475W) — no manual 460W / 500W
+          return V44_SUPPORTED_PANELS.wattages.filter((w) => {
+            const n = Number(w);
+            return n >= min && n <= max;
+          });
         }
         case 'battery_manufacturer':
           return [
             ...new Set(
               equipment.batteries
-                .filter((b) => b.repVisible !== false)
+                .filter(
+                  (b) =>
+                    b.repVisible !== false &&
+                    isSupportedBatteryManufacturer(b.manufacturer),
+                )
                 .map((b) => b.manufacturer),
             ),
           ].sort();
@@ -398,7 +457,12 @@ export default function V44CalculatorInputsScreen() {
           return [
             ...new Set(
               equipment.batteries
-                .filter((b) => b.manufacturer === mfr && b.repVisible !== false)
+                .filter(
+                  (b) =>
+                    b.manufacturer === mfr &&
+                    b.repVisible !== false &&
+                    isSupportedBatteryModel(b.model),
+                )
                 .map((b) => b.model),
             ),
           ].sort();
@@ -407,7 +471,11 @@ export default function V44CalculatorInputsScreen() {
           return [
             ...new Set(
               equipment.inverters
-                .filter((i) => i.repVisible !== false)
+                .filter(
+                  (i) =>
+                    i.repVisible !== false &&
+                    isSupportedInverterManufacturer(i.manufacturer),
+                )
                 .map((i) => i.manufacturer),
             ),
           ].sort();
@@ -416,7 +484,16 @@ export default function V44CalculatorInputsScreen() {
           return [
             ...new Set(
               equipment.inverters
-                .filter((i) => i.manufacturer === mfr && i.repVisible !== false)
+                .filter(
+                  (i) =>
+                    i.manufacturer === mfr &&
+                    i.repVisible !== false &&
+                    isSupportedInverter(
+                      i.manufacturer,
+                      i.model,
+                      i.capacityKw,
+                    ),
+                )
                 .map((i) => i.model),
             ),
           ].sort();
@@ -445,7 +522,54 @@ export default function V44CalculatorInputsScreen() {
     return groups.find((g) => g.id === 'usage_known') || null;
   }, [groups, radios.current_tariff]);
 
+  /**
+   * Block Continue until every field the rep can see is filled in correctly,
+   * so the workflow can't be completed with missing or invalid data.
+   */
+  const validationErrors = (): string[] => {
+    const problems: string[] = [];
+    const wholeNumberFields = ['battery_modules', 'inverter_devices', 'no_of_arrays'];
+
+    for (const section of visibleSections) {
+      const fields = section.fields.filter((f) =>
+        !REP_HIDDEN_STANDING_CHARGE_FIELDS.has(f.id) &&
+        isFieldVisible(f, radios, consumptionMatrix, true),
+      );
+      for (const field of fields) {
+        const mustFill =
+          field.required ||
+          isConsumptionField(field.id) ||
+          field.id === 'occupancy_archetype';
+        const raw = (inputs[field.id] || '').trim();
+        const label = resolveFieldLabel(field, radios, true);
+
+        if (!raw) {
+          if (mustFill) problems.push(`${label} is missing`);
+          continue;
+        }
+        if (field.type === 'number') {
+          const n = Number(raw);
+          if (Number.isNaN(n) || n < 0) {
+            problems.push(`${label} must be a valid number`);
+          } else if (wholeNumberFields.includes(field.id) && (!Number.isInteger(n) || n < 1)) {
+            problems.push(`${label} must be a whole number of 1 or more`);
+          }
+        }
+      }
+    }
+    return problems;
+  };
+
   const onContinue = async () => {
+    const problems = validationErrors();
+    if (problems.length) {
+      showAlert(
+        'Please complete the form',
+        problems.slice(0, 8).join('\n') +
+          (problems.length > 8 ? `\n…and ${problems.length - 8} more` : ''),
+      );
+      return;
+    }
     try {
       setSaving(true);
       const toSaveRadios = {
@@ -472,7 +596,7 @@ export default function V44CalculatorInputsScreen() {
         calculatorType: 'v44',
       });
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save');
+      showAlert('Error', e instanceof Error ? e.message : 'Failed to save');
     } finally {
       setSaving(false);
     }
@@ -580,6 +704,7 @@ export default function V44CalculatorInputsScreen() {
         {/* Excel Inputs order: Existing → Solar PV → Battery → Inverter → Current Tariff → New tariffs → Export */}
         {visibleSections.map((section) => {
           const fields = section.fields.filter((f) =>
+            !REP_HIDDEN_STANDING_CHARGE_FIELDS.has(f.id) &&
             isFieldVisible(f, radios, consumptionMatrix, true),
           );
           if (!fields.length && !(section.id === 'current_tariff' && cosyUsageGroup)) {
@@ -625,7 +750,11 @@ export default function V44CalculatorInputsScreen() {
                         color: value ? theme.primaryText : theme.secondaryText,
                       }}
                     >
-                      {value || 'Select…'}
+                      {value
+                        ? field.id === 'inverter_model'
+                          ? inverterDisplayName(value)
+                          : value
+                        : 'Select…'}
                     </Text>
                     <Feather name="chevron-down" size={18} color={theme.secondaryText} />
                   </TouchableOpacity>
@@ -647,9 +776,20 @@ export default function V44CalculatorInputsScreen() {
                     },
                   ]}
                   value={value}
-                  onChangeText={(t) => setInput(field.id, t)}
+                  onChangeText={(t) =>
+                    setInput(
+                      field.id,
+                      field.id === 'battery_modules'
+                        ? t.replace(/[^\d]/g, '')
+                        : t,
+                    )
+                  }
                   keyboardType={
-                    field.type === 'number' ? 'decimal-pad' : 'default'
+                    field.id === 'battery_modules'
+                      ? 'number-pad'
+                      : field.type === 'number'
+                        ? 'decimal-pad'
+                        : 'default'
                   }
                   placeholderTextColor={theme.secondaryText}
                 />
@@ -667,7 +807,7 @@ export default function V44CalculatorInputsScreen() {
                   ]}
                 >
                   <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
-                    Current Tariff
+                    Customer's Current Tariff
                   </Text>
                   {rateFields.map(renderField)}
                 </View>
@@ -760,10 +900,6 @@ export default function V44CalculatorInputsScreen() {
                     exportId: 'if_offpeak_rate_export',
                   },
                 ];
-            const standingId = isStandard
-              ? 'flux_standing_charge'
-              : 'if_standing_charge';
-
             return (
               <View
                 key={section.id}
@@ -885,37 +1021,6 @@ export default function V44CalculatorInputsScreen() {
                     </View>
                   ))}
 
-                  <View
-                    style={[
-                      styles.fluxTableRow,
-                      { borderTopColor: theme.cardBorder },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.fluxTableLabel,
-                        { color: theme.primaryText, flex: 1.4 },
-                      ]}
-                    >
-                      Standing Charge (pence per day)
-                    </Text>
-                    <TextInput
-                      style={[
-                        styles.fluxTableInput,
-                        styles.fluxStandingInput,
-                        {
-                          backgroundColor: theme.inputBackground,
-                          borderColor: theme.cardBorder,
-                          color: theme.primaryText,
-                        },
-                      ]}
-                      value={inputs[standingId] || ''}
-                      onChangeText={(t) => setInput(standingId, t)}
-                      keyboardType="decimal-pad"
-                      placeholder="—"
-                      placeholderTextColor={theme.secondaryText}
-                    />
-                  </View>
                 </View>
                 <Text style={[styles.fluxFootnote, { color: theme.secondaryText }]}>
                   Import prices include VAT.
@@ -939,26 +1044,6 @@ export default function V44CalculatorInputsScreen() {
                   : section.title}
               </Text>
 
-              {section.id === 'new_overnight' &&
-              (radios.battery_savings === 2 || radios.battery_savings === 5) ? (
-                <View
-                  style={[
-                    styles.infoBanner,
-                    {
-                      backgroundColor: theme.primaryButton + '14',
-                      borderColor: theme.primaryButton + '40',
-                    },
-                  ]}
-                >
-                  <Feather name="zap" size={16} color={theme.primaryButton} />
-                  <Text style={[styles.infoBannerText, { color: theme.primaryText }]}>
-                    Pre-filled with 100Green overnight rates — Single 27.73p day /
-                    7.00p night, Dual 36.26p day / 7.00p night. Export defaults to
-                    12p.
-                  </Text>
-                </View>
-              ) : null}
-
               {section.id === 'new_overnight' || section.id === 'export_tariff' ? (
                 <View style={styles.overrideRow}>
                   <View style={{ flex: 1, paddingRight: 12 }}>
@@ -966,9 +1051,8 @@ export default function V44CalculatorInputsScreen() {
                       Override rates
                     </Text>
                     <Text style={[styles.fluxHint, { color: theme.secondaryText, marginBottom: 0 }]}>
-                      {section.id === 'new_overnight'
-                        ? 'Locked to 100Green tariff defaults. Turn Override on to enter different rates.'
-                        : 'Locked to 12p/kWh export (100Green / SEG default).'}
+                      Rates are set automatically. Only turn this on if the
+                      customer has agreed different rates.
                     </Text>
                   </View>
                   <Switch
@@ -984,15 +1068,13 @@ export default function V44CalculatorInputsScreen() {
                 <>
                   {renderTariffNumberField({
                     id: 'new_peak_rate',
-                    label: 'Peak / Day Rate (pence per kWh)',
+                    label: 'Peak / day rate (pence per kWh)',
                     locked: !tariffOverride,
-                    badge: '100Green',
                   })}
                   {renderTariffNumberField({
                     id: 'new_offpeak_rate',
-                    label: 'Off-Peak / Night Rate (pence per kWh)',
+                    label: 'Off-peak / night rate (pence per kWh)',
                     locked: !tariffOverride,
-                    badge: '100Green',
                   })}
                   {fields
                     .filter(
@@ -1011,9 +1093,8 @@ export default function V44CalculatorInputsScreen() {
               ) : section.id === 'export_tariff' ? (
                 renderTariffNumberField({
                   id: 'export_tariff_rate',
-                  label: 'Export Tariff (pence per kWh)',
+                  label: 'Export tariff (pence per kWh)',
                   locked: !tariffOverride,
-                  badge: '12p · 100Green',
                 })
               ) : (
                 fields.map(renderField)
@@ -1061,7 +1142,11 @@ export default function V44CalculatorInputsScreen() {
                     setDropdown(null);
                   }}
                 >
-                  <Text style={{ color: theme.primaryText }}>{opt}</Text>
+                  <Text style={{ color: theme.primaryText }}>
+                    {dropdown?.fieldId === 'inverter_model'
+                      ? inverterDisplayName(opt)
+                      : opt}
+                  </Text>
                 </TouchableOpacity>
               ))}
               {!dropdown?.options?.length ? (
@@ -1171,22 +1256,6 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
   fluxHint: { fontSize: 13, lineHeight: 18, marginBottom: 10 },
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 14,
-  },
-  infoBannerText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '500',
-  },
   overrideRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1206,15 +1275,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 6,
   },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
   lockRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1223,11 +1283,6 @@ const styles = StyleSheet.create({
   lockText: {
     fontSize: 12,
     fontWeight: '600',
-  },
-  fieldHint: {
-    fontSize: 12,
-    marginTop: 6,
-    lineHeight: 16,
   },
   fluxPullRow: { marginBottom: 12, gap: 8 },
   fluxPullBtn: {
@@ -1278,9 +1333,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     textAlign: 'center',
-  },
-  fluxStandingInput: {
-    flex: 2,
   },
   fluxFootnote: {
     marginTop: 8,

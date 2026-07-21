@@ -20,6 +20,7 @@ import {
   V44_QUESTIONS_GROUP_IDS,
   V44RadioGroup,
   defaultRadios,
+  isBatterySavingsOptionDisabled,
   questionGroupOptions,
   radiosFromProgress,
   radiosToProgress,
@@ -74,6 +75,11 @@ export default function V44CalculatorQuestionsScreen() {
         setCustomerDetails(routeCustomer);
       }
       const restored = radiosFromProgress(progress?.radioButtonSelections, allGroups);
+      // If a previously saved selection is now disabled (e.g. Octopus Flux), reset it
+      if (isBatterySavingsOptionDisabled(restored.battery_savings)) {
+        const batteryGroup = allGroups.find((g) => g.id === 'battery_savings');
+        restored.battery_savings = batteryGroup?.defaultValue ?? 1;
+      }
       setRadios(restored);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
@@ -270,6 +276,9 @@ export default function V44CalculatorQuestionsScreen() {
                 </Text>
                 {options.map((opt) => {
                   const active = selected === opt.value;
+                  const disabled =
+                    group.id === 'battery_savings' &&
+                    isBatterySavingsOptionDisabled(opt.value);
                   return (
                     <TouchableOpacity
                       key={opt.value}
@@ -280,9 +289,11 @@ export default function V44CalculatorQuestionsScreen() {
                           backgroundColor: active
                             ? theme.primaryButton + '18'
                             : theme.inputBackground,
+                          opacity: disabled ? 0.45 : 1,
                         },
                       ]}
                       onPress={() => setRadio(group.id, opt.value)}
+                      disabled={disabled}
                     >
                       <View
                         style={[
@@ -305,20 +316,11 @@ export default function V44CalculatorQuestionsScreen() {
                             ? 'Octopus Flux'
                             : opt.label}
                         </Text>
-                        {group.id === 'battery_savings' && opt.value === 2 ? (
+                        {disabled ? (
                           <Text
                             style={[styles.optionHint, { color: theme.secondaryText }]}
                           >
-                            Prefills New Electricity Tariff with 100Green rates
-                            (Single 27.73/7.00 · Dual 36.26/7.00) and 12p export
-                          </Text>
-                        ) : null}
-                        {group.id === 'battery_savings' && opt.value === 1 ? (
-                          <Text
-                            style={[styles.optionHint, { color: theme.secondaryText }]}
-                          >
-                            Copies current tariff into New Electricity Tariff · 12p
-                            export · night rate disabled
+                            Not available yet
                           </Text>
                         ) : null}
                       </View>

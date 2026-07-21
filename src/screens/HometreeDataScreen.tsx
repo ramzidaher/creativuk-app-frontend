@@ -384,7 +384,12 @@ export default function HometreeDataScreen() {
         emptyAction={
           <TouchableOpacity
             style={[styles.secondaryAction, { borderColor: theme.primaryButton }]}
-            onPress={() => navigation.navigate('CalculatorTypeSelection', { opportunityId })}
+            onPress={() =>
+              navigation.navigate('CustomerDetails', {
+                opportunityId,
+                calculatorType: 'v44',
+              })
+            }
           >
             <Feather name="settings" size={18} color={theme.primaryButton} />
             <Text style={[styles.secondaryActionText, { color: theme.primaryButton }]}>

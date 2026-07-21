@@ -296,7 +296,7 @@ export default function SolarWorkflowScreen() {
               return {
                 ...step,
                 title: 'Calculate',
-                description: 'Choose between Off Peak and Flux options',
+                description: 'Enter system details and generate the proposal',
                 stepType: 'CALCULATOR'
               };
             case 'SOLAR_PROJECTION':
@@ -997,7 +997,7 @@ export default function SolarWorkflowScreen() {
 
 
 
-  const handleStepPress = (stepNumber: number) => {
+  const handleStepPress = async (stepNumber: number) => {
     console.log('🔍 Step pressed:', stepNumber);
     const stepInfo = workflowSteps.find(step => step.stepNumber === stepNumber);
     console.log('🔍 Step info:', stepInfo?.title, stepInfo?.stepType, 'Step number:', stepInfo?.stepNumber);
@@ -1128,7 +1128,19 @@ export default function SolarWorkflowScreen() {
     
     if (stepInfo?.stepType === 'CALCULATOR') {
       console.log('🔍 Navigating to calculator');
-      navigation.navigate('CalculatorTypeSelection', { opportunityId });
+      // Combined v4.4 calculator only — no calculator-file / type picker.
+      navigation.navigate('CustomerDetails', {
+        opportunityId,
+        calculatorType: 'v44',
+        templateFileName:
+          'EPVS Member Calculator v4.4 - (Creativ) 15th June 2026 (1).xlsm',
+        selectedOptions: {
+          solar: true,
+          battery: true,
+          solarHybrid: false,
+          batteryInverter: false,
+        },
+      });
       return;
     }
     
