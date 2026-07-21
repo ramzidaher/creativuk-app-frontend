@@ -17,7 +17,6 @@ import {
 } from '../../../creativuk-app-backend/src/calculator-testing/v44-schema';
 
 const HIDDEN = new Set([
-  'standing_charge',
   'new_standing_charge',
   'flux_standing_charge',
   'if_standing_charge',

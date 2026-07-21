@@ -60,8 +60,9 @@ type RouteParams = {
   calculatorType?: 'v44';
 };
 
+// New-tariff standing charges are hidden and default to 47.5p/day.
+// The current tariff standing charge (standing_charge) IS shown — reps fill it manually.
 const REP_HIDDEN_STANDING_CHARGE_FIELDS = new Set([
-  'standing_charge',
   'new_standing_charge',
   'flux_standing_charge',
   'if_standing_charge',

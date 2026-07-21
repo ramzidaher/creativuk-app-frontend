@@ -171,8 +171,9 @@ export const V44_100GREEN_RATES = {
 export const V44_100GREEN_OFFPEAK_HOURS = '7';
 
 /**
- * Standard standing charge in pence/day. EPVS confirmed this does not affect
- * savings or benefit calculations, so reps do not need to enter it.
+ * Standard standing charge in pence/day for the NEW tariffs (hidden from reps).
+ * EPVS confirmed it does not affect calculations. The CURRENT tariff standing
+ * charge is visible and entered manually by the rep.
  */
 export const V44_STANDING_CHARGE_DEFAULT = '47.5';
 
@@ -194,9 +195,6 @@ export function applyNewTariffDefaults(
   const next = { ...inputs };
   const savings = radios.battery_savings;
   const tariff = radios.current_tariff ?? 1;
-
-  // Always replace stale/customer-specific values with the agreed standard.
-  next.standing_charge = V44_STANDING_CHARGE_DEFAULT;
 
   const setIf = (key: string, value: string) => {
     if (force || !String(next[key] ?? '').trim()) {
