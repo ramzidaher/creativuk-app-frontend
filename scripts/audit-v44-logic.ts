@@ -5,7 +5,7 @@
  */
 import {
   applyNewTariffDefaults,
-  isFieldVisible,
+  isApprovedV44RepFieldVisible,
   isSectionVisible,
   resolveFieldLabel,
   sortSectionsByExcelOrder,
@@ -17,7 +17,6 @@ import {
 } from '../../../creativuk-app-backend/src/calculator-testing/v44-schema';
 
 const HIDDEN = new Set([
-  'new_standing_charge',
   'flux_standing_charge',
   'if_standing_charge',
 ]);
@@ -62,7 +61,11 @@ for (const [savings, savingsLabel] of savingsOptions) {
         const fields = section.fields.filter(
           (f) =>
             !HIDDEN.has(f.id) &&
-            isFieldVisible(f, radios, V44_CONSUMPTION_MATRIX, true),
+            isApprovedV44RepFieldVisible(
+              f,
+              radios,
+              V44_CONSUMPTION_MATRIX,
+            ),
         );
         if (!fields.length) continue;
         console.log(`  [${section.title}]`);

@@ -266,7 +266,7 @@ const TrainingHubScreen: React.FC = () => {
                   <Text style={[styles.guideTitle, { color: theme.primaryText }]}>{guide.title}</Text>
                   <Text style={[styles.guideDescription, { color: theme.secondaryText }]}>{guide.description}</Text>
                 </View>
-                {guide.url && !guide.sections?.length && (
+                {guide.url && !guide.sections?.length && !guide.links?.length && (
                   <TouchableOpacity onPress={() => handleGuidePress(guide)}>
                     <Feather name="external-link" size={18} color={theme.primaryButton} />
                   </TouchableOpacity>
@@ -304,7 +304,7 @@ const TrainingHubScreen: React.FC = () => {
                 </View>
               ))}
 
-              {guide.url && (
+              {guide.url && !guide.links?.length && (
                 <TouchableOpacity
                   style={[styles.guideLinkButton, { borderColor: theme.primaryButton }]}
                   onPress={() => openGuideUrl(guide.url!)}

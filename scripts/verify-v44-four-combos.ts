@@ -5,7 +5,8 @@
  */
 import {
   applyNewTariffDefaults,
-  isFieldVisible,
+  isApprovedV44RepFieldVisible,
+  isApprovedV44RepSectionVisible,
   isSectionVisible,
   resolveFieldLabel,
   sortSectionsByExcelOrder,
@@ -16,9 +17,8 @@ import {
   V44_SECTIONS,
 } from '../../../creativuk-app-backend/src/calculator-testing/v44-schema';
 
-// Hidden by design: new-tariff standing charges (47.5p filled in background)
+// Unsupported Flux variants stay hidden.
 const HIDDEN = new Set([
-  'new_standing_charge',
   'flux_standing_charge',
   'if_standing_charge',
 ]);
@@ -128,31 +128,34 @@ for (const c of CASES) {
   const shown: string[] = [];
   const sections = sortSectionsByExcelOrder(
     V44_SECTIONS as unknown as V44Section[],
-  ).filter((s) => {
-    if (s.id === 'system_costs' || s.id === 'customer') return false;
-    if (s.id === 'new_overnight' && radios.battery_savings === 1) return false;
-    return isSectionVisible(s, radios);
-  });
+  ).filter((s) => isApprovedV44RepSectionVisible(s, radios));
   for (const section of sections) {
     for (const f of section.fields) {
       if (HIDDEN.has(f.id)) continue;
-      if (!isFieldVisible(f, radios, V44_CONSUMPTION_MATRIX, true)) continue;
+      if (!isApprovedV44RepFieldVisible(f, radios, V44_CONSUMPTION_MATRIX))
+        continue;
       shown.push(resolveFieldLabel(f, radios, true));
     }
   }
 
-  const missing = c.expected.filter((e) => !shown.includes(e));
-  const extra = shown.filter((s) => !c.expected.includes(s));
+  const fieldErrors: string[] = [];
+  const maxFields = Math.max(c.expected.length, shown.length);
+  for (let i = 0; i < maxFields; i++) {
+    if (c.expected[i] !== shown[i]) {
+      fieldErrors.push(
+        `#${i + 1}: expected ${c.expected[i] ?? '(none)'}, got ${shown[i] ?? '(none)'}`,
+      );
+    }
+  }
 
   const defaults = applyNewTariffDefaults(radios, {}, { force: true });
   const autoErrors = Object.entries(c.expectedAuto)
     .filter(([k, v]) => defaults[k] !== v)
     .map(([k, v]) => `${k}: expected ${v}, got ${defaults[k] ?? '(none)'}`);
 
-  const pass = !missing.length && !extra.length && !autoErrors.length;
+  const pass = !fieldErrors.length && !autoErrors.length;
   console.log(`${pass ? 'PASS' : 'FAIL'}  ${c.name}`);
-  if (missing.length) console.log(`   MISSING: ${missing.join(' | ')}`);
-  if (extra.length) console.log(`   EXTRA:   ${extra.join(' | ')}`);
+  if (fieldErrors.length) console.log(`   FIELDS:  ${fieldErrors.join(' | ')}`);
   if (autoErrors.length) console.log(`   AUTO:    ${autoErrors.join(' | ')}`);
   if (!pass) failures++;
 }

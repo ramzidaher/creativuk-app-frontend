@@ -4,6 +4,7 @@ import {
   PROPERTY_NOT_VISIBLE_SECTION_INTRO,
   PROPERTY_NOT_VISIBLE_STEPS,
 } from './findPropertyGuide';
+import { OPENSOLAR_DESIGN_GUIDE_INTRO, OPENSOLAR_DESIGN_GUIDE_LINKS } from './opensolarWorkflow';
 
 export interface TrainingScenarioTemplate {
   scenarioNumber: number;
@@ -97,9 +98,8 @@ export const TRAINING_HOW_TO_GUIDES: TrainingHowToGuide[] = [
   {
     id: 'opensolar-design',
     title: 'How to design on OpenSolar',
-    description:
-      'Create and save the OpenSolar design before you start Solar Progress — then link it in step 2 using the project ID or property address.',
-    url: 'https://support.opensolar.com/hc/en-us/articles/7576156328207--Design',
+    description: OPENSOLAR_DESIGN_GUIDE_INTRO,
+    links: OPENSOLAR_DESIGN_GUIDE_LINKS,
   },
   {
     id: 'complete-app',

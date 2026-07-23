@@ -40,7 +40,7 @@ import {
     SurveyPage8
 } from '../types';
 import { surveyApi } from '../utils/api';
-import { filesFromWebFileList } from '../utils/surveyWebImageFiles';
+import { filesFromWebFileList, surveyFilesFromDataTransfer } from '../utils/surveyWebImageFiles';
 import {
   ALL_SURVEY_IMAGE_FIELDS,
   getImageFieldsForSurveyPage,
@@ -52,7 +52,12 @@ import {
   urlsToSurveyImageFiles,
 } from '../utils/syncSurveyImages';
 import { filterImagesForSubmission } from '../utils/batchImageUpload';
-import { compressImageAuto } from '../utils/imageCompression';
+import {
+  compressImageAuto,
+  compressSurveyUploadFiles,
+  SurveyUploadCompressionError,
+  SurveyUploadTooLargeError,
+} from '../utils/imageCompression';
 
 const { width, height } = Dimensions.get('window');
 
@@ -836,34 +841,32 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
     const isUploading = fieldName ? !!uploadingFields[fieldName] : false;
     const isDisabled = isUploading;
 
-    const webDragHandlers = isWeb && onWebDrop && fieldName
-      ? {
-          onDragEnter: (e: any) => {
-            e.preventDefault?.();
-            e.stopPropagation?.();
-            setIsDragOver(true);
-          },
-          onDragLeave: (e: any) => {
-            e.preventDefault?.();
-            e.stopPropagation?.();
-            setIsDragOver(false);
-          },
-          onDragOver: (e: any) => {
-            e.preventDefault?.();
-            e.stopPropagation?.();
-            setIsDragOver(true);
-          },
-          onDrop: async (e: any) => {
-            e.preventDefault?.();
-            e.stopPropagation?.();
-            setIsDragOver(false);
-            const fileList = e.dataTransfer?.files ?? e.nativeEvent?.dataTransfer?.files;
-            if (fileList?.length) {
-              await onWebDrop(fieldName, fileList);
-            }
-          },
-        }
-      : {};
+    const uploadZoneStyle = {
+      backgroundColor: isDragOver ? theme.primaryButton + '15' : theme.inputBackground,
+      borderColor: isDragOver ? theme.primaryButton : isComplete ? '#10b981' : theme.cardBorder,
+      borderStyle: isDragOver ? 'dashed' : 'solid',
+      opacity: isDisabled ? 0.65 : 1,
+    } as const;
+
+    const uploadZoneContent = (
+      <View style={modernStyles.fileUploadContent}>
+        {isUploading ? (
+          <ActivityIndicator size="small" color={theme.primaryButton} />
+        ) : (
+          <Ionicons name={isDragOver ? 'cloud-upload-outline' : 'camera-outline'} size={32} color={theme.primaryButton} />
+        )}
+        <Text style={[modernStyles.fileUploadTitle, { color: theme.primaryText }]}>
+          {isUploading ? 'Uploading…' : isDragOver ? 'Drop images here' : 'Add Photos'}
+        </Text>
+        <Text style={[modernStyles.fileUploadSubtitle, { color: theme.secondaryText }]}>
+          {isWeb ? 'Tap to select or drag and drop images here' : 'Tap to take photos or select from gallery'}
+        </Text>
+        <Text style={[modernStyles.fileUploadHint, { color: theme.secondaryText }]}>
+          {required ? `Minimum ${minRequired} images required` : 'Optional'} • Camera • Gallery • Files
+          {isWeb ? ' • Drag & drop' : ''}
+        </Text>
+      </View>
+    );
 
     return (
       <View style={modernStyles.inputContainer}>
@@ -885,45 +888,78 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
             )}
           </View>
         </View>
-        <Pressable
-          style={[
-            modernStyles.fileUploadWrapper,
-            { 
-              backgroundColor: isDragOver ? theme.primaryButton + '15' : theme.inputBackground,
-              borderColor: isDragOver ? theme.primaryButton : isComplete ? '#10b981' : theme.cardBorder,
-              borderStyle: isDragOver ? 'dashed' : 'solid',
-              opacity: isDisabled ? 0.65 : 1,
-            }
-          ]}
-          onPress={() => {
-            if (isDisabled) return;
-            onPress();
-          }}
-          disabled={isDisabled}
-          accessibilityRole="button"
-          accessibilityLabel={`Upload ${label}`}
-          accessibilityHint="Tap to select files or drag and drop images"
-          {...(isDisabled ? {} : webDragHandlers)}
-          {...props}
-        >
-          <View style={modernStyles.fileUploadContent}>
-            {isUploading ? (
-              <ActivityIndicator size="small" color={theme.primaryButton} />
-            ) : (
-              <Ionicons name={isDragOver ? 'cloud-upload-outline' : 'camera-outline'} size={32} color={theme.primaryButton} />
-            )}
-            <Text style={[modernStyles.fileUploadTitle, { color: theme.primaryText }]}>
-              {isUploading ? 'Uploading…' : isDragOver ? 'Drop images here' : 'Add Photos'}
-            </Text>
-            <Text style={[modernStyles.fileUploadSubtitle, { color: theme.secondaryText }]}>
-              {isWeb ? 'Tap to select or drag and drop images here' : 'Tap to take photos or select from gallery'}
-            </Text>
-            <Text style={[modernStyles.fileUploadHint, { color: theme.secondaryText }]}>
-              {required ? `Minimum ${minRequired} images required` : 'Optional'} • Camera • Gallery • Files
-              {isWeb ? ' • Drag & drop' : ''}
-            </Text>
-          </View>
-        </Pressable>
+        {isWeb && onWebDrop && fieldName ? (
+          <div
+            role="button"
+            tabIndex={isDisabled ? -1 : 0}
+            aria-label={`Upload ${label}`}
+            aria-disabled={isDisabled}
+            style={{
+              borderRadius: 12,
+              border: `2px ${uploadZoneStyle.borderStyle} ${uploadZoneStyle.borderColor}`,
+              padding: 24,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 120,
+              backgroundColor: uploadZoneStyle.backgroundColor,
+              opacity: uploadZoneStyle.opacity,
+              cursor: isDisabled ? 'not-allowed' : 'pointer',
+              boxSizing: 'border-box',
+            }}
+            onClick={() => {
+              if (isDisabled) return;
+              onPress();
+            }}
+            onKeyDown={(event) => {
+              if (isDisabled) return;
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onPress();
+              }
+            }}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (!isDisabled) setIsDragOver(true);
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setIsDragOver(false);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (!isDisabled) setIsDragOver(true);
+            }}
+            onDrop={async (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setIsDragOver(false);
+              if (isDisabled || !event.dataTransfer) return;
+              await onWebDrop(fieldName, event.dataTransfer);
+            }}
+            {...props}
+          >
+            {uploadZoneContent}
+          </div>
+        ) : (
+          <Pressable
+            style={[modernStyles.fileUploadWrapper, uploadZoneStyle]}
+            onPress={() => {
+              if (isDisabled) return;
+              onPress();
+            }}
+            disabled={isDisabled}
+            accessibilityRole="button"
+            accessibilityLabel={`Upload ${label}`}
+            accessibilityHint="Tap to select files or drag and drop images"
+            {...props}
+          >
+            {uploadZoneContent}
+          </Pressable>
+        )}
         
         {files.length > 0 && (
           <View style={[
@@ -936,7 +972,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
                 { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }
               ]}>
                 <View style={modernStyles.uploadedFileInfo}>
-                  {file.uri && (file.type?.includes('image') || file.mimeType?.includes('image')) ? (
+                  {file.uri && (file.mimeType?.startsWith('image/') || file.type?.includes?.('image')) ? (
                     <Image 
                       key={file.uri}
                       source={{ uri: file.uri }} 
@@ -2622,28 +2658,69 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           return;
         }
 
-        console.log(`📤 Uploading ${validFiles.length} image(s) for ${fieldName}...`);
-        const uploadResponse = await surveyApi.uploadImagesAndGetUrls(opportunityId || '', fieldName, validFiles);
+        console.log(`🖼️ Preparing ${validFiles.length} image(s) for upload...`);
+        const uploadedUrls: string[] = [];
+        const uploadedOptimisticFiles: typeof validFiles = [];
 
-        const isSuccess = uploadResponse?.success === true;
-        const responseBody = uploadResponse?.data as Record<string, unknown> | undefined;
-        const urls =
-          (responseBody?.data as { urls?: string[] } | undefined)?.urls ||
-          (responseBody?.urls as string[] | undefined);
-        const hasUrls = urls && Array.isArray(urls) && urls.length > 0;
+        for (const file of validFiles) {
+          let compressedFile: (typeof validFiles)[0];
+          try {
+            const [compressed] = await compressSurveyUploadFiles([file]);
+            compressedFile = compressed;
+          } catch (error) {
+            const message =
+              error instanceof SurveyUploadTooLargeError ||
+              error instanceof SurveyUploadCompressionError
+                ? error.message
+                : `Could not prepare "${file.name || 'photo'}" for upload. Try saving as JPEG.`;
+            showAlert('Upload failed', message, 'error');
+            if (uploadedUrls.length > 0) {
+              break;
+            }
+            return;
+          }
 
-        if (!isSuccess || !hasUrls) {
-          console.error('❌ Upload failed for', fieldName, uploadResponse);
+          console.log(`📤 Uploading 1 image for ${fieldName}...`);
+          const uploadResponse = await surveyApi.uploadImagesAndGetUrls(
+            opportunityId || '',
+            fieldName,
+            [compressedFile],
+          );
+
+          const isSuccess = uploadResponse?.success === true;
+          const responseBody = uploadResponse?.data as Record<string, unknown> | undefined;
+          const urls =
+            (responseBody?.data as { urls?: string[] } | undefined)?.urls ||
+            (responseBody?.urls as string[] | undefined);
+
+          if (!isSuccess || !urls?.length) {
+            console.error('❌ Upload failed for', fieldName, uploadResponse);
+            showAlert(
+              'Upload failed',
+              `Could not upload "${compressedFile.name || fieldName}". ${uploadResponse?.error || 'Please try again.'}`,
+              'error',
+            );
+            if (uploadedUrls.length > 0) {
+              break;
+            }
+            return;
+          }
+
+          uploadedUrls.push(...urls);
+          uploadedOptimisticFiles.push(compressedFile);
+        }
+
+        const hasUrls = uploadedUrls.length > 0;
+        if (!hasUrls) {
           showAlert(
             'Upload failed',
-            `Could not upload to "${fieldName}". ${uploadResponse?.error || 'Please try again.'}`,
-            'error'
+            `Could not upload to "${fieldName}". Please try again.`,
+            'error',
           );
           return;
         }
 
-        // Show uploaded images immediately (no refresh required)
-        const optimisticFiles = urlsToSurveyImageFiles(fieldName, urls, validFiles);
+        const optimisticFiles = urlsToSurveyImageFiles(fieldName, uploadedUrls, uploadedOptimisticFiles);
         const existingHttp = validCurrentFiles.filter(
           (file: { uri?: string }) =>
             typeof file.uri === 'string' && file.uri.startsWith('http'),
@@ -2661,7 +2738,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
           synced = await syncImagesFromServer(fieldName);
         }
 
-        console.log(`✅ Uploaded ${urls.length} image(s) to ${fieldName}`);
+        console.log(`✅ Uploaded ${uploadedUrls.length} image(s) to ${fieldName}`);
       } catch (error) {
         console.error(`❌ Error adding files to ${fieldName}:`, error);
         showAlert('Error', `Failed to upload images for ${fieldName}. Please try again.`, 'error');
@@ -2680,11 +2757,17 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
   }, [opportunityId, syncImagesFromServer, applyFieldImagesToState]);
 
   const handleWebFilesDrop = useCallback(
-    async (fieldName: string, fileList: FileList | File[]) => {
+    async (fieldName: string, dataTransfer: DataTransfer) => {
       try {
-        const newFiles = await filesFromWebFileList(fileList);
+        const { files: newFiles, hadUrlDrag } = await surveyFilesFromDataTransfer(dataTransfer);
         if (newFiles.length === 0) {
-          showAlert('No images', 'Please drop image files (JPEG, PNG, etc.).', 'warning');
+          showAlert(
+            'No images',
+            hadUrlDrag
+              ? 'Could not load that image from the browser tab. Save it to your computer first, or use Add Photos to pick a file.'
+              : 'Please drop image files (JPEG, PNG, etc.).',
+            'warning',
+          );
           return;
         }
         await addFilesToField(fieldName, newFiles);

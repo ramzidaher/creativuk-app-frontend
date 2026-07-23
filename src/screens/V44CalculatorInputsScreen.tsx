@@ -28,19 +28,21 @@ import {
   applyNewTariffDefaults,
   fieldsClearedByRadioChange,
   inverterDisplayName,
+  isApprovedV44RepFieldVisible,
+  isApprovedV44RepSectionVisible,
   isConsumptionField,
-  isFieldVisible,
-  isSectionVisible,
   isSupportedBatteryManufacturer,
   isSupportedBatteryModel,
   isSupportedInverter,
   isSupportedInverterManufacturer,
   isSupportedPanelManufacturer,
   isSupportedPanelModel,
+  normalizeV44Radios,
   radiosFromProgress,
   radiosToProgress,
   resolveFieldLabel,
   sortSectionsByExcelOrder,
+  v44Radio,
 } from '../utils/v44Logic';
 
 type Equipment = {
@@ -58,15 +60,42 @@ type RouteParams = {
   opportunityId: string;
   customerDetails?: { customerName: string; address: string; postcode: string };
   calculatorType?: 'v44';
+  /** Fresh selections from Questions — takes priority over saved progress */
+  pendingRadios?: Record<string, number>;
 };
 
-// New-tariff standing charges are hidden and default to 47.5p/day.
-// The current tariff standing charge (standing_charge) IS shown — reps fill it manually.
+// New-tariff standing charge is hidden (47.5p default in background).
+// Current-tariff standing charge stays visible for manual entry.
 const REP_HIDDEN_STANDING_CHARGE_FIELDS = new Set([
   'new_standing_charge',
   'flux_standing_charge',
   'if_standing_charge',
 ]);
+
+const TARIFF_OVERRIDE_SECTIONS = new Set(['new_overnight', 'export_tariff']);
+const ALWAYS_RENDER_SECTIONS = new Set(['current_tariff', ...TARIFF_OVERRIDE_SECTIONS]);
+const EQUIPMENT_SECTION_IDS = new Set(['solar_pv', 'battery', 'inverter']);
+const NEW_TARIFF_SECTION_IDS = new Set(['new_overnight', 'export_tariff']);
+
+function parseRouteCustomerDetails(
+  raw: unknown,
+): RouteParams['customerDetails'] | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  if (Array.isArray(raw)) return undefined;
+  const c = raw as Record<string, unknown>;
+  if (
+    typeof c.customerName !== 'string' &&
+    typeof c.address !== 'string' &&
+    typeof c.postcode !== 'string'
+  ) {
+    return undefined;
+  }
+  return {
+    customerName: String(c.customerName ?? ''),
+    address: String(c.address ?? ''),
+    postcode: String(c.postcode ?? ''),
+  };
+}
 
 /**
  * v4.4 Inputs — schema-driven show/hide/clear (Excel Toggle logic in the app).
@@ -76,7 +105,9 @@ export default function V44CalculatorInputsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { opportunityId } = route.params as RouteParams;
-  const routeCustomer = (route.params as RouteParams).customerDetails;
+  const routeCustomer = parseRouteCustomerDetails(
+    (route.params as RouteParams).customerDetails,
+  );
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -97,6 +128,9 @@ export default function V44CalculatorInputsScreen() {
   const [fluxRatesLoading, setFluxRatesLoading] = useState(false);
   /** When false, New Electricity Tariff / Export stay locked to auto defaults */
   const [tariffOverride, setTariffOverride] = useState(false);
+  const [hasRestoredProgress, setHasRestoredProgress] = useState(false);
+  const [savedInputs, setSavedInputs] = useState<Record<string, string> | null>(null);
+  const [savedRadios, setSavedRadios] = useState<Record<string, number> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -124,6 +158,14 @@ export default function V44CalculatorInputsScreen() {
         progress?.radioButtonSelections,
         schemaRes.data.radioGroups,
       );
+      const pending = (route.params as RouteParams).pendingRadios;
+      if (pending) {
+        Object.assign(
+          restoredRadios,
+          normalizeV44Radios(pending, schemaRes.data.radioGroups),
+        );
+        navigation.setParams({ pendingRadios: undefined } as Partial<RouteParams>);
+      }
       setRadios(restoredRadios);
 
       const restoredInputs = { ...(progress?.dynamicInputs || {}) };
@@ -194,13 +236,37 @@ export default function V44CalculatorInputsScreen() {
       // the selected tariff. Old saved rates (including stale test data) are
       // discarded — reps must switch Override on per session to enter custom rates.
       setTariffOverride(false);
-      setInputs(applyNewTariffDefaults(restoredRadios, restoredInputs, { force: true }));
+      const finalInputs = applyNewTariffDefaults(restoredRadios, restoredInputs, { force: true });
+      setInputs(finalInputs);
+
+      const hasSavedInputs =
+        progress?.completedSteps?.['dynamic-inputs'] ||
+        (progress?.dynamicInputs && Object.keys(progress.dynamicInputs).length > 0);
+      if (hasSavedInputs) {
+        setHasRestoredProgress(true);
+        setSavedInputs({ ...finalInputs });
+        setSavedRadios({ ...restoredRadios });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
       setLoading(false);
     }
-  }, [opportunityId]);
+  }, [opportunityId, navigation]);
+
+  const modeSummary = useMemo(() => {
+    const savings = v44Radio(radios, 'battery_savings');
+    const tariff = v44Radio(radios, 'current_tariff', 1);
+    const savingsLabels: Record<number, string> = {
+      1: 'Self-Consumption',
+      2: 'Overnight Charging',
+    };
+    const tariffLabels: Record<number, string> = {
+      1: 'Single Rate',
+      2: 'Dual Rate',
+    };
+    return `${savingsLabels[savings] ?? '—'} · ${tariffLabels[tariff] ?? '—'}`;
+  }, [radios]);
 
   // Reload whenever the screen gains focus so changes made on the Questions
   // page (e.g. switching tariff type) are picked up immediately when the rep
@@ -350,6 +416,8 @@ export default function V44CalculatorInputsScreen() {
     id: string;
     label: string;
     locked: boolean;
+    lockedReason?: string;
+    badge?: string;
   }) => {
     const value = inputs[opts.id] || '';
     const locked = opts.locked;
@@ -359,6 +427,13 @@ export default function V44CalculatorInputsScreen() {
           <Text style={[styles.label, { color: theme.secondaryText, flex: 1 }]}>
             {opts.label}
           </Text>
+          {opts.badge ? (
+            <View style={[styles.badge, { backgroundColor: theme.primaryButton + '22' }]}>
+              <Text style={[styles.badgeText, { color: theme.primaryButton }]}>
+                {opts.badge}
+              </Text>
+            </View>
+          ) : null}
           {locked ? (
             <View style={styles.lockRow}>
               <Feather name="lock" size={14} color={theme.secondaryText} />
@@ -384,9 +459,14 @@ export default function V44CalculatorInputsScreen() {
           onChangeText={(t) => setInput(opts.id, t)}
           editable={!locked}
           keyboardType="decimal-pad"
-          placeholder="—"
+          placeholder={opts.lockedReason || '—'}
           placeholderTextColor={theme.secondaryText}
         />
+        {opts.lockedReason ? (
+          <Text style={[styles.fieldHint, { color: theme.secondaryText }]}>
+            {opts.lockedReason}
+          </Text>
+        ) : null}
       </View>
     );
   };
@@ -507,15 +587,120 @@ export default function V44CalculatorInputsScreen() {
   );
 
   const visibleSections = useMemo(() => {
-    return sortSectionsByExcelOrder(sections).filter((s) => {
-      if (s.id === 'system_costs') return false; // Pricing owns costs
-      if (s.id === 'customer') return false; // already on Customer Details
-      // Self-Consumption keeps the current tariff — no New Electricity Tariff.
-      // Guard here too so it stays hidden even before the backend schema redeploys.
-      if (s.id === 'new_overnight' && radios.battery_savings === 1) return false;
-      return isSectionVisible(s, radios);
-    });
+    return sortSectionsByExcelOrder(sections).filter((s) =>
+      isApprovedV44RepSectionVisible(s, radios),
+    );
   }, [sections, radios]);
+
+  const equipmentSections = useMemo(
+    () => visibleSections.filter((s) => EQUIPMENT_SECTION_IDS.has(s.id)),
+    [visibleSections],
+  );
+
+  const newTariffSections = useMemo(
+    () => visibleSections.filter((s) => NEW_TARIFF_SECTION_IDS.has(s.id)),
+    [visibleSections],
+  );
+
+  const mainSections = useMemo(
+    () =>
+      visibleSections.filter(
+        (s) =>
+          !EQUIPMENT_SECTION_IDS.has(s.id) &&
+          !NEW_TARIFF_SECTION_IDS.has(s.id),
+      ),
+    [visibleSections],
+  );
+
+  const getVisibleFields = useCallback(
+    (section: V44Section) =>
+      section.fields.filter(
+        (f) =>
+          !REP_HIDDEN_STANDING_CHARGE_FIELDS.has(f.id) &&
+          isApprovedV44RepFieldVisible(f, radios, consumptionMatrix),
+      ),
+    [radios, consumptionMatrix],
+  );
+
+  const renderField = useCallback(
+    (field: V44Field) => {
+      const label = resolveFieldLabel(field, radios, true);
+      const value = inputs[field.id] || '';
+      if (field.type === 'dropdown') {
+        return (
+          <View key={field.id} style={styles.field}>
+            <Text style={[styles.label, { color: theme.secondaryText }]}>
+              {label}
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.input,
+                {
+                  backgroundColor: theme.inputBackground,
+                  borderColor: theme.cardBorder,
+                },
+              ]}
+              onPress={() =>
+                setDropdown({
+                  fieldId: field.id,
+                  label,
+                  options: dropdownOptions(field),
+                })
+              }
+            >
+              <Text
+                style={{
+                  color: value ? theme.primaryText : theme.secondaryText,
+                }}
+              >
+                {value
+                  ? field.id === 'inverter_model'
+                    ? inverterDisplayName(value)
+                    : value
+                  : 'Select…'}
+              </Text>
+              <Feather name="chevron-down" size={18} color={theme.secondaryText} />
+            </TouchableOpacity>
+          </View>
+        );
+      }
+      return (
+        <View key={field.id} style={styles.field}>
+          <Text style={[styles.label, { color: theme.secondaryText }]}>
+            {label}
+          </Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.inputBackground,
+                borderColor: theme.cardBorder,
+                color: theme.primaryText,
+              },
+            ]}
+            value={value}
+            onChangeText={(t) =>
+              setInput(
+                field.id,
+                field.id === 'battery_modules'
+                  ? t.replace(/[^\d]/g, '')
+                  : t,
+              )
+            }
+            keyboardType={
+              field.id === 'battery_modules'
+                ? 'number-pad'
+                : field.type === 'number'
+                  ? 'decimal-pad'
+                  : 'default'
+            }
+            placeholderTextColor={theme.secondaryText}
+          />
+        </View>
+      );
+    },
+    [dropdownOptions, inputs, radios, theme, setInput],
+  );
 
   /** Cosy tariff: Excel shows usage split options next to Annual Grid Consumption */
   const cosyUsageGroup = useMemo(() => {
@@ -534,7 +719,7 @@ export default function V44CalculatorInputsScreen() {
     for (const section of visibleSections) {
       const fields = section.fields.filter((f) =>
         !REP_HIDDEN_STANDING_CHARGE_FIELDS.has(f.id) &&
-        isFieldVisible(f, radios, consumptionMatrix, true),
+        isApprovedV44RepFieldVisible(f, radios, consumptionMatrix),
       );
       for (const field of fields) {
         const mustFill =
@@ -561,6 +746,31 @@ export default function V44CalculatorInputsScreen() {
     return problems;
   };
 
+  const hasChanges = () => {
+    if (!savedInputs || !savedRadios) return false;
+    for (const [key, value] of Object.entries(inputs)) {
+      if ((savedInputs[key] || '') !== (value || '')) return true;
+    }
+    for (const [key, value] of Object.entries(savedInputs)) {
+      if ((inputs[key] || '') !== (value || '')) return true;
+    }
+    for (const [key, value] of Object.entries(radios)) {
+      if (savedRadios[key] !== value) return true;
+    }
+    for (const [key, value] of Object.entries(savedRadios)) {
+      if (radios[key] !== value) return true;
+    }
+    return false;
+  };
+
+  const onSkip = () => {
+    navigation.navigate('SolarArraysInputs', {
+      opportunityId,
+      customerDetails,
+      calculatorType: 'v44',
+    });
+  };
+
   const onContinue = async () => {
     const problems = validationErrors();
     if (problems.length) {
@@ -578,6 +788,7 @@ export default function V44CalculatorInputsScreen() {
         existing_solar: 2,
         installing_new_solar: 1,
         inverter_new: 1,
+        usage_known: 1,
       };
       await CalculatorProgressService.saveProgress(opportunityId, 'v44', {
         currentStep: 'dynamic-inputs',
@@ -590,6 +801,10 @@ export default function V44CalculatorInputsScreen() {
           'dynamic-inputs': true,
         },
       });
+
+      setHasRestoredProgress(true);
+      setSavedInputs({ ...inputs });
+      setSavedRadios({ ...toSaveRadios });
 
       navigation.navigate('SolarArraysInputs', {
         opportunityId,
@@ -657,7 +872,7 @@ export default function V44CalculatorInputsScreen() {
                 Calculator Inputs
               </Text>
               <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
-                Equipment, tariffs, and system details
+                {modeSummary} — equipment, tariffs, and usage
               </Text>
             </View>
           </View>
@@ -702,13 +917,45 @@ export default function V44CalculatorInputsScreen() {
             },
           ]}
         >
-        {/* Excel Inputs order: Existing → Solar PV → Battery → Inverter → Current Tariff → New tariffs → Export */}
-        {visibleSections.map((section) => {
-          const fields = section.fields.filter((f) =>
-            !REP_HIDDEN_STANDING_CHARGE_FIELDS.has(f.id) &&
-            isFieldVisible(f, radios, consumptionMatrix, true),
-          );
-          if (!fields.length && !(section.id === 'current_tariff' && cosyUsageGroup)) {
+        {/* System equipment — Solar PV, Battery, Inverter */}
+        {equipmentSections.some((s) => getVisibleFields(s).length > 0) ? (
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder },
+            ]}
+          >
+            <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
+              System Equipment
+            </Text>
+            {equipmentSections.reduce<React.ReactNode[]>((nodes, section) => {
+              const fields = getVisibleFields(section);
+              if (!fields.length) return nodes;
+              nodes.push(
+                <View key={section.id}>
+                  {nodes.length > 0 ? (
+                    <View
+                      style={[styles.subsectionDivider, { borderColor: theme.cardBorder }]}
+                    />
+                  ) : null}
+                  <Text style={[styles.subsectionTitle, { color: theme.primaryText }]}>
+                    {section.title}
+                  </Text>
+                  {fields.map(renderField)}
+                </View>,
+              );
+              return nodes;
+            }, [])}
+          </View>
+        ) : null}
+
+        {mainSections.map((section) => {
+          const fields = getVisibleFields(section);
+          if (
+            !fields.length &&
+            !(section.id === 'current_tariff' && cosyUsageGroup) &&
+            !ALWAYS_RENDER_SECTIONS.has(section.id)
+          ) {
             return null;
           }
 
@@ -721,106 +968,26 @@ export default function V44CalculatorInputsScreen() {
               isConsumptionField(f.id) || f.id === 'occupancy_archetype',
           );
 
-          const renderField = (field: V44Field) => {
-            const label = resolveFieldLabel(field, radios, true);
-            const value = inputs[field.id] || '';
-            if (field.type === 'dropdown') {
-              return (
-                <View key={field.id} style={styles.field}>
-                  <Text style={[styles.label, { color: theme.secondaryText }]}>
-                    {label}
-                  </Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.input,
-                      {
-                        backgroundColor: theme.inputBackground,
-                        borderColor: theme.cardBorder,
-                      },
-                    ]}
-                    onPress={() =>
-                      setDropdown({
-                        fieldId: field.id,
-                        label,
-                        options: dropdownOptions(field),
-                      })
-                    }
-                  >
-                    <Text
-                      style={{
-                        color: value ? theme.primaryText : theme.secondaryText,
-                      }}
-                    >
-                      {value
-                        ? field.id === 'inverter_model'
-                          ? inverterDisplayName(value)
-                          : value
-                        : 'Select…'}
-                    </Text>
-                    <Feather name="chevron-down" size={18} color={theme.secondaryText} />
-                  </TouchableOpacity>
-                </View>
-              );
-            }
-            return (
-              <View key={field.id} style={styles.field}>
-                <Text style={[styles.label, { color: theme.secondaryText }]}>
-                  {label}
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: theme.inputBackground,
-                      borderColor: theme.cardBorder,
-                      color: theme.primaryText,
-                    },
-                  ]}
-                  value={value}
-                  onChangeText={(t) =>
-                    setInput(
-                      field.id,
-                      field.id === 'battery_modules'
-                        ? t.replace(/[^\d]/g, '')
-                        : t,
-                    )
-                  }
-                  keyboardType={
-                    field.id === 'battery_modules'
-                      ? 'number-pad'
-                      : field.type === 'number'
-                        ? 'decimal-pad'
-                        : 'default'
-                  }
-                  placeholderTextColor={theme.secondaryText}
-                />
-              </View>
-            );
-          };
-
           if (section.id === 'current_tariff') {
             return (
-              <View key={section.id}>
-                <View
-                  style={[
-                    styles.card,
-                    { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder },
-                  ]}
-                >
-                  <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
-                    Customer's Current Tariff
-                  </Text>
-                  {rateFields.map(renderField)}
-                </View>
+              <View
+                key={section.id}
+                style={[
+                  styles.card,
+                  { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder },
+                ]}
+              >
+                <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
+                  Customer's Current Tariff
+                </Text>
+                {rateFields.map(renderField)}
 
                 {cosyUsageGroup ? (
-                  <View
-                    style={[
-                      styles.card,
-                      { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder },
-                    ]}
-                  >
-                    <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
+                  <>
+                    <View
+                      style={[styles.subsectionDivider, { borderColor: theme.cardBorder }]}
+                    />
+                    <Text style={[styles.subsectionTitle, { color: theme.primaryText }]}>
                       {cosyUsageGroup.question}
                     </Text>
                     {cosyUsageGroup.options
@@ -849,21 +1016,19 @@ export default function V44CalculatorInputsScreen() {
                           </TouchableOpacity>
                         );
                       })}
-                  </View>
+                  </>
                 ) : null}
 
                 {consumptionFields.length ? (
-                  <View
-                    style={[
-                      styles.card,
-                      { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder },
-                    ]}
-                  >
-                    <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
+                  <>
+                    <View
+                      style={[styles.subsectionDivider, { borderColor: theme.cardBorder }]}
+                    />
+                    <Text style={[styles.subsectionTitle, { color: theme.primaryText }]}>
                       Annual Grid Consumption
                     </Text>
                     {consumptionFields.map(renderField)}
-                  </View>
+                  </>
                 ) : null}
               </View>
             );
@@ -1039,21 +1204,37 @@ export default function V44CalculatorInputsScreen() {
               ]}
             >
               <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
-                {section.id === 'new_overnight' &&
-                (radios.battery_savings === 2 || radios.battery_savings === 5)
-                  ? 'New Electricity Tariff (100Green)'
-                  : section.title}
+                {section.title}
               </Text>
+              {fields.map(renderField)}
+            </View>
+          );
+        })}
 
-              {section.id === 'new_overnight' || section.id === 'export_tariff' ? (
+        {/* New tariffs — electricity + export combined */}
+        {newTariffSections.length > 0 ? (
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder },
+            ]}
+          >
+            <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>
+              New Tariffs
+            </Text>
+
+            {newTariffSections.some((s) => s.id === 'new_overnight') ? (
+              <View>
+                <Text style={[styles.subsectionTitle, { color: theme.primaryText }]}>
+                  New Electricity Tariff (100Green)
+                </Text>
                 <View style={styles.overrideRow}>
                   <View style={{ flex: 1, paddingRight: 12 }}>
                     <Text style={[styles.overrideTitle, { color: theme.primaryText }]}>
                       Override rates
                     </Text>
                     <Text style={[styles.fluxHint, { color: theme.secondaryText, marginBottom: 0 }]}>
-                      Rates are set automatically. Only turn this on if the
-                      customer has agreed different rates.
+                      Locked to 100Green tariff defaults. Turn Override on to enter different rates.
                     </Text>
                   </View>
                   <Switch
@@ -1063,46 +1244,86 @@ export default function V44CalculatorInputsScreen() {
                     thumbColor="#ffffff"
                   />
                 </View>
-              ) : null}
-
-              {section.id === 'new_overnight' ? (
-                <>
-                  {renderTariffNumberField({
-                    id: 'new_peak_rate',
-                    label: 'Peak / day rate (pence per kWh)',
-                    locked: !tariffOverride,
-                  })}
-                  {renderTariffNumberField({
-                    id: 'new_offpeak_rate',
-                    label: 'Off-peak / night rate (pence per kWh)',
-                    locked: !tariffOverride,
-                  })}
-                  {fields
-                    .filter(
-                      (f) =>
-                        f.id === 'new_offpeak_hours' ||
-                        f.id === 'new_standing_charge',
-                    )
-                    .map((f) =>
-                      renderTariffNumberField({
-                        id: f.id,
-                        label: resolveFieldLabel(f, radios, true),
-                        locked: !tariffOverride,
-                      }),
-                    )}
-                </>
-              ) : section.id === 'export_tariff' ? (
-                renderTariffNumberField({
-                  id: 'export_tariff_rate',
-                  label: 'Export tariff (pence per kWh)',
+                {renderTariffNumberField({
+                  id: 'new_peak_rate',
+                  label: 'Peak / Day Rate (pence per kWh)',
                   locked: !tariffOverride,
-                })
-              ) : (
-                fields.map(renderField)
-              )}
-            </View>
-          );
-        })}
+                  badge: '100Green',
+                })}
+                {renderTariffNumberField({
+                  id: 'new_offpeak_rate',
+                  label: 'Off-Peak / Night Rate (pence per kWh)',
+                  locked: !tariffOverride,
+                  badge: '100Green',
+                })}
+                {renderTariffNumberField({
+                  id: 'new_offpeak_hours',
+                  label: 'No. of Off-Peak Hours',
+                  locked: !tariffOverride,
+                })}
+              </View>
+            ) : null}
+
+            {newTariffSections.some((s) => s.id === 'new_overnight') &&
+            newTariffSections.some((s) => s.id === 'export_tariff') ? (
+              <View
+                style={[styles.subsectionDivider, { borderColor: theme.cardBorder }]}
+              />
+            ) : null}
+
+            {newTariffSections.some((s) => s.id === 'export_tariff') ? (
+              <View>
+                <Text style={[styles.subsectionTitle, { color: theme.primaryText }]}>
+                  New Export Tariff
+                </Text>
+                <View style={styles.overrideRow}>
+                  <View style={{ flex: 1, paddingRight: 12 }}>
+                    <Text style={[styles.overrideTitle, { color: theme.primaryText }]}>
+                      Override rates
+                    </Text>
+                    <Text style={[styles.fluxHint, { color: theme.secondaryText, marginBottom: 0 }]}>
+                      Locked to 12p/kWh export (100Green / SEG default).
+                    </Text>
+                  </View>
+                  <Switch
+                    value={tariffOverride}
+                    onValueChange={toggleTariffOverride}
+                    trackColor={{ false: '#cbd5e1', true: theme.primaryButton }}
+                    thumbColor="#ffffff"
+                  />
+                </View>
+                {renderTariffNumberField({
+                  id: 'export_tariff_rate',
+                  label: 'Export Tariff (pence per kWh)',
+                  locked: !tariffOverride,
+                  badge: '12p · 100Green',
+                })}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {Object.values(inputs).some((value) => value && value.trim() !== '') &&
+        hasRestoredProgress &&
+        savedInputs &&
+        !hasChanges() ? (
+          <TouchableOpacity
+            style={[
+              styles.skipButton,
+              {
+                borderColor: theme.dangerButton,
+                backgroundColor: theme.dangerButton + '10',
+              },
+            ]}
+            onPress={onSkip}
+            activeOpacity={0.8}
+          >
+            <Feather name="skip-forward" size={16} color={theme.dangerButton} />
+            <Text style={[styles.skipButtonText, { color: theme.dangerButton }]}>
+              Skip
+            </Text>
+          </TouchableOpacity>
+        ) : null}
 
         <TouchableOpacity
           style={[
@@ -1256,6 +1477,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
+  subsectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 10,
+    marginTop: 2,
+  },
+  subsectionDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginVertical: 16,
+  },
   fluxHint: { fontSize: 13, lineHeight: 18, marginBottom: 10 },
   overrideRow: {
     flexDirection: 'row',
@@ -1284,6 +1515,20 @@ const styles = StyleSheet.create({
   lockText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  badge: {
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  fieldHint: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 4,
   },
   fluxPullRow: { marginBottom: 12, gap: 8 },
   fluxPullBtn: {
@@ -1356,6 +1601,23 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
     marginBottom: 8,
+  },
+  skipButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 2,
+    backgroundColor: 'transparent',
+  },
+  skipButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
   continue: {
     marginTop: 8,

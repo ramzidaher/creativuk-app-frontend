@@ -34,6 +34,7 @@ type RouteParams = {
     postcode: string;
   };
   calculatorType?: 'v44';
+  pendingRadios?: Record<string, number>;
 };
 
 /**
@@ -53,6 +54,8 @@ export default function V44CalculatorQuestionsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [groups, setGroups] = useState<V44RadioGroup[]>([]);
   const [radios, setRadios] = useState<Record<string, number>>({});
+  const [hasRestoredProgress, setHasRestoredProgress] = useState(false);
+  const [savedRadios, setSavedRadios] = useState<Record<string, number> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -84,11 +87,18 @@ export default function V44CalculatorQuestionsScreen() {
       if (restored.current_tariff === 3) {
         restored.current_tariff = 1;
       }
-      // Split by Spend / Usage (3/4) are not in use — reset to Yes
-      if (restored.usage_known === 3 || restored.usage_known === 4) {
-        restored.usage_known = 1;
-      }
+      // Approved flow always uses known annual usage. It is not a rep question.
+      restored.usage_known = 1;
       setRadios(restored);
+
+      const hasSavedQuestions =
+        progress?.completedSteps?.['radio-buttons'] ||
+        (progress?.radioButtonSelections?.battery_savings &&
+          progress?.radioButtonSelections?.current_tariff);
+      if (hasSavedQuestions) {
+        setHasRestoredProgress(true);
+        setSavedRadios({ ...restored });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
@@ -108,6 +118,25 @@ export default function V44CalculatorQuestionsScreen() {
     setRadios((prev) => ({ ...prev, [groupId]: value }));
   };
 
+  const hasChanges = () => {
+    if (!savedRadios) return false;
+    for (const [key, value] of Object.entries(radios)) {
+      if (savedRadios[key] !== value) return true;
+    }
+    for (const [key, value] of Object.entries(savedRadios)) {
+      if (radios[key] !== value) return true;
+    }
+    return false;
+  };
+
+  const onSkip = () => {
+    navigation.navigate('CalculatorInputs', {
+      opportunityId,
+      customerDetails,
+      calculatorType: 'v44',
+    });
+  };
+
   const onContinue = async () => {
     if (!radios.battery_savings) {
       Alert.alert('Required', 'Please select what battery savings should be based on.');
@@ -117,11 +146,6 @@ export default function V44CalculatorQuestionsScreen() {
       Alert.alert('Required', 'Please select the current tariff type.');
       return;
     }
-    if (!radios.usage_known) {
-      Alert.alert('Required', "Please select whether you know the customer's annual usage.");
-      return;
-    }
-
     try {
       setSaving(true);
       const toSave = {
@@ -129,6 +153,7 @@ export default function V44CalculatorQuestionsScreen() {
         existing_solar: 2,
         installing_new_solar: 1,
         inverter_new: 1,
+        usage_known: 1,
       };
       await CalculatorProgressService.saveProgress(opportunityId, 'v44', {
         currentStep: 'radio-buttons',
@@ -150,10 +175,14 @@ export default function V44CalculatorQuestionsScreen() {
         },
       });
 
+      setHasRestoredProgress(true);
+      setSavedRadios({ ...toSave });
+
       navigation.navigate('CalculatorInputs', {
         opportunityId,
         customerDetails,
         calculatorType: 'v44',
+        pendingRadios: toSave,
       });
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save');
@@ -339,6 +368,29 @@ export default function V44CalculatorQuestionsScreen() {
             );
           })}
 
+          {radios.battery_savings &&
+          radios.current_tariff &&
+          hasRestoredProgress &&
+          savedRadios &&
+          !hasChanges() ? (
+            <TouchableOpacity
+              style={[
+                styles.skipButton,
+                {
+                  borderColor: theme.dangerButton,
+                  backgroundColor: theme.dangerButton + '10',
+                },
+              ]}
+              onPress={onSkip}
+              activeOpacity={0.8}
+            >
+              <Feather name="skip-forward" size={16} color={theme.dangerButton} />
+              <Text style={[styles.skipButtonText, { color: theme.dangerButton }]}>
+                Skip
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
           <TouchableOpacity
             style={[
               styles.continue,
@@ -476,6 +528,23 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginTop: 4,
     fontWeight: '500',
+  },
+  skipButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 2,
+    backgroundColor: 'transparent',
+  },
+  skipButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
   continue: {
     marginTop: 8,

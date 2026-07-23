@@ -86,6 +86,17 @@ export default function PricingScreen() {
   const [hometreeQuoteStatus, setHometreeQuoteStatus] = useState<string | null>(null);
   const [hometreeQuoteLoading, setHometreeQuoteLoading] = useState(false);
   const [hometreeDepositMatched, setHometreeDepositMatched] = useState<number | null>(null);
+  const [showHometreeTermFallbackModal, setShowHometreeTermFallbackModal] = useState(false);
+  const [hometreeTermFallbackInfo, setHometreeTermFallbackInfo] = useState<{
+    termYearsRequested: number;
+    termYearsMatched: number;
+    depositRequested?: number;
+    depositMatched?: number;
+    message: string;
+    monthlyYear1?: number;
+    source: 'quote' | 'submit';
+  } | null>(null);
+  const pendingAfterHometreeFallbackRef = useRef<(() => Promise<void>) | null>(null);
   const [interestRateTypeOptions, setInterestRateTypeOptions] = useState<string[]>([]);
   const [loadingDropdownOptions, setLoadingDropdownOptions] = useState(false);
   const [showDropdownModal, setShowDropdownModal] = useState(false);
@@ -713,7 +724,10 @@ export default function PricingScreen() {
         data?: {
           monthlyYear1: number | null;
           depositMatched: number;
+          termYearsRequested: number | null;
           termYearsMatched: number | null;
+          termFallbackUsed: boolean;
+          termFallbackMessage: string | null;
           upfrontOptions: number[];
           termOptionsYears: number[];
           sourceUrl: string;
@@ -722,11 +736,12 @@ export default function PricingScreen() {
       }>(
         `/pricing/hometree/quote?priceNet=${encodeURIComponent(String(totalCost))}` +
           `&deposit=${encodeURIComponent(String(depositNum))}` +
-          `&termYears=${encodeURIComponent(String(termYears))}`,
+          `&termYears=${encodeURIComponent(String(termYears))}` +
+          `&shortestWarranty=15`,
       );
 
       const body = res.data;
-      if (!res.success || !body?.success || !body.data) {
+      if (!body?.success || !body.data) {
         throw new Error(body?.message || 'HomeTree quote failed');
       }
 
@@ -734,8 +749,26 @@ export default function PricingScreen() {
       setHometreeUpfrontOptions(quote.upfrontOptions || []);
       setHometreeTermOptions(quote.termOptionsYears || [5, 10, 15, 20, 25]);
       setHometreeDepositMatched(quote.depositMatched);
-      // Do not set leaseMonthlyPayment here — backend applies it after submit + recalc
       setLeaseMonthlyPayment('');
+
+      if (
+        quote.termFallbackMessage &&
+        quote.termYearsRequested != null &&
+        quote.termYearsMatched != null
+      ) {
+        setHometreeTermFallbackInfo({
+          termYearsRequested: quote.termYearsRequested,
+          termYearsMatched: quote.termYearsMatched,
+          depositMatched: quote.depositMatched,
+          message: quote.termFallbackMessage,
+          monthlyYear1: quote.monthlyYear1 ?? undefined,
+          source: 'quote',
+        });
+        setShowHometreeTermFallbackModal(true);
+        setHometreeQuoteStatus(quote.termFallbackMessage);
+        return;
+      }
+
       setHometreeQuoteStatus(
         'HomeTree monthly is calculated after Save & Submit (needs Year 1 savings from the calculator).',
       );
@@ -1136,6 +1169,73 @@ export default function PricingScreen() {
     }
   };
 
+  const completePricingStepAndNavigate = async (
+    savedInputs: Record<string, string> = {},
+  ) => {
+    try {
+      console.log('🎯 Marking pricing step as completed...');
+      const { workflowApi } = await import('../utils/api');
+
+      const result = await workflowApi.completeStep(opportunityId, 3, {
+        calculatorType: calculatorType,
+        completedAt: new Date().toISOString(),
+        savedInputs,
+        totalSystemCost: totalCost,
+        paymentMethod: paymentMethod,
+        deposit: deposit,
+        interestRate: interestRate,
+        interestRateType: interestRateType,
+        paymentTerm: paymentTerm,
+        leaseMonthlyPayment: leaseMonthlyPayment,
+      });
+
+      console.log('✅ Pricing step marked as completed:', result);
+
+      if (result && result.success) {
+        console.log('🔍 Pricing step completed successfully, navigating to next step...');
+        navigation.navigate('Presentation', { opportunityId });
+      } else {
+        console.error('❌ Step completion failed:', result);
+        showAlert('Error', 'Failed to complete pricing step. Please try again.');
+      }
+    } catch (workflowError) {
+      console.error('Error marking pricing step as completed:', workflowError);
+      showAlert('Error', 'Failed to complete pricing step. Please try again.');
+    }
+  };
+
+  const handleHometreeTermFallbackContinue = async () => {
+    if (!hometreeTermFallbackInfo) {
+      setShowHometreeTermFallbackModal(false);
+      return;
+    }
+
+    const { termYearsMatched, monthlyYear1, depositMatched, source } =
+      hometreeTermFallbackInfo;
+    setPaymentTerm(String(termYearsMatched));
+    if (monthlyYear1 != null) {
+      setLeaseMonthlyPayment(String(monthlyYear1));
+    }
+    if (depositMatched != null) {
+      setDeposit(String(depositMatched));
+      setHometreeDepositMatched(depositMatched);
+    }
+    setHometreeQuoteStatus(hometreeTermFallbackInfo.message);
+    setShowHometreeTermFallbackModal(false);
+
+    if (source === 'quote') {
+      debouncedSave();
+      return;
+    }
+
+    const pending = pendingAfterHometreeFallbackRef.current;
+    pendingAfterHometreeFallbackRef.current = null;
+    setHometreeTermFallbackInfo(null);
+    if (pending) {
+      await pending();
+    }
+  };
+
   const handleSaveAndSubmit = async () => {
     try {
       // Validate that a payment method is selected
@@ -1368,6 +1468,34 @@ export default function PricingScreen() {
           });
           
           if (!submitResult.success) {
+            if (submitResult.hometreeTermFallback) {
+              const fb = submitResult.hometreeTermFallback;
+              inputs['payment_term'] = String(fb.termYearsMatched);
+              if (fb.monthlyYear1 != null) {
+                inputs['lease_monthly_payment'] = String(fb.monthlyYear1);
+              }
+              if (fb.depositMatched != null) {
+                inputs['deposit'] = String(fb.depositMatched);
+              }
+              setHometreeTermFallbackInfo({
+                ...fb,
+                source: 'submit',
+              });
+              setPaymentTerm(String(fb.termYearsMatched));
+              if (fb.monthlyYear1 != null) {
+                setLeaseMonthlyPayment(String(fb.monthlyYear1));
+              }
+              if (fb.depositMatched != null) {
+                setDeposit(String(fb.depositMatched));
+              }
+              setHometreeQuoteStatus(fb.message);
+              pendingAfterHometreeFallbackRef.current = () =>
+                completePricingStepAndNavigate(inputs);
+              setShowHometreeTermFallbackModal(true);
+              setLoading(false);
+              return;
+            }
+
             console.error('❌ Calculator submission failed:', submitResult.message);
             showAlert(
               '⚠️ Submission Failed',
@@ -1379,12 +1507,40 @@ export default function PricingScreen() {
           }
           
           console.log('✅ Calculator submitted successfully to Excel:', submitResult.filePath);
-          if (calculatorType === 'v44' && submitResult.filePath) {
+          if (calculatorType === 'v44' && submitResult.filePath && !submitResult.hometreeTermFallback) {
             showAlert(
               'Calculator file created',
               `Saved to:\n${submitResult.filePath}\n\n(Flux/EPVS files go in epvs-opportunities — same as production)`,
               [{ text: 'OK' }],
             );
+          }
+
+          if (submitResult.hometreeTermFallback) {
+            const fb = submitResult.hometreeTermFallback;
+            inputs['payment_term'] = String(fb.termYearsMatched);
+            if (fb.monthlyYear1 != null) {
+              inputs['lease_monthly_payment'] = String(fb.monthlyYear1);
+            }
+            if (fb.depositMatched != null) {
+              inputs['deposit'] = String(fb.depositMatched);
+            }
+            setHometreeTermFallbackInfo({
+              ...fb,
+              source: 'submit',
+            });
+            setPaymentTerm(String(fb.termYearsMatched));
+            if (fb.monthlyYear1 != null) {
+              setLeaseMonthlyPayment(String(fb.monthlyYear1));
+            }
+            if (fb.depositMatched != null) {
+              setDeposit(String(fb.depositMatched));
+            }
+            setHometreeQuoteStatus(fb.message);
+            pendingAfterHometreeFallbackRef.current = () =>
+              completePricingStepAndNavigate(inputs);
+            setShowHometreeTermFallbackModal(true);
+            setLoading(false);
+            return;
           }
         } catch (submitError) {
           console.error('❌ Error submitting calculator:', submitError);
@@ -1397,44 +1553,7 @@ export default function PricingScreen() {
           return;
         }
         
-        // Mark the pricing step as completed in the workflow
-        try {
-          console.log('🎯 Marking pricing step as completed...');
-          const { workflowApi } = await import('../utils/api');
-          
-          const result = await workflowApi.completeStep(opportunityId, 3, {
-            calculatorType: calculatorType,
-            completedAt: new Date().toISOString(),
-            savedInputs: inputs,
-            totalSystemCost: totalCost,
-            paymentMethod: paymentMethod,
-            deposit: deposit,
-            interestRate: interestRate,
-            interestRateType: interestRateType,
-            paymentTerm: paymentTerm,
-            leaseMonthlyPayment: leaseMonthlyPayment,
-          });
-          
-          console.log('✅ Pricing step marked as completed:', result);
-          
-          // Verify the step was actually completed
-          if (result && result.success) {
-            console.log('🔍 Pricing step completed successfully, navigating to next step...');
-            console.log('🔍 Navigation params:', { opportunityId });
-            
-            // Pricing data saved to JSON and Excel file created via submit
-            // Navigate directly to Presentation screen without alert to ensure smooth flow
-            navigation.navigate('Presentation', { opportunityId });
-            
-            console.log('🔍 Navigation call completed');
-          } else {
-            console.error('❌ Step completion failed:', result);
-            showAlert('Error', 'Failed to complete pricing step. Please try again.');
-          }
-        } catch (workflowError) {
-          console.error('Error marking pricing step as completed:', workflowError);
-          showAlert('Error', 'Failed to complete pricing step. Please try again.');
-        }
+        await completePricingStepAndNavigate(inputs);
       } catch (saveError) {
         console.error('❌ Error saving pricing data to JSON:', saveError);
         showAlert(
@@ -2460,6 +2579,54 @@ export default function PricingScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* HomeTree term fallback modal */}
+      <Modal
+        visible={showHometreeTermFallbackModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowHometreeTermFallbackModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <View style={[styles.warningModalIcon, { backgroundColor: theme.primaryButton + '20' }]}>
+              <Feather name="info" size={32} color={theme.primaryButton} />
+            </View>
+            <Text style={[styles.modalTitle, { color: theme.primaryText }]}>
+              HomeTree plan adjusted
+            </Text>
+            <Text style={[styles.modalSubtitle, { color: theme.secondaryText }]}>
+              {hometreeTermFallbackInfo?.message ||
+                'HomeTree cannot offer the selected payment plan for this quote.'}
+            </Text>
+            {hometreeTermFallbackInfo?.termYearsMatched != null ? (
+              <View style={{ marginTop: 12, gap: 6 }}>
+                {hometreeTermFallbackInfo.termYearsRequested !==
+                hometreeTermFallbackInfo.termYearsMatched ? (
+                  <Text style={[styles.fieldHint, { color: theme.secondaryText, textAlign: 'center' }]}>
+                    You selected {hometreeTermFallbackInfo.termYearsRequested} years
+                  </Text>
+                ) : null}
+                <Text style={[styles.fieldHint, { color: theme.primaryText, textAlign: 'center', fontWeight: '600' }]}>
+                  Next available plan: {hometreeTermFallbackInfo.termYearsMatched} years
+                  {hometreeTermFallbackInfo.monthlyYear1 != null
+                    ? ` at £${hometreeTermFallbackInfo.monthlyYear1}/month`
+                    : ''}
+                  {hometreeTermFallbackInfo.depositMatched != null
+                    ? ` with £${hometreeTermFallbackInfo.depositMatched.toLocaleString()} upfront`
+                    : ''}
+                </Text>
+              </View>
+            ) : null}
+            <TouchableOpacity
+              style={[styles.modalConfirmButton, { backgroundColor: theme.primaryButton, marginTop: 20 }]}
+              onPress={handleHometreeTermFallbackContinue}
+            >
+              <Text style={[styles.modalConfirmText, { color: '#ffffff' }]}>Continue</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

@@ -71,9 +71,10 @@ export default function SolarArraysInputsScreen() {
   };
 
   // Helper function to capture state from any rows array
-  const captureStateFromRows = (rowsArray: ArrayRow[]) => {
+  const captureStateFromRows = (rowsArray: ArrayRow[], type?: 'flux' | 'off-peak' | 'v44') => {
     const enabledCount = rowsArray.filter(r => r.enabled).length;
-    const isFlux = calculatorType === 'flux' || calculatorType === 'v44';
+    const calcType = type ?? calculatorType;
+    const isFlux = calcType === 'flux' || calcType === 'v44';
     const sortedRows = [...rowsArray].sort((a, b) => a.id - b.id);
     
     const inputs: Record<string, string> = {};
@@ -176,7 +177,9 @@ export default function SolarArraysInputsScreen() {
   };
 
   const handleContinue = async () => {
-    if (!hasUnsavedChanges && savedArraysData) {
+    const hasData = hasArrayInputData(rows);
+    // Only skip save when arrays were already saved and there is no row data to round/validate.
+    if (!hasUnsavedChanges && savedArraysData && !hasData) {
       navigateToPricing();
       return;
     }
@@ -322,23 +325,16 @@ export default function SolarArraysInputsScreen() {
           console.log('🔍 Found arrays data in progress:', progress.arraysData);
           const savedData = progress.arraysData;
           
-          // Store the saved data for comparison
-          setSavedArraysData(savedData);
-          
           // Restore arrays data from progress
           if (savedData.arrayRows) {
             const enabledCount = savedData.enabledCount || 1;
-            
-            setRows(prev => prev.map((r, idx) => {
-              const shouldEnable = idx < enabledCount;
-              if (!shouldEnable) return { ...r, enabled: false };
-              
+            const restoredRows = Array.from({ length: arrayCap }).map((_, idx) => {
+              const r = { id: idx + 1, enabled: idx < enabledCount } as ArrayRow;
+              if (!r.enabled) return r;
+
               const savedRow = savedData.arrayRows.find((row: any) => row.id === r.id);
-              if (!savedRow) return { ...r, enabled: shouldEnable };
-              
-              // Determine source: if saved data has OpenSolar source, preserve it
-              // Otherwise, if we have OpenSolar data available, use 'opensolar'
-              // Otherwise use the saved source or 'manual'
+              if (!savedRow) return r;
+
               let source: 'opensolar' | 'manual';
               if (savedRow.source === 'opensolar') {
                 source = 'opensolar';
@@ -347,23 +343,25 @@ export default function SolarArraysInputsScreen() {
               } else {
                 source = savedRow.source || 'manual';
               }
-              
-              // Restore override state - this is critical to show if user overrode OpenSolar data
+
               const overrideOpenSolar = savedRow.overrideOpenSolar === true;
-              
+
               console.log(`🔍 Restoring array ${r.id}: source=${source}, overrideOpenSolar=${overrideOpenSolar}`);
-              
+
               return {
                 ...r,
-                enabled: shouldEnable,
+                enabled: true,
                 numberOfPanels: savedRow.numberOfPanels || '',
                 orientationDeg: savedRow.orientationDeg || '',
                 pitchDeg: savedRow.pitchDeg || '',
                 shadingFactor: savedRow.shadingFactor || '',
-                source: source,
-                overrideOpenSolar: overrideOpenSolar
+                source,
+                overrideOpenSolar,
               };
-            }));
+            });
+
+            setRows(restoredRows);
+            setSavedArraysData(captureStateFromRows(restoredRows, resolvedType));
 
             const restoredHasImportedData = savedData.arrayRows.some((row: any) =>
               row.enabled && (
@@ -697,15 +695,26 @@ export default function SolarArraysInputsScreen() {
     setHasUnsavedChanges(true);
   };
 
-  // Handle blur event to round orientation values
+  // Handle blur event to round orientation and pitch values
   const onBlur = (id: number, key: keyof ArrayRow, value: string) => {
-    // Only round orientation on blur if not in override mode
+    const currentRow = rows.find(r => r.id === id);
+    const isOverrideMode = currentRow?.source === 'opensolar' && currentRow?.overrideOpenSolar;
+
+    if (isOverrideMode || !value || value.trim() === '') return;
+
     if (key === 'orientationDeg') {
-      const currentRow = rows.find(r => r.id === id);
-      const isOverrideMode = currentRow?.source === 'opensolar' && currentRow?.overrideOpenSolar;
-      
-      if (!isOverrideMode && value && value.trim() !== '') {
-        const roundedValue = validateOrientation(value, true); // true = round on blur
+      const roundedValue = validateOrientation(value, true);
+      if (roundedValue !== value) {
+        setRows(prev => prev.map(r => r.id === id ? { ...r, [key]: roundedValue } : r));
+        setHasUnsavedChanges(true);
+      }
+      return;
+    }
+
+    if (key === 'pitchDeg') {
+      const num = parseFloat(value);
+      if (!isNaN(num)) {
+        const roundedValue = String(Math.round(num));
         if (roundedValue !== value) {
           setRows(prev => prev.map(r => r.id === id ? { ...r, [key]: roundedValue } : r));
           setHasUnsavedChanges(true);
@@ -1104,6 +1113,23 @@ export default function SolarArraysInputsScreen() {
 
           <View
             style={[
+              styles.noteBox,
+              {
+                marginTop: 12,
+                marginBottom: 0,
+                backgroundColor: isDark ? '#1e3a5f' : '#eff6ff',
+                borderColor: isDark ? '#3b82f6' : '#93c5fd',
+              },
+            ]}
+          >
+            <Feather name="info" size={16} color={isDark ? '#93c5fd' : '#1d4ed8'} />
+            <Text style={[styles.noteText, { color: isDark ? '#bfdbfe' : '#1e40af', flex: 1 }]}>
+              On save, orientation rounds to the nearest 5° and pitch to the nearest whole degree (matches Excel).
+            </Text>
+          </View>
+
+          <View
+            style={[
               styles.sapTable,
               { borderColor: theme.cardBorder, marginTop: 16, width: '100%' as any },
             ]}
@@ -1229,6 +1255,7 @@ export default function SolarArraysInputsScreen() {
                         editable={editable}
                         value={r.pitchDeg || ''}
                         onChangeText={(v) => onChange(r.id, 'pitchDeg', v)}
+                        onBlur={() => onBlur(r.id, 'pitchDeg', r.pitchDeg || '')}
                         keyboardType="decimal-pad"
                         placeholder="—"
                         placeholderTextColor={theme.secondaryText}
@@ -1311,6 +1338,28 @@ export default function SolarArraysInputsScreen() {
             </Text>
           </View>
         )}
+        {hasArrayInputData(rows) &&
+        hasRestoredProgress &&
+        savedArraysData &&
+        !hasUnsavedChanges &&
+        !hasDataChanged() ? (
+          <TouchableOpacity
+            style={[
+              styles.skipButton,
+              {
+                borderColor: theme.dangerButton,
+                backgroundColor: theme.dangerButton + '10',
+              },
+            ]}
+            onPress={navigateToPricing}
+            activeOpacity={0.8}
+          >
+            <Feather name="skip-forward" size={16} color={theme.dangerButton} />
+            <Text style={[styles.skipButtonText, { color: theme.dangerButton }]}>
+              Skip
+            </Text>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity 
           style={[
             styles.saveButton, 
@@ -1452,7 +1501,7 @@ export default function SolarArraysInputsScreen() {
         animationType="fade"
         onRequestClose={() => {}} // Prevent closing during rounding
       >
-        <View style={styles.modalOverlay}>
+        <View style={[styles.modalOverlay, { zIndex: 9999 }]}>
           <View style={[styles.roundingModalContent, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
             <View style={styles.roundingModalIconContainer}>
               <View style={[styles.roundingModalIconCircle, { backgroundColor: theme.primaryButton + '15' }]}>
@@ -1815,6 +1864,22 @@ const styles = StyleSheet.create({
       minHeight: 80, // Ensure footer has minimum height
       marginBottom: 65, // Add margin for BottomNavigation on web
     }),
+  },
+  skipButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 2,
+    backgroundColor: 'transparent',
+  },
+  skipButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
   saveButton: { backgroundColor: '#16a34a', paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
   saveButtonChanged: { backgroundColor: '#f59e0b' },

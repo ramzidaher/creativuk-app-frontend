@@ -48,7 +48,6 @@ export type V44Section = {
 export const V44_QUESTIONS_GROUP_IDS = [
   'battery_savings',
   'current_tariff',
-  'usage_known',
 ] as const;
 
 /** Rep-visible battery savings options in Excel visual order (SC, Flux, Overnight) */
@@ -193,8 +192,8 @@ export function applyNewTariffDefaults(
 ): Record<string, string> {
   const force = options?.force === true;
   const next = { ...inputs };
-  const savings = radios.battery_savings;
-  const tariff = radios.current_tariff ?? 1;
+  const savings = v44Radio(radios, 'battery_savings');
+  const tariff = v44Radio(radios, 'current_tariff', 1);
 
   const setIf = (key: string, value: string) => {
     if (force || !String(next[key] ?? '').trim()) {
@@ -237,12 +236,52 @@ export function applyNewTariffDefaults(
   return next;
 }
 
+/** Coerce saved / URL radio values — strict `=== 1` fails on string `"1"`. */
+export function v44Radio(
+  radios: Record<string, unknown>,
+  key: string,
+  fallback = -1,
+): number {
+  const raw = radios[key];
+  if (typeof raw === 'number' && !Number.isNaN(raw)) return raw;
+  const n = Number(raw);
+  return Number.isNaN(n) ? fallback : n;
+}
+
+export function normalizeV44Radios(
+  radios: Record<string, unknown>,
+  groups?: V44RadioGroup[],
+): Record<string, number> {
+  const base = groups ? defaultRadios(groups) : {};
+  if (!radios || typeof radios !== 'object') return base;
+
+  for (const [key, val] of Object.entries(radios)) {
+    const n = Number(val);
+    if (!Number.isNaN(n)) {
+      base[key] = n;
+      continue;
+    }
+    if (typeof val === 'string' && groups) {
+      for (const g of groups) {
+        const opt = g.options.find((o) => o.shapeName === val);
+        if (opt) {
+          base[g.id] = opt.value;
+          break;
+        }
+      }
+    }
+  }
+
+  base.usage_known = 1;
+  return base;
+}
+
 export function rulesPass(
   rules: VisibilityRule[] | undefined,
   radios: Record<string, number>,
 ): boolean {
   if (!rules?.length) return true;
-  return rules.every((r) => r.in.includes(radios[r.group] ?? -1));
+  return rules.every((r) => r.in.includes(v44Radio(radios, r.group)));
 }
 
 export function resolveFieldLabel(
@@ -252,8 +291,8 @@ export function resolveFieldLabel(
 ): string {
   if (repView && field.repLabel) return field.repLabel;
   if (field.labelByState) {
-    const tariff = radios.current_tariff ?? 1;
-    const usage = radios.usage_known ?? 1;
+    const tariff = v44Radio(radios, 'current_tariff', 1);
+    const usage = v44Radio(radios, 'usage_known', 1);
     const exact = field.labelByState[`${tariff}-${usage}`];
     if (exact) return exact;
     const wildcard = field.labelByState[`${tariff}-*`];
@@ -304,11 +343,101 @@ export function isFieldVisible(
   return true;
 }
 
+/**
+ * Authoritative rep-facing gate for the four supported combinations.
+ *
+ * Annual usage is always "Yes", so Single Rate uses annual usage and Dual
+ * Rate uses peak/off-peak usage. New Overnight fields appear only for
+ * Overnight Charging; export appears for both supported savings methods.
+ * This deliberately overrides stale backend schema visibility.
+ */
+export function isApprovedV44RepFieldVisible(
+  field: V44Field,
+  radios: Record<string, number>,
+  consumptionMatrix: Record<string, string[]>,
+): boolean {
+  const batterySavings = v44Radio(radios, 'battery_savings');
+  const currentTariff = v44Radio(radios, 'current_tariff');
+  const isSelfConsumption = batterySavings === 1;
+  const isOvernightCharging = batterySavings === 2;
+  const isSingleRate = currentTariff === 1;
+  const isDualRate = currentTariff === 2;
+
+  switch (field.id) {
+    case 'current_rate_1':
+      // Same Excel field: Unit Rate for Single, Peak Rate for Dual.
+      return isSingleRate || isDualRate;
+    case 'current_rate_2':
+    case 'current_rate_3':
+      return isDualRate;
+    case 'standing_charge':
+      return isSingleRate || isDualRate;
+    case 'occupancy_archetype':
+    case 'spend_1':
+    case 'spend_2':
+    case 'spend_3':
+      return false;
+    case 'consumption_1':
+      return isSingleRate;
+    case 'consumption_2':
+    case 'consumption_3':
+      return isDualRate;
+    case 'new_peak_rate':
+    case 'new_offpeak_rate':
+    case 'new_offpeak_hours':
+      return isOvernightCharging;
+    case 'new_standing_charge':
+      // Hidden from reps — auto-filled at 47.5p in the background.
+      return false;
+    case 'export_tariff_rate':
+      return isSelfConsumption || isOvernightCharging;
+    case 'flux_day_rate_import':
+    case 'flux_day_rate_export':
+    case 'flux_flux_rate_import':
+    case 'flux_flux_rate_export':
+    case 'flux_peak_rate_import':
+    case 'flux_peak_rate_export':
+    case 'flux_standing_charge':
+    case 'if_peak_rate_import':
+    case 'if_peak_rate_export':
+    case 'if_offpeak_rate_import':
+    case 'if_offpeak_rate_export':
+    case 'if_standing_charge':
+      return false;
+    default:
+      return isFieldVisible(field, radios, consumptionMatrix, true);
+  }
+}
+
 export function isSectionVisible(
   section: V44Section,
   radios: Record<string, number>,
 ): boolean {
   return rulesPass(section.visibleWhen, radios);
+}
+
+/** Rep-facing section gates — do not rely on stale backend schema visibleWhen. */
+export function isApprovedV44RepSectionVisible(
+  section: V44Section,
+  radios: Record<string, number>,
+): boolean {
+  const isSelfConsumption = v44Radio(radios, 'battery_savings') === 1;
+  const isOvernightCharging = v44Radio(radios, 'battery_savings') === 2;
+
+  switch (section.id) {
+    case 'system_costs':
+    case 'customer':
+      return false;
+    case 'new_overnight':
+      return isOvernightCharging;
+    case 'export_tariff':
+      return isSelfConsumption || isOvernightCharging;
+    case 'standard_flux':
+    case 'intelligent_flux':
+      return false;
+    default:
+      return isSectionVisible(section, radios);
+  }
 }
 
 /** Fields to clear when a radio group changes */
@@ -391,24 +520,7 @@ export function radiosFromProgress(
   radioButtonSelections?: Record<string, string>,
   groups?: V44RadioGroup[],
 ): Record<string, number> {
-  const base = groups ? defaultRadios(groups) : {};
-  if (!radioButtonSelections) return base;
-  for (const [key, val] of Object.entries(radioButtonSelections)) {
-    const n = Number(val);
-    if (!Number.isNaN(n)) {
-      base[key] = n;
-    } else if (groups) {
-      // shape name fallback
-      for (const g of groups) {
-        const opt = g.options.find((o) => o.shapeName === val);
-        if (opt) {
-          base[g.id] = opt.value;
-          break;
-        }
-      }
-    }
-  }
-  return base;
+  return normalizeV44Radios(radioButtonSelections ?? {}, groups);
 }
 
 export function radiosToProgress(

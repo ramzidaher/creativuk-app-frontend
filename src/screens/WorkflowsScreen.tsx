@@ -330,7 +330,7 @@ export default function WorkflowsScreen() {
       case 'OPEN_SOLAR':
         return 'Access OpenSolar platform for design';
       case 'CALCULATOR':
-        return 'Choose between Off Peak and Flux options';
+        return 'Enter system details and generate the proposal';
       case 'SOLAR_PROJECTION':
         return 'Review solar projection data and financial analysis';
       case 'PROPOSAL_GENERATION':

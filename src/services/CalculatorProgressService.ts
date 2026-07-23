@@ -448,7 +448,19 @@ class CalculatorProgressService {
     opportunityId: string,
     calculatorType: 'off-peak' | 'flux' | 'epvs' | 'v44',
     existingFileName?: string
-  ): Promise<{ success: boolean; message: string; filePath?: string }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    filePath?: string;
+    hometreeTermFallback?: {
+      termYearsRequested: number;
+      termYearsMatched: number;
+      depositRequested?: number;
+      depositMatched?: number;
+      message: string;
+      monthlyYear1?: number;
+    };
+  }> {
     try {
       const userId = await this.getUserId();
       
@@ -505,6 +517,7 @@ class CalculatorProgressService {
           success: true,
           message: responseData.message || 'Successfully completed calculation',
           filePath: responseData.filePath,
+          hometreeTermFallback: responseData.hometreeTermFallback,
         };
       } else {
         console.error('❌ Calculator submission failed:', {
@@ -514,6 +527,8 @@ class CalculatorProgressService {
         return {
           success: false,
           message: responseData?.message || responseData?.error || 'Failed to submit calculator',
+          filePath: responseData?.filePath,
+          hometreeTermFallback: responseData?.hometreeTermFallback,
         };
       }
     } catch (error: any) {

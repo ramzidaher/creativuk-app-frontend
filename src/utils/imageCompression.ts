@@ -5,6 +5,7 @@ interface CompressionOptions {
   maxHeight?: number;
   quality?: number;
   format?: 'jpeg' | 'png' | 'webp';
+  sourceMimeType?: string;
 }
 
 interface CompressedImageResult {
@@ -15,67 +16,103 @@ interface CompressedImageResult {
   format: string;
 }
 
+/** Max base64 payload per image upload (~2MB encoded) to stay under IIS limits. */
+export const MAX_SURVEY_UPLOAD_BASE64_LENGTH = 2.5 * 1024 * 1024;
+
+export class SurveyUploadTooLargeError extends Error {
+  constructor(public fileName: string) {
+    super(
+      `Photo "${fileName}" is still too large after compression. Upload one photo at a time, or save it as JPEG and try again.`,
+    );
+    this.name = 'SurveyUploadTooLargeError';
+  }
+}
+
+export class SurveyUploadCompressionError extends Error {
+  constructor(public fileName: string, reason?: string) {
+    super(
+      reason ||
+        `Could not process "${fileName}". Save it as JPEG or PNG and try again (HEIC may not be supported in the browser).`,
+    );
+    this.name = 'SurveyUploadCompressionError';
+  }
+}
+
+function resolveSourceMimeType(mimeType?: string): string {
+  if (mimeType?.startsWith('image/')) {
+    return mimeType;
+  }
+  return 'image/jpeg';
+}
+
+function base64PayloadLength(base64: string): number {
+  const clean = base64.includes(',') ? base64.split(',')[1] : base64;
+  return clean.length;
+}
+
 /**
  * Compress an image to reduce file size while maintaining reasonable quality
  */
 export const compressImage = async (
   base64Data: string,
-  options: CompressionOptions = {}
+  options: CompressionOptions = {},
+  fallbackToOriginal = true,
 ): Promise<CompressedImageResult> => {
   const {
     maxWidth = 1920,
     maxHeight = 1080,
     quality = 0.8,
-    format = 'jpeg'
+    format = 'jpeg',
+    sourceMimeType,
   } = options;
 
   try {
-    // Remove data URL prefix if present
-    const cleanBase64 = base64Data.replace(/^data:image\/[a-z]+;base64,/, '');
-    
-    // For React Native, we'll use a simple compression approach
-    // In a real app, you might want to use libraries like react-native-image-resizer
+    const cleanBase64 = base64Data.replace(/^data:image\/[a-z+]+;base64,/, '');
+
     if (Platform.OS === 'web') {
-      return await compressImageWeb(cleanBase64, { maxWidth, maxHeight, quality, format });
-    } else {
-      return await compressImageNative(cleanBase64, { maxWidth, maxHeight, quality, format });
+      return await compressImageWeb(cleanBase64, {
+        maxWidth,
+        maxHeight,
+        quality,
+        format,
+        sourceMimeType,
+      });
     }
+
+    return await compressImageNative(cleanBase64, { maxWidth, maxHeight, quality, format });
   } catch (error) {
     console.error('Image compression failed:', error);
-    // Return original data if compression fails
+    if (!fallbackToOriginal) {
+      throw error;
+    }
     return {
       base64: base64Data,
       width: 0,
       height: 0,
       size: base64Data.length,
-      format: 'original'
+      format: 'original',
     };
   }
 };
 
-/**
- * Compress image for web platform using Canvas API
- */
-const compressImageWeb = async (
-  base64Data: string,
-  options: CompressionOptions
-): Promise<CompressedImageResult> => {
+async function compressImageFromBlobUrl(
+  blobUrl: string,
+  options: CompressionOptions,
+): Promise<CompressedImageResult> {
   return new Promise((resolve, reject) => {
-    try {
-      const img = new Image();
-      img.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      try {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        
         if (!ctx) {
           reject(new Error('Could not get canvas context'));
           return;
         }
 
-        // Calculate new dimensions while maintaining aspect ratio
         let { width, height } = img;
         const { maxWidth = 1920, maxHeight = 1080, quality = 0.8, format = 'jpeg' } = options;
-        
+
         if (width > maxWidth || height > maxHeight) {
           const ratio = Math.min(maxWidth / width, maxHeight / height);
           width *= ratio;
@@ -84,24 +121,74 @@ const compressImageWeb = async (
 
         canvas.width = width;
         canvas.height = height;
-
-        // Draw and compress
         ctx.drawImage(img, 0, 0, width, height);
-        
+
         const mimeType = `image/${format}`;
         const compressedBase64 = canvas.toDataURL(mimeType, quality);
-        
+
         resolve({
           base64: compressedBase64,
           width: Math.round(width),
           height: Math.round(height),
           size: compressedBase64.length,
-          format: mimeType
+          format: mimeType,
+        });
+      } catch (error) {
+        reject(error);
+      }
+    };
+    img.onerror = () => reject(new Error('Failed to load image from blob URL'));
+    img.src = blobUrl;
+  });
+}
+
+/**
+ * Compress image for web platform using Canvas API
+ */
+const compressImageWeb = async (
+  base64Data: string,
+  options: CompressionOptions,
+): Promise<CompressedImageResult> => {
+  return new Promise((resolve, reject) => {
+    try {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'));
+          return;
+        }
+
+        let { width, height } = img;
+        const { maxWidth = 1920, maxHeight = 1080, quality = 0.8, format = 'jpeg' } = options;
+
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width *= ratio;
+          height *= ratio;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const mimeType = `image/${format}`;
+        const compressedBase64 = canvas.toDataURL(mimeType, quality);
+
+        resolve({
+          base64: compressedBase64,
+          width: Math.round(width),
+          height: Math.round(height),
+          size: compressedBase64.length,
+          format: mimeType,
         });
       };
-      
+
       img.onerror = () => reject(new Error('Failed to load image'));
-      img.src = `data:image/jpeg;base64,${base64Data}`;
+      const sourceMime = resolveSourceMimeType(options.sourceMimeType);
+      img.src = `data:${sourceMime};base64,${base64Data}`;
     } catch (error) {
       reject(error);
     }
@@ -152,23 +239,137 @@ export const getOptimalCompressionSettings = (originalSize: number): Compression
 /**
  * Compress image with automatic quality adjustment
  */
-export const compressImageAuto = async (base64Data: string): Promise<CompressedImageResult> => {
-  const originalSize = base64Data.length;
+export const compressImageAuto = async (
+  base64Data: string,
+  mimeType?: string,
+  byteSize?: number,
+): Promise<CompressedImageResult> => {
+  const originalSize = byteSize ?? base64Data.length;
   const settings = getOptimalCompressionSettings(originalSize);
-  
-  console.log(`🖼️ Compressing image: ${(originalSize / 1024 / 1024).toFixed(2)}MB -> target: ${settings.maxWidth}x${settings.maxHeight}, quality: ${settings.quality}`);
-  
-  const result = await compressImage(base64Data, settings);
-  
+
+  console.log(
+    `🖼️ Compressing image: ${(originalSize / 1024 / 1024).toFixed(2)}MB -> target: ${settings.maxWidth}x${settings.maxHeight}, quality: ${settings.quality}`,
+  );
+
+  let result = await compressImage(base64Data, { ...settings, sourceMimeType: mimeType }, false);
+
+  if (base64PayloadLength(result.base64) > MAX_SURVEY_UPLOAD_BASE64_LENGTH) {
+    console.log('🖼️ Still too large, applying ultra compression...');
+    result = await compressImage(
+      base64Data,
+      { maxWidth: 640, maxHeight: 480, quality: 0.35, format: 'jpeg', sourceMimeType: mimeType },
+      false,
+    );
+  }
+
   const compressionRatio = ((originalSize - result.size) / originalSize * 100).toFixed(1);
-  console.log(`✅ Image compressed: ${(result.size / 1024 / 1024).toFixed(2)}MB (${compressionRatio}% reduction)`);
-  
+  console.log(
+    `✅ Image compressed: ${(result.size / 1024 / 1024).toFixed(2)}MB (${compressionRatio}% reduction)`,
+  );
+
   return result;
 };
 
 /**
  * Compress multiple images in parallel with progress tracking
  */
+export interface SurveyUploadFile {
+  uri?: string;
+  name?: string;
+  size?: number;
+  mimeType?: string;
+  base64?: string;
+  base64Data?: string;
+  isNew?: boolean;
+  timestamp?: number;
+  isCompressed?: boolean;
+  originalSize?: number;
+}
+
+function stripDataUrlPrefix(data: string): string {
+  return data.includes(',') ? data.split(',')[1] : data;
+}
+
+function isPdfUpload(file: Pick<SurveyUploadFile, 'mimeType' | 'name'>): boolean {
+  return (
+    file.mimeType === 'application/pdf' ||
+    (typeof file.name === 'string' && file.name.toLowerCase().endsWith('.pdf'))
+  );
+}
+
+/**
+ * Compress a survey upload file before sending to the API (skips PDFs and already-compressed files).
+ */
+export async function compressSurveyUploadFile<T extends SurveyUploadFile>(file: T): Promise<T> {
+  if (file.isCompressed || isPdfUpload(file)) {
+    if (isPdfUpload(file) && (file.size ?? 0) > 8 * 1024 * 1024) {
+      throw new SurveyUploadTooLargeError(file.name || 'PDF');
+    }
+    return file;
+  }
+
+  const raw = file.base64Data || file.base64 || '';
+  if (!raw) {
+    throw new SurveyUploadCompressionError(file.name || 'image', 'Missing image data.');
+  }
+
+  const originalBase64 = stripDataUrlPrefix(raw);
+  if (!originalBase64) {
+    throw new SurveyUploadCompressionError(file.name || 'image', 'Missing image data.');
+  }
+
+  let compressedResult: CompressedImageResult;
+
+  try {
+    if (Platform.OS === 'web' && file.uri?.startsWith('blob:')) {
+      const settings = getOptimalCompressionSettings(file.size ?? originalBase64.length);
+      compressedResult = await compressImageFromBlobUrl(file.uri, settings);
+      if (base64PayloadLength(compressedResult.base64) > MAX_SURVEY_UPLOAD_BASE64_LENGTH) {
+        compressedResult = await compressImageFromBlobUrl(file.uri, {
+          maxWidth: 640,
+          maxHeight: 480,
+          quality: 0.35,
+          format: 'jpeg',
+        });
+      }
+    } else {
+      compressedResult = await compressImageAuto(originalBase64, file.mimeType, file.size);
+    }
+  } catch (error) {
+    console.warn('Survey upload compression failed:', file.name, error);
+    throw new SurveyUploadCompressionError(
+      file.name || 'image',
+      error instanceof Error ? error.message : undefined,
+    );
+  }
+
+  const cleanBase64 = stripDataUrlPrefix(compressedResult.base64);
+  if (base64PayloadLength(cleanBase64) > MAX_SURVEY_UPLOAD_BASE64_LENGTH) {
+    throw new SurveyUploadTooLargeError(file.name || 'image');
+  }
+
+  const compressedDataUrl = compressedResult.base64.includes(',')
+    ? compressedResult.base64
+    : `data:${compressedResult.format};base64,${compressedResult.base64}`;
+
+  return {
+    ...file,
+    uri: compressedDataUrl,
+    size: compressedResult.size,
+    mimeType: compressedResult.format,
+    base64: compressedDataUrl,
+    base64Data: cleanBase64,
+    isCompressed: true,
+    originalSize: originalBase64.length,
+  };
+}
+
+export async function compressSurveyUploadFiles<T extends SurveyUploadFile>(
+  files: T[],
+): Promise<T[]> {
+  return Promise.all(files.map(compressSurveyUploadFile));
+}
+
 export const compressImagesBatch = async (
   images: Array<{ base64: string; fieldName: string; fileName?: string }>,
   onProgress?: (completed: number, total: number) => void
