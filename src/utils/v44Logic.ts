@@ -64,29 +64,52 @@ export function isBatterySavingsOptionDisabled(value: number): boolean {
 }
 
 /**
- * Panels reps can sell. The Excel catalog lists every EPVS panel; reps only
- * see what we currently install. The confirmed panel is the Eurener Nexa Matte
- * TOPCon N-type (460W-500W range) sold at 475W. Update at launch if the
- * supported model changes.
+ * Fixed panel for all v4.4 sales — must match the Excel Panels catalog row
+ * (Eurener Nexa Matte TOPCon N-type, 460–500 W range, sold at 475 W).
+ * Reps do not choose panel manufacturer/model/wattage in the app.
  */
+export const V44_DEFAULT_PANEL = {
+  manufacturer: 'Eurener',
+  model: 'Nexa Matte TOPCon N-type (460W - 500W)',
+  wattage: '475',
+} as const;
+
+/** @deprecated Use V44_DEFAULT_PANEL — kept for any legacy allowlist checks */
 export const V44_SUPPORTED_PANELS = {
-  manufacturers: ['Eurener'],
-  /** Case-insensitive substrings — a model must match one to be shown */
+  manufacturers: [V44_DEFAULT_PANEL.manufacturer],
   modelIncludes: ['Nexa Matte'],
-  /** Only wattages on sale — blocks manual 460W / 500W selection */
-  wattages: ['475'],
+  wattages: [V44_DEFAULT_PANEL.wattage],
 } as const;
 
 export function isSupportedPanelManufacturer(manufacturer: string): boolean {
-  return V44_SUPPORTED_PANELS.manufacturers.some(
-    (m) => m.toLowerCase() === manufacturer.trim().toLowerCase(),
+  return (
+    manufacturer.trim().toLowerCase() ===
+    V44_DEFAULT_PANEL.manufacturer.toLowerCase()
   );
 }
 
 export function isSupportedPanelModel(model: string): boolean {
-  return V44_SUPPORTED_PANELS.modelIncludes.some((s) =>
-    model.toLowerCase().includes(s.toLowerCase()),
-  );
+  return model.trim() === V44_DEFAULT_PANEL.model;
+}
+
+/** Always apply the standard 475 W Nexa panel when installing new solar. */
+export function applyDefaultPanelInputs(
+  radios: Record<string, number>,
+  inputs: Record<string, string>,
+): Record<string, string> {
+  if (v44Radio(radios, 'installing_new_solar') !== 1) {
+    const next = { ...inputs };
+    delete next.panel_manufacturer;
+    delete next.panel_model;
+    delete next.panel_wattage;
+    return next;
+  }
+  return {
+    ...inputs,
+    panel_manufacturer: V44_DEFAULT_PANEL.manufacturer,
+    panel_model: V44_DEFAULT_PANEL.model,
+    panel_wattage: V44_DEFAULT_PANEL.wattage,
+  };
 }
 
 /**
@@ -170,11 +193,13 @@ export const V44_100GREEN_RATES = {
 export const V44_100GREEN_OFFPEAK_HOURS = '7';
 
 /**
- * Standard standing charge in pence/day for the NEW tariffs (hidden from reps).
- * EPVS confirmed it does not affect calculations. The CURRENT tariff standing
- * charge is visible and entered manually by the rep.
+ * Standing charge fallback (pence/day) when the rep leaves current tariff blank.
+ * The CURRENT tariff standing charge is visible and entered manually by the rep.
  */
 export const V44_STANDING_CHARGE_DEFAULT = '47.5';
+
+/** New overnight-tariff standing charge (pence/day) — hidden from reps, always 44. */
+export const V44_NEW_STANDING_CHARGE_DEFAULT = '44';
 
 /**
  * Pre-fill New Electricity Tariff + Export based on battery savings basis.
@@ -212,7 +237,7 @@ export function applyNewTariffDefaults(
     setIf('new_peak_rate', green.day);
     setIf('new_offpeak_rate', green.night);
     setIf('new_offpeak_hours', V44_100GREEN_OFFPEAK_HOURS);
-    next.new_standing_charge = V44_STANDING_CHARGE_DEFAULT;
+    next.new_standing_charge = V44_NEW_STANDING_CHARGE_DEFAULT;
   }
 
   // These modes are not currently selectable by reps, but keep their hidden
@@ -387,7 +412,7 @@ export function isApprovedV44RepFieldVisible(
     case 'new_offpeak_hours':
       return isOvernightCharging;
     case 'new_standing_charge':
-      // Hidden from reps — auto-filled at 47.5p in the background.
+      // Hidden from reps — auto-filled at 44p in the background.
       return false;
     case 'export_tariff_rate':
       return isSelfConsumption || isOvernightCharging;
@@ -403,6 +428,11 @@ export function isApprovedV44RepFieldVisible(
     case 'if_offpeak_rate_import':
     case 'if_offpeak_rate_export':
     case 'if_standing_charge':
+      return false;
+    case 'panel_manufacturer':
+    case 'panel_model':
+    case 'panel_wattage':
+      // Fixed Eurener Nexa 475 W — applied automatically in the background.
       return false;
     default:
       return isFieldVisible(field, radios, consumptionMatrix, true);

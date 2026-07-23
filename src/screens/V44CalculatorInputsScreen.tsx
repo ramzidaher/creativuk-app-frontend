@@ -25,8 +25,8 @@ import {
   V44Field,
   V44RadioGroup,
   V44Section,
-  V44_SUPPORTED_PANELS,
   applyCascadeClear,
+  applyDefaultPanelInputs,
   applyNewTariffDefaults,
   fieldsClearedByRadioChange,
   inverterDisplayName,
@@ -37,8 +37,6 @@ import {
   isSupportedBatteryModel,
   isSupportedInverter,
   isSupportedInverterManufacturer,
-  isSupportedPanelManufacturer,
-  isSupportedPanelModel,
   normalizeV44Radios,
   radiosFromProgress,
   radiosToProgress,
@@ -66,7 +64,7 @@ type RouteParams = {
   pendingRadios?: Record<string, number>;
 };
 
-// New-tariff standing charge is hidden (47.5p default in background).
+// New-tariff standing charge is hidden (44p default in background).
 // Current-tariff standing charge stays visible for manual entry.
 const REP_HIDDEN_STANDING_CHARGE_FIELDS = new Set([
   'new_standing_charge',
@@ -183,21 +181,6 @@ export default function V44CalculatorInputsScreen() {
         restoredInputs.address = effectiveCustomer.address || '';
         restoredInputs.postcode = effectiveCustomer.postcode || '';
       }
-      // Clear stale panel selections that are no longer supported
-      // (only Eurener Nexa 475W is sold — see V44_SUPPORTED_PANELS)
-      const savedPanelMfr = String(restoredInputs.panel_manufacturer ?? '').trim();
-      const savedPanelModel = String(restoredInputs.panel_model ?? '').trim();
-      const savedPanelWattage = String(restoredInputs.panel_wattage ?? '').trim();
-      if (
-        (savedPanelMfr && !isSupportedPanelManufacturer(savedPanelMfr)) ||
-        (savedPanelModel && !isSupportedPanelModel(savedPanelModel)) ||
-        (savedPanelWattage &&
-          !(V44_SUPPORTED_PANELS.wattages as readonly string[]).includes(savedPanelWattage))
-      ) {
-        delete restoredInputs.panel_manufacturer;
-        delete restoredInputs.panel_model;
-        delete restoredInputs.panel_wattage;
-      }
       // Keep unsupported/upcoming battery models in the backend catalog, but
       // never restore them into the sales-rep flow.
       const savedBatteryMfr = String(
@@ -243,7 +226,10 @@ export default function V44CalculatorInputsScreen() {
       // the selected tariff. Old saved rates (including stale test data) are
       // discarded — reps must switch Override on per session to enter custom rates.
       setTariffOverride(false);
-      const finalInputs = applyNewTariffDefaults(restoredRadios, restoredInputs, { force: true });
+      const finalInputs = applyDefaultPanelInputs(
+        restoredRadios,
+        applyNewTariffDefaults(restoredRadios, restoredInputs, { force: true }),
+      );
       setInputs(finalInputs);
 
       const hasSavedInputs =
@@ -410,7 +396,10 @@ export default function V44CalculatorInputsScreen() {
         const forceDefaults =
           !tariffOverride &&
           (groupId === 'battery_savings' || groupId === 'current_tariff');
-        return applyNewTariffDefaults(next, copy, { force: forceDefaults });
+        return applyDefaultPanelInputs(
+          next,
+          applyNewTariffDefaults(next, copy, { force: forceDefaults }),
+        );
       });
       return next;
     });
@@ -428,7 +417,12 @@ export default function V44CalculatorInputsScreen() {
   const toggleTariffOverride = (enabled: boolean) => {
     setTariffOverride(enabled);
     if (!enabled) {
-      setInputs((prev) => applyNewTariffDefaults(radios, prev, { force: true }));
+      setInputs((prev) =>
+        applyDefaultPanelInputs(
+          radios,
+          applyNewTariffDefaults(radios, prev, { force: true }),
+        ),
+      );
     }
   };
 
@@ -496,51 +490,6 @@ export default function V44CalculatorInputsScreen() {
       if (field.staticOptions) return field.staticOptions;
       if (!equipment || !field.dropdownSource) return [];
       switch (field.dropdownSource) {
-        case 'panel_manufacturer':
-          // Reps only see panels we currently sell (Eurener Nexa 475W)
-          return [
-            ...new Set(
-              equipment.panels
-                .filter((p) => isSupportedPanelManufacturer(p.manufacturer))
-                .map((p) => p.manufacturer),
-            ),
-          ].sort();
-        case 'panel_model': {
-          const mfr = inputs.panel_manufacturer;
-          return [
-            ...new Set(
-              equipment.panels
-                .filter((p) => {
-                  if (p.manufacturer !== mfr || !isSupportedPanelModel(p.model)) {
-                    return false;
-                  }
-                  // Model must offer a wattage we sell (475W)
-                  const min = p.minWattage ?? 0;
-                  const max = p.maxWattage ?? min;
-                  return V44_SUPPORTED_PANELS.wattages.some((w) => {
-                    const n = Number(w);
-                    return n >= min && n <= max;
-                  });
-                })
-                .map((p) => p.model),
-            ),
-          ].sort();
-        }
-        case 'panel_wattage': {
-          const mfr = inputs.panel_manufacturer;
-          const model = inputs.panel_model;
-          const panel = equipment.panels.find(
-            (p) => p.manufacturer === mfr && p.model === model,
-          );
-          if (!panel) return [];
-          const min = panel.minWattage ?? 0;
-          const max = panel.maxWattage ?? min;
-          // Only wattages currently sold (475W) — no manual 460W / 500W
-          return V44_SUPPORTED_PANELS.wattages.filter((w) => {
-            const n = Number(w);
-            return n >= min && n <= max;
-          });
-        }
         case 'battery_manufacturer':
           return [
             ...new Set(
@@ -810,10 +759,16 @@ export default function V44CalculatorInputsScreen() {
         inverter_new: 1,
         usage_known: 1,
       };
+      const inputsToSave = applyDefaultPanelInputs(
+        toSaveRadios,
+        applyNewTariffDefaults(toSaveRadios, inputs, {
+          force: !tariffOverride,
+        }),
+      );
       await CalculatorProgressService.saveProgress(opportunityId, 'v44', {
         currentStep: 'dynamic-inputs',
         radioButtonSelections: radiosToProgress(toSaveRadios),
-        dynamicInputs: inputs,
+        dynamicInputs: inputsToSave,
         customerDetails,
         completedSteps: {
           'template-selection': true,
@@ -823,8 +778,9 @@ export default function V44CalculatorInputsScreen() {
       });
 
       setHasRestoredProgress(true);
-      setSavedInputs({ ...inputs });
+      setSavedInputs({ ...inputsToSave });
       setSavedRadios({ ...toSaveRadios });
+      setInputs(inputsToSave);
 
       navigation.navigate('SolarArraysInputs', {
         opportunityId,

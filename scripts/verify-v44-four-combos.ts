@@ -87,7 +87,7 @@ const CASES: Array<{
       new_peak_rate: '27.73',
       new_offpeak_rate: '7.00',
       new_offpeak_hours: '7',
-      new_standing_charge: '47.5',
+      new_standing_charge: '44',
     },
   },
   {
@@ -111,7 +111,7 @@ const CASES: Array<{
       new_peak_rate: '36.26',
       new_offpeak_rate: '7.00',
       new_offpeak_hours: '7',
-      new_standing_charge: '47.5',
+      new_standing_charge: '44',
     },
   },
 ];

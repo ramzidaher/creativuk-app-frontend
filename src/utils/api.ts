@@ -1632,7 +1632,7 @@ export const presentationApi = {
 
   async getHometreeQuoteData(
     opportunityId: string,
-    calculatorType?: 'flux' | 'off-peak' | 'epvs',
+    calculatorType?: 'flux' | 'off-peak' | 'epvs' | 'v44',
     fileName?: string,
   ): Promise<ApiResponse<any>> {
     try {

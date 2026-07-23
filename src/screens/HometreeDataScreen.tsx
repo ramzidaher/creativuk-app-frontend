@@ -244,7 +244,9 @@ export default function HometreeDataScreen() {
         setError(null);
         const response = await presentationApi.getHometreeQuoteData(
           opportunityId,
-          sheet.calculatorType === 'epvs' ? 'flux' : sheet.calculatorType,
+          sheet.calculatorType === 'epvs'
+            ? 'flux'
+            : (sheet.calculatorType as 'flux' | 'off-peak' | 'v44' | undefined),
           sheet.fileName,
         );
         if (response.success && response.data) {
@@ -301,6 +303,10 @@ export default function HometreeDataScreen() {
           );
           if (v44Sheet) {
             setSelectedSheet(v44Sheet as SheetInfo);
+            if (!sheetsLoadedRef.current) {
+              sheetsLoadedRef.current = true;
+              await loadHometreeData(v44Sheet as SheetInfo);
+            }
           }
         }
       } else {
