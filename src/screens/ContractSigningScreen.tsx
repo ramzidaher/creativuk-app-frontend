@@ -52,7 +52,7 @@ export default function ContractSigningScreen() {
   const [loadingContracts, setLoadingContracts] = useState(false);
   
   // Calculator type selection state
-  const [selectedCalculatorType, setSelectedCalculatorType] = useState<'flux' | 'off-peak' | null>(null);
+  const [selectedCalculatorType, setSelectedCalculatorType] = useState<'flux' | 'off-peak' | 'v44' | null>(null);
   const [calculatorOffPeakEnabled, setCalculatorOffPeakEnabled] = useState(true);
   const [calculatorFluxEnabled, setCalculatorFluxEnabled] = useState(true);
   const [calculatorSettingsLoaded, setCalculatorSettingsLoaded] = useState(false);
@@ -652,6 +652,8 @@ export default function ContractSigningScreen() {
       // Find the calculator step to determine type (now step 3)
       const calculatorStep = progressResult?.steps?.find((s: any) => s.stepNumber === 3);
       const calculatorType = calculatorStep?.data?.calculatorType || 'off-peak';
+      const isV44 = calculatorType === 'v44';
+      const isFluxFamily = calculatorType === 'flux' || calculatorType === 'epvs' || isV44;
       
       // Find the contract generation step (step 8) to get PDF path
       const contractStep = progressResult?.steps?.find((s: any) => s.stepNumber === 8);
@@ -661,22 +663,26 @@ export default function ContractSigningScreen() {
       // Create a default contract object
       const defaultContract = {
         id: 'default-contract',
-        name: calculatorType === 'flux' || calculatorType === 'epvs' ? 'Flux Contract' : 'Off Peak Contract',
-        type: calculatorType === 'flux' || calculatorType === 'epvs' ? 'Flux Calculator' : 'Off Peak Calculator',
-        description: `Contract generated from ${calculatorType === 'flux' || calculatorType === 'epvs' ? 'Flux' : 'Off Peak'} calculator data`,
-        filePath: pdfPath || (calculatorType === 'flux' || calculatorType === 'epvs' 
+        name: isV44 ? 'EPVS v4.4 Contract' : isFluxFamily ? 'Flux Contract' : 'Off Peak Contract',
+        type: isV44 ? 'EPVS v4.4 Calculator' : isFluxFamily ? 'Flux Calculator' : 'Off Peak Calculator',
+        description: `Contract generated from ${isV44 ? 'EPVS v4.4' : isFluxFamily ? 'Flux' : 'Off Peak'} calculator data`,
+        filePath: pdfPath || (isFluxFamily
           ? `src/excel-file-calculator/epvs-opportunities/pdfs/EPVS Calculator - ${opportunityId}.pdf`
           : `src/excel-file-calculator/opportunities/pdfs/Off Peak Calculator - ${opportunityId}.pdf`),
-        pdfUrl: pdfUrl || (calculatorType === 'flux' || calculatorType === 'epvs'
+        pdfUrl: pdfUrl || (isFluxFamily
           ? `/api/epvs-automation/pdf/${opportunityId}`
           : `/api/excel-automation/pdf/${opportunityId}`),
         calculatorType: calculatorType,
-        isEPVS: calculatorType === 'flux' || calculatorType === 'epvs',
+        isEPVS: isFluxFamily,
       };
       
       setSelectedContract(defaultContract);
       setSelectedPdfPath(defaultContract.filePath);
       setPdfUrl(defaultContract.pdfUrl);
+
+      if (isV44) {
+        setSelectedCalculatorType('v44');
+      }
       
       // Go directly to signing step
       setStep('signing');
@@ -694,7 +700,7 @@ export default function ContractSigningScreen() {
 
 
   // DocuSeal workflow handler - Step 1: Create template for verification
-  const handleCreateDocuSealWorkflow = async (calculatorType: 'flux' | 'off-peak') => {
+  const handleCreateDocuSealWorkflow = async (calculatorType: 'flux' | 'off-peak' | 'v44') => {
     // Prevent multiple clicks - disable immediately
     if (isCreatingWorkflow) {
       return;
@@ -715,13 +721,14 @@ export default function ContractSigningScreen() {
       const date = new Date().toISOString().split('T')[0];
       
       // Determine the route based on calculator type - use /template endpoint
-      const route = calculatorType === 'flux' 
-        ? '/docuseal/contract/flux/template'
-        : '/docuseal/contract/off-peak/template';
+      const route = calculatorType === 'off-peak'
+        ? '/docuseal/contract/off-peak/template'
+        : '/docuseal/contract/flux/template';
       
       // Prepare request body - only opportunityId and contractData for template creation
       const requestBody: any = {
         opportunityId,
+        calculatorType,
         contractData: {
           customerName: customerName,
           date,
@@ -1986,7 +1993,7 @@ export default function ContractSigningScreen() {
           </Text>
           <Text style={[styles.contractSubtitle, { color: theme.secondaryText }]}>
             {selectedCalculatorType 
-              ? `Sign your ${selectedCalculatorType === 'flux' ? 'Flux' : 'Off Peak'} contract digitally`
+              ? `Sign your ${selectedCalculatorType === 'v44' ? 'EPVS v4.4' : selectedCalculatorType === 'flux' ? 'Flux' : 'Off Peak'} contract digitally`
               : 'Select calculator type to begin'
             }
           </Text>
