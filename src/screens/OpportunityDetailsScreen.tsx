@@ -393,21 +393,6 @@ export default function OpportunityDetailsScreen() {
         ]}
       >
         <View style={styles.content}>
-          {/* Hero Section */}
-          <View style={styles.heroSection}>
-            <View style={[styles.heroIconContainer, { backgroundColor: theme.primaryButton + '15' }]}>
-              <View style={[styles.heroIcon, { backgroundColor: theme.primaryButton }]}>
-                <Feather name="briefcase" size={32} color="#ffffff" />
-              </View>
-            </View>
-            <Text style={[styles.heroTitle, { color: theme.primaryText }]}>
-              {opportunity.name || 'Opportunity Details'}
-            </Text>
-            <Text style={[styles.heroDescription, { color: theme.secondaryText }]}>
-              {opportunity.type === 'ai' ? 'AI Generated Opportunity' : 'Manual Entry Opportunity'}
-            </Text>
-          </View>
-
           {/* Opportunity Details Section */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -908,51 +893,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 24,
     maxWidth: 480,
-  },
-  heroSection: {
-    alignItems: 'center',
-    marginBottom: 48,
-    paddingTop: 32,
-  },
-  heroIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 32,
-    shadowColor: 'rgba(0, 0, 0, 0.1)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  heroIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: 'rgba(0, 0, 0, 0.2)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  heroTitle: {
-    fontSize: 32,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 40,
-    letterSpacing: -0.5,
-  },
-  heroDescription: {
-    fontSize: 18,
-    textAlign: 'center',
-    lineHeight: 26,
-    maxWidth: width * 0.85,
-    opacity: 0.9,
   },
   section: {
     marginBottom: 32,

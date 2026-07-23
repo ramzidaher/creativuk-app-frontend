@@ -46,6 +46,7 @@ export interface CalculatorProgressData {
     paymentMethod: 'Cash' | 'Hometree' | 'New Finance' | 'Finance' | 'Interest Free Loan' | null;
     totalSystemCost?: string; // Total system cost (total_system_cost)
     deposit: string;
+    depositEnabled?: boolean;
     interestRate: string;
     interestRateType: string;
     paymentTerm: string;

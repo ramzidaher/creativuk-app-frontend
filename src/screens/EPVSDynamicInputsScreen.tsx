@@ -22,6 +22,12 @@ import { PANEL_MANUFACTURERS, getPanelModels } from '../config/panelOptions';
 import { SOLAR_INVERTER_MANUFACTURERS, getSolarInverterModels } from '../config/solarInverterOptions';
 import { useTheme } from '../context/ThemeContext';
 import CalculatorProgressService from '../services/CalculatorProgressService';
+import {
+  getCustomerDetailsFromRouteParams,
+  normalizeRouteParams,
+  parseRadioButtonSelections,
+  parseSelectedOptions,
+} from '../utils/deepLinkParams';
 // DateTimePicker is not available on web, so we'll conditionally import it
 let DateTimePicker: any = null;
 if (Platform.OS !== 'web') {
@@ -70,14 +76,13 @@ export default function EPVSDynamicInputsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { theme, isDark } = useTheme();
-  const { 
-    opportunityId, 
-    customerDetails, 
-    selectedOptions = {}, 
-    templateFileName,
-    selectedTemplateOptions,
-    calculatorType = 'flux'
-  } = route.params as RouteParams;
+  const params = normalizeRouteParams(route.params as Record<string, unknown>);
+  const opportunityId = params.opportunityId as string;
+  const customerDetails = getCustomerDetailsFromRouteParams(params);
+  const selectedOptions = parseRadioButtonSelections(params.selectedOptions) ?? {};
+  const templateFileName = typeof params.templateFileName === 'string' ? params.templateFileName : undefined;
+  const selectedTemplateOptions = parseSelectedOptions(params.selectedTemplateOptions);
+  const calculatorType = (params.calculatorType as RouteParams['calculatorType']) || 'flux';
   
   const [inputFields, setInputFields] = useState<InputField[]>([]);
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
@@ -133,47 +138,8 @@ export default function EPVSDynamicInputsScreen() {
     return false;
   };
 
-  // Helper function to validate and fix template options (shared between init and fetchDynamicInputs)
-  const validateTemplateOptions = (options: any): RouteParams['selectedTemplateOptions'] | undefined => {
-    if (!options) return undefined;
-    
-    // If it's a string (could be stringified [object Object])
-    if (typeof options === 'string') {
-      if (options === '[object Object]' || options === 'object Object') {
-        console.warn('⚠️ Template options is stringified [object Object], cannot parse');
-        return undefined;
-      }
-      try {
-        const parsed = JSON.parse(options);
-        if (parsed && typeof parsed === 'object') {
-          return parsed as RouteParams['selectedTemplateOptions'];
-        }
-      } catch (e) {
-        console.warn('⚠️ Could not parse template options from string:', e);
-        return undefined;
-      }
-    }
-    
-    // If it's an object but has numeric keys (stringified [object Object] parsed as object)
-    if (options && typeof options === 'object' && !Array.isArray(options)) {
-      const keys = Object.keys(options);
-      // Check if it's the stringified [object Object] pattern
-      if (keys.length > 0 && keys[0] === '0' && keys.some(k => /^\d+$/.test(k))) {
-        const values = keys.map(k => options[k]).join('');
-        if (values === '[object Object]') {
-          console.warn('⚠️ Template options is stringified [object Object] parsed as object, skipping');
-          return undefined;
-        }
-      }
-      
-      // Check if it has the expected properties
-      if ('solar' in options || 'battery' in options || 'solarHybrid' in options || 'batteryInverter' in options) {
-        return options as RouteParams['selectedTemplateOptions'];
-      }
-    }
-    
-    return undefined;
-  };
+  const validateTemplateOptions = (options: unknown): RouteParams['selectedTemplateOptions'] | undefined =>
+    parseSelectedOptions(options);
 
   // Restore customer details immediately on mount (separate from init to show in UI quickly)
   useEffect(() => {
@@ -305,24 +271,11 @@ export default function EPVSDynamicInputsScreen() {
           // Off-Peak uses CalculatorProgressService which stores as 'radioButtonSelections'
           // Check both fields to support both calculators
           const rawRadioSelections = progress.radioButtonSelections || (progress as any).selectedOptions;
-          
-          // Ensure radioButtonSelections is a valid object, not a string
-          let validRadioSelections: Record<string, string> | undefined;
-          if (rawRadioSelections) {
-            if (typeof rawRadioSelections === 'object' && rawRadioSelections !== null && !Array.isArray(rawRadioSelections)) {
-              validRadioSelections = rawRadioSelections;
-              console.log('✅ Found valid radio selections in progress:', validRadioSelections);
-            } else if (typeof rawRadioSelections === 'string' && rawRadioSelections !== '[object Object]') {
-              try {
-                validRadioSelections = JSON.parse(rawRadioSelections);
-                console.log('✅ Parsed radio selections from string:', validRadioSelections);
-              } catch (e) {
-                console.warn('⚠️ Could not parse radio selections from progress:', e);
-                validRadioSelections = undefined;
-              }
-            } else {
-              console.warn('⚠️ Radio selections is invalid type or format:', typeof rawRadioSelections, rawRadioSelections);
-            }
+          const validRadioSelections = parseRadioButtonSelections(rawRadioSelections);
+          if (validRadioSelections) {
+            console.log('✅ Found valid radio selections in progress:', validRadioSelections);
+          } else if (rawRadioSelections) {
+            console.warn('⚠️ Radio selections is invalid type or format:', typeof rawRadioSelections, rawRadioSelections);
           } else {
             console.warn('⚠️ No radio selections found in progress object (checked both radioButtonSelections and selectedOptions)');
           }
@@ -479,29 +432,9 @@ export default function EPVSDynamicInputsScreen() {
             // Off-Peak uses CalculatorProgressService which stores as 'radioButtonSelections'
             // Check both fields to support both calculators
             const rawRadioSelections = progress.radioButtonSelections || (progress as any).selectedOptions;
-            
-            // Ensure radioButtonSelections is a valid object, not a string
-            let validRadioSelections: Record<string, string> | undefined;
-            if (rawRadioSelections) {
-              if (typeof rawRadioSelections === 'object' && rawRadioSelections !== null && !Array.isArray(rawRadioSelections)) {
-                validRadioSelections = rawRadioSelections;
-                console.log('✅ Second attempt: Found valid radio selections:', validRadioSelections);
-              } else if (typeof rawRadioSelections === 'string' && rawRadioSelections !== '[object Object]') {
-                try {
-                  validRadioSelections = JSON.parse(rawRadioSelections);
-                  console.log('✅ Second attempt: Parsed radio selections from string:', validRadioSelections);
-                } catch (e) {
-                  console.warn('⚠️ Second attempt: Could not parse radio selections from progress:', e);
-                  validRadioSelections = undefined;
-                }
-              } else {
-                console.warn('⚠️ Second attempt: Radio selections is invalid type:', typeof rawRadioSelections);
-              }
-            } else {
-              console.warn('⚠️ Second attempt: No radio selections found in progress object (checked both radioButtonSelections and selectedOptions)');
-            }
-            
+            const validRadioSelections = parseRadioButtonSelections(rawRadioSelections);
             if (validRadioSelections && Object.keys(validRadioSelections).length > 0) {
+              console.log('✅ Second attempt: Found valid radio selections:', validRadioSelections);
               // Also check for template options in second attempt
               const secondAttemptTemplateOptions = progress.templateSelection?.selectedOptions || selectedTemplateOptions;
               restoredProgressData = {
@@ -752,13 +685,7 @@ export default function EPVSDynamicInputsScreen() {
       
       // Always prefer restored progress over route params
       // Use override first (from direct call in init), then state, then route params
-      // Handle case where selectedOptions might be stringified '[object Object]' from route params
-      let routeSelectedOptions = selectedOptions;
-      if (typeof selectedOptions === 'string' && selectedOptions === '[object Object]') {
-        routeSelectedOptions = {};
-        console.warn('⚠️ selectedOptions from route params is stringified, using empty object');
-      }
-      
+      const routeSelectedOptions = selectedOptions;
       // Determine effective radio button selections
       // Priority: restoredDataOverride > restoredRadioSelections state > route params
       let effectiveSelectedOptions: Record<string, string> = {};
@@ -1999,17 +1926,6 @@ export default function EPVSDynamicInputsScreen() {
         ]}
       >
         <View style={styles.content}>
-          {/* Hero Section */}
-          <View style={styles.heroSection}>
-            <View style={[styles.heroIcon, { backgroundColor: theme.primaryButton + '20' }]}>
-              <Feather name="edit-3" size={32} color={theme.primaryButton} />
-            </View>
-            <Text style={[styles.heroTitle, { color: theme.primaryText }]}>Input Fields</Text>
-            <Text style={[styles.heroSubtitle, { color: theme.secondaryText }]}>
-              Complete the required fields to generate your calculation
-            </Text>
-          </View>
-
           {/* Progress automatically restored on load - no manual restore button needed */}
 
           {/* Customer Summary Card */}
@@ -2774,40 +2690,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     paddingHorizontal: 32,
-  },
-  
-  // Hero Section
-  heroSection: {
-    alignItems: 'center',
-    marginBottom: 32,
-    paddingHorizontal: 4,
-  },
-  heroIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    shadowColor: 'rgba(0, 0, 0, 0.06)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  heroTitle: {
-    fontSize: width < 768 ? 24 : 28,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 8,
-    letterSpacing: -0.4,
-  },
-  heroSubtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 22,
-    fontWeight: '500',
-    paddingHorizontal: 20,
   },
   
   // Summary Card

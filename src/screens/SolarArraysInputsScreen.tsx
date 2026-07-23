@@ -5,6 +5,10 @@ import { ActivityIndicator, Alert, Animated, Modal, Platform, ScrollView, StyleS
 import BottomNavigation from '../components/BottomNavigation';
 import { useTheme } from '../context/ThemeContext';
 import CalculatorProgressService from '../services/CalculatorProgressService';
+import {
+  getCustomerDetailsFromRouteParams,
+  normalizeRouteParams,
+} from '../utils/deepLinkParams';
 
 type ArrayRow = {
   id: number;
@@ -30,13 +34,13 @@ export default function SolarArraysInputsScreen() {
   const { theme, isDark } = useTheme();
   const { width } = useWindowDimensions();
   const isNarrow = width < 768;
-  const routeParams = route.params as RouteParams;
-  const opportunityId = routeParams.opportunityId;
+  const params = normalizeRouteParams(route.params as Record<string, unknown>);
+  const opportunityId = params.opportunityId as string | undefined;
+  const initialCalculatorType = (params.calculatorType as RouteParams['calculatorType']) || 'off-peak';
+  const initialCustomerDetails = getCustomerDetailsFromRouteParams(params);
 
-  const [calculatorType, setCalculatorType] = useState<'flux' | 'off-peak' | 'v44'>(
-    routeParams.calculatorType || 'off-peak',
-  );
-  const [customerDetails, setCustomerDetails] = useState(routeParams.customerDetails);
+  const [calculatorType, setCalculatorType] = useState<'flux' | 'off-peak' | 'v44'>(initialCalculatorType);
+  const [customerDetails, setCustomerDetails] = useState(initialCustomerDetails);
 
   const maxArrays = calculatorType === 'v44' ? 6 : 8;
 
@@ -1131,23 +1135,6 @@ export default function SolarArraysInputsScreen() {
 
           <View
             style={[
-              styles.noteBox,
-              {
-                marginTop: 12,
-                marginBottom: 0,
-                backgroundColor: isDark ? '#1e3a5f' : '#eff6ff',
-                borderColor: isDark ? '#3b82f6' : '#93c5fd',
-              },
-            ]}
-          >
-            <Feather name="info" size={16} color={isDark ? '#93c5fd' : '#1d4ed8'} />
-            <Text style={[styles.noteText, { color: isDark ? '#bfdbfe' : '#1e40af', flex: 1 }]}>
-              On save, orientation rounds to the nearest 5° and pitch to the nearest whole degree (matches Excel).
-            </Text>
-          </View>
-
-          <View
-            style={[
               styles.sapTable,
               { borderColor: theme.cardBorder, marginTop: 16, width: '100%' as any },
             ]}
@@ -1162,7 +1149,7 @@ export default function SolarArraysInputsScreen() {
               <View
                 style={
                   isNarrow
-                    ? { minWidth: 720 }
+                    ? { minWidth: linkedOpenSolar ? 800 : 720 }
                     : { width: '100%' as any, flex: 1 }
                 }
               >
@@ -1177,6 +1164,9 @@ export default function SolarArraysInputsScreen() {
               <Text style={[styles.sapHeaderCell, isNarrow ? styles.sapColFieldFixed : styles.sapColFieldFlex]}>Orientation (° from south)</Text>
               <Text style={[styles.sapHeaderCell, isNarrow ? styles.sapColFieldFixed : styles.sapColFieldFlex]}>Pitch (° from flat)</Text>
               <Text style={[styles.sapHeaderCell, isNarrow ? styles.sapColFieldFixed : styles.sapColFieldFlex]}>Shading (e.g. 0.96)</Text>
+              {linkedOpenSolar ? (
+                <Text style={[styles.sapHeaderCell, styles.sapColOverride]}>Override</Text>
+              ) : null}
             </View>
 
             {rows
@@ -1300,34 +1290,28 @@ export default function SolarArraysInputsScreen() {
                         placeholder="—"
                         placeholderTextColor={theme.secondaryText}
                       />
+                      {linkedOpenSolar ? (
+                        <View style={[styles.sapOverrideCell, styles.sapColOverride]}>
+                          {r.source === 'opensolar' ? (
+                            <Switch
+                              value={r.overrideOpenSolar || false}
+                              onValueChange={(value) => {
+                                setRows((prev) =>
+                                  prev.map((row) =>
+                                    row.id === r.id
+                                      ? { ...row, overrideOpenSolar: value }
+                                      : row,
+                                  ),
+                                );
+                                setHasUnsavedChanges(true);
+                              }}
+                              trackColor={{ false: '#e2e8f0', true: '#B4F35B' }}
+                              thumbColor={r.overrideOpenSolar ? '#1e293b' : '#64748b'}
+                            />
+                          ) : null}
+                        </View>
+                      ) : null}
                     </View>
-                    {r.source === 'opensolar' && r.enabled ? (
-                      <View
-                        style={[
-                          styles.sapOverrideRow,
-                          { borderTopColor: theme.cardBorder },
-                        ]}
-                      >
-                        <Text style={[styles.overrideLabel, { color: theme.primaryText }]}>
-                          Override OpenSolar (Array {r.id})
-                        </Text>
-                        <Switch
-                          value={r.overrideOpenSolar || false}
-                          onValueChange={(value) => {
-                            setRows((prev) =>
-                              prev.map((row) =>
-                                row.id === r.id
-                                  ? { ...row, overrideOpenSolar: value }
-                                  : row,
-                              ),
-                            );
-                            setHasUnsavedChanges(true);
-                          }}
-                          trackColor={{ false: '#e2e8f0', true: '#B4F35B' }}
-                          thumbColor={r.overrideOpenSolar ? '#1e293b' : '#64748b'}
-                        />
-                      </View>
-                    ) : null}
                   </View>
                 );
               })}
@@ -1755,6 +1739,7 @@ const styles = StyleSheet.create({
   sapColField: { width: 140, flexGrow: 1 },
   sapColFieldFixed: { width: 140, flexShrink: 0 },
   sapColFieldFlex: { flex: 1, minWidth: 120 },
+  sapColOverride: { width: 88, flexShrink: 0 },
   sapArrayCell: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1770,13 +1755,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
-  sapOverrideRow: {
-    flexDirection: 'row',
+  sapOverrideCell: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    justifyContent: 'center',
+    paddingVertical: 4,
   },
   sourceBadgeCompact: {
     backgroundColor: '#dcfce7',

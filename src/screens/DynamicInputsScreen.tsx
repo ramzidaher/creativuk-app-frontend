@@ -26,6 +26,12 @@ import { PANEL_MANUFACTURERS, getPanelModels } from '../config/panelOptions';
 import { SOLAR_INVERTER_MANUFACTURERS, getSolarInverterModels } from '../config/solarInverterOptions';
 import { useTheme } from '../context/ThemeContext';
 import CalculatorProgressService from '../services/CalculatorProgressService';
+import {
+  getCustomerDetailsFromRouteParams,
+  normalizeRouteParams,
+  parseJsonParam,
+  parseSelectedOptions,
+} from '../utils/deepLinkParams';
 // DateTimePicker is not available on web, so we'll conditionally import it
 let DateTimePicker: any = null;
 if (Platform.OS !== 'web') {
@@ -79,9 +85,10 @@ export default function DynamicInputsScreen() {
   
   // Get params from route, handling both navigation params and URL params
   const rawParams = route.params as RouteParams;
+  const params = normalizeRouteParams(rawParams as Record<string, unknown>);
   
   // Get opportunityId from route params or URL
-  const opportunityIdFromParams = rawParams?.opportunityId;
+  const opportunityIdFromParams = rawParams?.opportunityId ?? (params.opportunityId as string | undefined);
   const opportunityIdFromUrl = (route.params as any)?.opportunityId || 
     (Platform.OS === 'web' && typeof window !== 'undefined' 
       ? window.location.pathname.split('/dynamic-inputs/')[1]?.split('?')[0] 
@@ -89,31 +96,28 @@ export default function DynamicInputsScreen() {
   
   const opportunityId = opportunityIdFromParams || opportunityIdFromUrl;
   
-  // Check if params are valid (not [object Object])
-  const isValidObject = (obj: any): boolean => {
-    if (!obj || typeof obj !== 'object') return false;
-    const str = String(obj);
-    return str !== '[object Object]' && str !== 'object Object';
+  const customerDetails = getCustomerDetailsFromRouteParams(params) ?? {
+    customerName: '',
+    address: '',
+    postcode: '',
   };
   
-  // Get params, falling back to empty objects if invalid
-  const customerDetails = isValidObject(rawParams?.customerDetails) 
-    ? rawParams.customerDetails 
-    : (rawParams?.customerDetails || { customerName: '', address: '', postcode: '' });
+  const selectedOptions =
+    parseJsonParam<Record<string, string>>(params.selectedOptions) ?? {};
   
-  const selectedOptions = isValidObject(rawParams?.selectedOptions) 
-    ? rawParams.selectedOptions || {} 
-    : {};
-  
-  const templateFileName = typeof rawParams?.templateFileName === 'string' 
-    ? rawParams.templateFileName 
+  const templateFileName = typeof params.templateFileName === 'string' 
+    ? params.templateFileName 
     : undefined;
   
-  const selectedTemplateOptions = isValidObject(rawParams?.selectedTemplateOptions)
-    ? rawParams.selectedTemplateOptions
-    : undefined;
+  const selectedTemplateOptions = parseSelectedOptions(params.selectedTemplateOptions);
   
-  const calculatorType = rawParams?.calculatorType || 'off-peak';
+  const calculatorType = (params.calculatorType as RouteParams['calculatorType']) || 'off-peak';
+  
+  const hasRouteCustomerDetails = !!(
+    customerDetails.customerName ||
+    customerDetails.address ||
+    customerDetails.postcode
+  );
   
   // State for restored params from progress
   const [restoredParams, setRestoredParams] = useState<{
@@ -200,7 +204,7 @@ export default function DynamicInputsScreen() {
             customerDetails: progress.customerDetails
           }));
           console.log('✅ Customer details restored from JSON immediately in DynamicInputsScreen:', progress.customerDetails);
-        } else if (customerDetails && isValidObject(customerDetails)) {
+        } else if (hasRouteCustomerDetails) {
           // Fallback to route params if JSON doesn't have it
           setRestoredParams(prev => ({
             ...prev,
@@ -211,7 +215,7 @@ export default function DynamicInputsScreen() {
       } catch (error) {
         console.warn('⚠️ Could not restore customer details immediately:', error);
         // Still try route params as fallback
-        if (customerDetails && isValidObject(customerDetails)) {
+        if (hasRouteCustomerDetails) {
           setRestoredParams(prev => ({
             ...prev,
             customerDetails: customerDetails
@@ -233,9 +237,9 @@ export default function DynamicInputsScreen() {
       
       // If params are missing or invalid, try to restore from saved progress
       const needsRestore = !customerDetails?.customerName || 
-                          !isValidObject(customerDetails) ||
+                          !hasRouteCustomerDetails ||
                           !templateFileName ||
-                          !isValidObject(selectedTemplateOptions);
+                          !selectedTemplateOptions;
       
       let restoredParamsLocal: {
         customerDetails?: RouteParams['customerDetails'];
@@ -270,7 +274,7 @@ export default function DynamicInputsScreen() {
           } else {
             console.warn('⚠️ No saved progress found for opportunity:', opportunityId);
             // Set error if we can't proceed without required data
-            if (!customerDetails?.customerName && !isValidObject(customerDetails)) {
+            if (!customerDetails?.customerName && !hasRouteCustomerDetails) {
               setError('Missing customer details. Please navigate from the previous screen or ensure progress is saved.');
             }
           }
@@ -1639,17 +1643,6 @@ export default function DynamicInputsScreen() {
         ]}
       >
         <View style={styles.content}>
-          {/* Hero Section */}
-          <View style={styles.heroSection}>
-            <View style={[styles.heroIcon, { backgroundColor: theme.primaryButton + '20' }]}>
-              <Feather name="edit-3" size={32} color={theme.primaryButton} />
-            </View>
-            <Text style={[styles.heroTitle, { color: theme.primaryText }]}>Input Fields</Text>
-            <Text style={[styles.heroSubtitle, { color: theme.secondaryText }]}>
-              Complete the required fields to generate your calculation
-            </Text>
-          </View>
-
           {/* Progress automatically restored on load - no manual restore button needed */}
 
           {/* Customer Summary Card */}
@@ -2545,40 +2538,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#475569',
     marginBottom: 8,
-  },
-  
-  // Hero Section
-  heroSection: {
-    alignItems: 'center',
-    marginBottom: 32,
-    paddingHorizontal: 4,
-  },
-  heroIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    shadowColor: 'rgba(0, 0, 0, 0.06)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  heroTitle: {
-    fontSize: width < 768 ? 24 : 28,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 8,
-    letterSpacing: -0.4,
-  },
-  heroSubtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 22,
-    fontWeight: '500',
-    paddingHorizontal: 20,
   },
   
   // Summary Card

@@ -525,15 +525,6 @@ export default function PresentationScreen() {
         {/* Step 1: File Selection */}
         {step === 'sheets' && (
           <>
-            <View style={styles.heroSection}>
-              <View style={[styles.heroIcon, { backgroundColor: theme.primaryButton + '20' }]}>
-                <Feather name="file-text" size={32} color={theme.primaryButton} />
-              </View>
-              <Text style={[styles.heroTitle, { color: theme.primaryText }]}>
-                Select the calculator for the proposal
-              </Text>
-            </View>
-
             <View style={[styles.formCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <ExcelSheetPicker
                 sheets={availableSheets}
@@ -713,42 +704,6 @@ const styles = StyleSheet.create({
     marginTop: -20,
     paddingHorizontal: width < 768 ? 16 : 24,
     paddingTop: 20,
-  },
-  
-  // Hero Section
-  heroSection: {
-    alignItems: 'center',
-    marginBottom: 32,
-    paddingHorizontal: 4,
-  },
-  heroIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    shadowColor: 'rgba(0, 0, 0, 0.06)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  heroTitle: {
-    fontSize: width < 768 ? 24 : 28,
-    fontWeight: '700',
-    color: '#1e293b',
-    textAlign: 'center',
-    marginBottom: 8,
-    letterSpacing: -0.4,
-  },
-  heroSubtitle: {
-    fontSize: 16,
-    color: '#64748b',
-    textAlign: 'center',
-    lineHeight: 22,
-    fontWeight: '500',
-    paddingHorizontal: 20,
   },
   
   // Form Cards

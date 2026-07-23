@@ -16,6 +16,11 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import BottomNavigation from '../components/BottomNavigation';
 import { useTheme } from '../context/ThemeContext';
 import { systemSettingsApi } from '../utils/api';
+import {
+  getCustomerDetailsFromRouteParams,
+  normalizeRouteParams,
+  parseSelectedOptions,
+} from '../utils/deepLinkParams';
 
 const { width, height } = Dimensions.get('window');
 
@@ -28,11 +33,11 @@ export default function CalculatorTypeSelectionScreen() {
   const [fluxEnabled, setFluxEnabled] = useState(true);
   const [loadingSettings, setLoadingSettings] = useState(true);
 
-  // Get parameters from the previous screen
-  const opportunityId = route.params?.opportunityId;
-  const templateFileName = route.params?.templateFileName;
-  const selectedOptions = route.params?.selectedOptions;
-  const customerDetails = route.params?.customerDetails;
+  const params = normalizeRouteParams(route.params as Record<string, unknown>);
+  const opportunityId = params.opportunityId as string | undefined;
+  const templateFileName = typeof params.templateFileName === 'string' ? params.templateFileName : undefined;
+  const selectedOptions = parseSelectedOptions(params.selectedOptions);
+  const customerDetails = getCustomerDetailsFromRouteParams(params);
 
   useEffect(() => {
     const loadCalculatorSettings = async () => {

@@ -649,18 +649,6 @@ export default function EmailConfirmationSigningScreen() {
 
       {/* Streamlined Booking Confirmation Signing Interface */}
       <View style={styles.signingContainer}>
-        <View style={styles.contractHeader}>
-          <View style={[styles.contractIcon, { backgroundColor: theme.primaryButton + '20' }]}>
-            <Ionicons name="mail-outline" size={32} color={theme.primaryButton} />
-          </View>
-          <Text style={[styles.contractTitle, { color: theme.primaryText }]}>
-            Booking Confirmation Signing
-          </Text>
-          <Text style={[styles.contractSubtitle, { color: theme.secondaryText }]}>
-            Send your booking confirmation for digital signing
-          </Text>
-        </View>
-
         <View style={[styles.contractInfo, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
           {/* Read-only Customer Name */}
           <View style={styles.contractDetailRow}>
@@ -857,29 +845,6 @@ const styles = StyleSheet.create({
       alignSelf: 'center',
       width: '100%',
     } as any),
-  },
-  contractHeader: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  contractIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  contractTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  contractSubtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 24,
   },
   contractInfo: {
     borderRadius: 16,

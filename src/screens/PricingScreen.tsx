@@ -8,6 +8,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -74,7 +75,8 @@ export default function PricingScreen() {
   const [paymentMethod, setPaymentMethod] = useState<
     'Cash' | 'Hometree' | 'New Finance' | 'Finance' | null
   >(null);
-  const [deposit, setDeposit] = useState<string>('');
+  const [deposit, setDeposit] = useState<string>('0');
+  const [depositEnabled, setDepositEnabled] = useState(false);
   const [interestRate, setInterestRate] = useState<string>('');
   const [interestRateType, setInterestRateType] = useState<string>('');
   const [paymentTerm, setPaymentTerm] = useState<string>('');
@@ -160,7 +162,9 @@ export default function PricingScreen() {
     
     // Only compare payment method specific fields if they are enabled for the current payment method
     const paymentMethodChanges = (
-      (enabledFields.deposit && deposit !== savedPricingData.deposit) ||
+      (enabledFields.deposit &&
+        (depositEnabled !== !!savedPricingData.depositEnabled ||
+          getEffectiveDeposit() !== (savedPricingData.depositEnabled ? savedPricingData.deposit || '0' : '0'))) ||
       (enabledFields.interestRate && interestRate !== savedPricingData.interestRate) ||
       (enabledFields.interestRateType && interestRateType !== savedPricingData.interestRateType) ||
       (enabledFields.paymentTerm && paymentTerm !== savedPricingData.paymentTerm) ||
@@ -183,7 +187,7 @@ export default function PricingScreen() {
     }
     
     return hasChangesResult;
-  }, [selectedBatteryType, selectedNumberOfPanels, additionalItemQuantities, paymentMethod, deposit, interestRate, interestRateType, paymentTerm, leaseMonthlyPayment, savedPricingData]);
+  }, [selectedBatteryType, selectedNumberOfPanels, additionalItemQuantities, paymentMethod, deposit, depositEnabled, interestRate, interestRateType, paymentTerm, leaseMonthlyPayment, savedPricingData]);
 
   // Pricing structure based on the image
   const pricingOptions: PricingOption[] = [
@@ -322,6 +326,14 @@ export default function PricingScreen() {
     }
   };
 
+  const getEffectiveDeposit = () => {
+    if (!getEnabledFields().deposit || !depositEnabled) {
+      return '0';
+    }
+    const trimmed = deposit.trim();
+    return trimmed || '0';
+  };
+
   const paymentMethodOptions: Array<{
     value: 'Cash' | 'Hometree' | 'New Finance' | 'Finance';
     label: string;
@@ -415,8 +427,18 @@ export default function PricingScreen() {
           // if (progress.pricingData.paymentMethod) {
           //   setPaymentMethod(progress.pricingData.paymentMethod);
           // }
+          if (progress.pricingData.depositEnabled != null) {
+            setDepositEnabled(progress.pricingData.depositEnabled);
+          } else if (progress.pricingData.deposit) {
+            const savedDeposit = String(progress.pricingData.deposit).trim();
+            setDepositEnabled(
+              savedDeposit !== '' && savedDeposit !== '0' && savedDeposit !== '0.00',
+            );
+          }
           if (progress.pricingData.deposit) {
             setDeposit(progress.pricingData.deposit);
+          } else {
+            setDeposit('0');
           }
           if (progress.pricingData.interestRate) {
             setInterestRate(progress.pricingData.interestRate);
@@ -538,7 +560,8 @@ export default function PricingScreen() {
         additionalItemQuantities,
         paymentMethod,
         totalSystemCost: totalCost.toString(),
-        deposit,
+        deposit: getEffectiveDeposit(),
+        depositEnabled,
         interestRate,
         interestRateType,
         paymentTerm,
@@ -578,7 +601,7 @@ export default function PricingScreen() {
     } catch (error) {
       console.error('❌ Error saving progress:', error);
     }
-  }, [opportunityId, calculatorType, selectedBatteryType, selectedNumberOfPanels, additionalItemQuantities, paymentMethod, deposit, interestRate, interestRateType, paymentTerm, leaseMonthlyPayment, totalCost, templateFileName, isRestoring]);
+  }, [opportunityId, calculatorType, selectedBatteryType, selectedNumberOfPanels, additionalItemQuantities, paymentMethod, deposit, depositEnabled, interestRate, interestRateType, paymentTerm, leaseMonthlyPayment, totalCost, templateFileName, isRestoring]);
 
   // Debounced save function
   const debouncedSave = useCallback(() => {
@@ -610,7 +633,7 @@ export default function PricingScreen() {
     if (isInitialized && !isRestoring && hasRestoredProgress) {
       debouncedSave();
     }
-  }, [selectedBatteryType, selectedNumberOfPanels, additionalItemQuantities, paymentMethod, deposit, interestRate, interestRateType, paymentTerm, leaseMonthlyPayment, isInitialized, isRestoring, hasRestoredProgress, debouncedSave]);
+  }, [selectedBatteryType, selectedNumberOfPanels, additionalItemQuantities, paymentMethod, deposit, depositEnabled, interestRate, interestRateType, paymentTerm, leaseMonthlyPayment, isInitialized, isRestoring, hasRestoredProgress, debouncedSave]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -717,7 +740,7 @@ export default function PricingScreen() {
       setHometreeQuoteLoading(true);
       setHometreeQuoteStatus('Loading HomeTree deposit options…');
       const { api } = await import('../utils/api');
-      const depositNum = Number(String(deposit).replace(/[^0-9.]/g, '')) || 0;
+      const depositNum = Number(getEffectiveDeposit().replace(/[^0-9.]/g, '')) || 0;
       // Indicative tiers only — accurate monthly needs Year 1 savings after Excel recalc
       const res = await api.get<{
         success: boolean;
@@ -784,6 +807,7 @@ export default function PricingScreen() {
     paymentMethod,
     totalCost,
     deposit,
+    depositEnabled,
     paymentTerm,
   ]);
 
@@ -843,7 +867,8 @@ export default function PricingScreen() {
           additionalItemQuantities,
           paymentMethod: paymentMethod,
           totalSystemCost: totalCost.toString(),
-          deposit: deposit || '',
+          deposit: getEffectiveDeposit(),
+          depositEnabled,
           interestRate: interestRate || '',
           interestRateType: interestRateType || '',
           paymentTerm: paymentTerm || '',
@@ -886,9 +911,10 @@ export default function PricingScreen() {
     setPaymentMethod(method);
 
     // Clear fields that the new method disables (match Excel grey cells)
+    setDepositEnabled(false);
+    setDeposit('0');
     if (calculatorType === 'v44') {
       if (method === 'Cash') {
-        setDeposit('');
         setInterestRate('');
         setInterestRateType('');
         setPaymentTerm('');
@@ -898,6 +924,14 @@ export default function PricingScreen() {
       } else if (method === 'Hometree') {
         setInterestRate('');
         setInterestRateType('');
+      }
+    } else if (method === 'Cash' || method === 'New Finance') {
+      // deposit reset above; keep other fields for New Finance
+      if (method === 'Cash') {
+        setInterestRate('');
+        setInterestRateType('');
+        setPaymentTerm('');
+        setLeaseMonthlyPayment('');
       }
     }
     
@@ -1182,7 +1216,7 @@ export default function PricingScreen() {
         savedInputs,
         totalSystemCost: totalCost,
         paymentMethod: paymentMethod,
-        deposit: deposit,
+        deposit: getEffectiveDeposit(),
         interestRate: interestRate,
         interestRateType: interestRateType,
         paymentTerm: paymentTerm,
@@ -1217,6 +1251,7 @@ export default function PricingScreen() {
       setLeaseMonthlyPayment(String(monthlyYear1));
     }
     if (depositMatched != null) {
+      setDepositEnabled(true);
       setDeposit(String(depositMatched));
       setHometreeDepositMatched(depositMatched);
     }
@@ -1250,10 +1285,6 @@ export default function PricingScreen() {
       }
 
       const enabled = getEnabledFields();
-      if (enabled.deposit && !deposit.trim()) {
-        showAlert('Required', 'Please enter the Deposit / Upfront Payment.');
-        return;
-      }
       if (enabled.interestRate && !interestRate.trim()) {
         showAlert('Required', 'Please enter the Interest Rate.');
         return;
@@ -1356,8 +1387,8 @@ export default function PricingScreen() {
       // Only save fields that have values and are enabled for the current payment method
       const enabledFields = getEnabledFields();
       
-      if (enabledFields.deposit && deposit) {
-        inputs['deposit'] = deposit;
+      if (enabledFields.deposit) {
+        inputs['deposit'] = getEffectiveDeposit();
       }
       
       if (enabledFields.interestRate && interestRate) {
@@ -1397,7 +1428,8 @@ export default function PricingScreen() {
               additionalItemQuantities,
               paymentMethod,
               totalSystemCost: totalCost.toString(),
-              deposit: deposit || '',
+              deposit: getEffectiveDeposit(),
+              depositEnabled,
               interestRate: interestRate || '',
               interestRateType: interestRateType || '',
               paymentTerm: paymentTerm || '',
@@ -1486,6 +1518,7 @@ export default function PricingScreen() {
                 setLeaseMonthlyPayment(String(fb.monthlyYear1));
               }
               if (fb.depositMatched != null) {
+                setDepositEnabled(true);
                 setDeposit(String(fb.depositMatched));
               }
               setHometreeQuoteStatus(fb.message);
@@ -1533,6 +1566,7 @@ export default function PricingScreen() {
               setLeaseMonthlyPayment(String(fb.monthlyYear1));
             }
             if (fb.depositMatched != null) {
+              setDepositEnabled(true);
               setDeposit(String(fb.depositMatched));
             }
             setHometreeQuoteStatus(fb.message);
@@ -1813,6 +1847,39 @@ export default function PricingScreen() {
             <Text style={[styles.sectionTitle, { color: theme.primaryText }]}>Payment Details</Text>
             <View style={styles.paymentDetailsContainer}>
               {getEnabledFields().deposit && (
+                <View style={styles.inputField}>
+                  <View style={styles.depositToggleRow}>
+                    <Text style={[styles.inputLabel, { color: theme.primaryText, flex: 1 }]}>
+                      {calculatorType === 'v44'
+                        ? 'Include deposit / upfront payment'
+                        : 'Include deposit'}
+                    </Text>
+                    <Switch
+                      value={depositEnabled}
+                      onValueChange={(enabled) => {
+                        if (isRestoringProgress.current) {
+                          return;
+                        }
+                        setDepositEnabled(enabled);
+                        if (!enabled) {
+                          setDeposit('0');
+                          setHometreeDepositMatched(null);
+                        } else if (deposit === '0' || !deposit.trim()) {
+                          setDeposit('');
+                        }
+                        debouncedSave();
+                      }}
+                      trackColor={{
+                        false: theme.cardBorder,
+                        true: theme.primaryButton + '80',
+                      }}
+                      thumbColor={depositEnabled ? theme.primaryButton : theme.secondaryText}
+                    />
+                  </View>
+                </View>
+              )}
+
+              {getEnabledFields().deposit && depositEnabled && (
                 <View style={styles.inputField}>
                   <Text style={[styles.inputLabel, { color: theme.primaryText }]}>
                     {calculatorType === 'v44' ? 'Deposit / Upfront Payment' : 'Deposit'}
@@ -2175,7 +2242,9 @@ export default function PricingScreen() {
           // Check if required fields for the selected payment method are filled
           const enabledFields = getEnabledFields();
           const hasRequiredFields = (
-            (!enabledFields.deposit || (enabledFields.deposit && deposit.trim() !== '')) &&
+            (!enabledFields.deposit ||
+              !depositEnabled ||
+              (depositEnabled && deposit.trim() !== '')) &&
             (!enabledFields.interestRate || (enabledFields.interestRate && interestRate.trim() !== '')) &&
             (!enabledFields.interestRateType || (enabledFields.interestRateType && interestRateType.trim() !== '')) &&
             (!enabledFields.paymentTerm || (enabledFields.paymentTerm && paymentTerm.trim() !== '')) &&
@@ -3041,6 +3110,12 @@ const styles = StyleSheet.create({
   },
   inputField: {
     gap: 8,
+  },
+  depositToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
   },
   inputLabel: {
     fontSize: 16,

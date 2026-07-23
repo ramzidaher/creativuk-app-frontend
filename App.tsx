@@ -1,4 +1,6 @@
 import {
+  getPathFromState as defaultGetPathFromState,
+  getStateFromPath as defaultGetStateFromPath,
   LinkingOptions,
   NavigationContainer
 } from '@react-navigation/native';
@@ -43,6 +45,13 @@ import {
   ThemeProvider,
   useTheme
 } from './src/context/ThemeContext';
+import {
+  patchNavigationStateForUrl,
+  patchNavigationStateFromUrl,
+  workflowLinkingParse,
+  workflowLinkingStringify,
+  workflowScreenLinking,
+} from './src/utils/deepLinkParams';
 
 // Screens
 import ContactAppointmentsScreen from './src/screens/ContactAppointmentsScreen';
@@ -295,6 +304,7 @@ export type RootStackParamList = {
     opportunityId: string; 
     calculatorType?: 'flux' | 'off-peak' | 'epvs' | 'v44'; 
   };
+  HometreeData: { opportunityId: string };
   Payment: { opportunityId: string };
   WelcomeEmail: { opportunityId: string; opportunity?: any };
   FinishAppointment: { opportunityId: string; opportunity?: any };
@@ -332,8 +342,61 @@ const webLinkingPrefix =
     ? window.location.origin
     : 'http://localhost:8081';
 
+/** Workflow screens opened via share links — stack includes MainTabs underneath for back nav. */
+const WORKFLOW_DEEP_LINK_SCREENS = new Set([
+  'Calculator',
+  'CalculatorTypeSelection',
+  'CalculatorQuestions',
+  'CalculatorInputs',
+  'FluxTemplateSelection',
+  'FluxRadioButton',
+  'FluxCalculator',
+  'FluxDynamicInputs',
+  'DynamicInputs',
+  'SolarArraysInputs',
+  'Pricing',
+  'SolarWorkflow',
+  'TemplateSelection',
+  'CustomerDetails',
+  'InstallationBooking',
+  'OpenSolarPublic',
+  'OpenSolarWebView',
+  'Presentation',
+  'VideoPresentation',
+  'Survey',
+  'SolarProjection',
+  'HometreeData',
+  'Payment',
+  'WelcomeEmail',
+  'FinishAppointment',
+]);
+
 const linking: LinkingOptions<RootStackParamList> = {
   prefixes: ['https://app.creativuk.co.uk', 'http://localhost:8081', 'http://127.0.0.1:8081', webLinkingPrefix],
+  getPathFromState(state, options) {
+    return defaultGetPathFromState(patchNavigationStateForUrl(state as any) as any, options);
+  },
+  getStateFromPath(path, options) {
+    const parsed = patchNavigationStateFromUrl(
+      defaultGetStateFromPath(path, options) as any,
+    ) as any;
+    if (!parsed?.routes?.length) {
+      return parsed;
+    }
+    const leaf = parsed.routes[parsed.index ?? parsed.routes.length - 1];
+    if (
+      leaf?.name &&
+      WORKFLOW_DEEP_LINK_SCREENS.has(leaf.name) &&
+      parsed.routes.length === 1
+    ) {
+      return {
+        ...parsed,
+        routes: [{ name: 'MainTabs' }, leaf],
+        index: 1,
+      };
+    }
+    return parsed;
+  },
   config: {
     screens: {
       // Main app screens
@@ -355,34 +418,29 @@ const linking: LinkingOptions<RootStackParamList> = {
       },
       
       // Calculator workflow screens
-      Calculator: 'calculator/:opportunityId?',
-      CalculatorTypeSelection: 'calculator-type/:opportunityId?',
-      CalculatorQuestions: 'calculator-questions/:opportunityId',
-      CalculatorInputs: 'calculator-inputs/:opportunityId',
-      FluxTemplateSelection: {
-        path: 'flux-template/:opportunityId',
-        parse: {
-          opportunityId: (id: string) => id,
-          calculatorType: (v: string) => v,
-        },
-      },
-      FluxRadioButton: 'flux-radio/:opportunityId?',
-      FluxCalculator: 'flux-calculator/:opportunityId?',
-      FluxDynamicInputs: 'flux-inputs/:opportunityId?',
-      DynamicInputs: 'dynamic-inputs/:opportunityId?',
-      SolarArraysInputs: 'solar-arrays/:opportunityId?',
-      Pricing: 'pricing/:opportunityId',
+      Calculator: workflowScreenLinking('calculator/:opportunityId'),
+      CalculatorTypeSelection: workflowScreenLinking('calculator-type/:opportunityId'),
+      CalculatorQuestions: workflowScreenLinking('calculator-questions/:opportunityId'),
+      CalculatorInputs: workflowScreenLinking('calculator-inputs/:opportunityId'),
+      FluxTemplateSelection: workflowScreenLinking('flux-template/:opportunityId'),
+      FluxRadioButton: workflowScreenLinking('flux-radio/:opportunityId'),
+      FluxCalculator: workflowScreenLinking('flux-calculator/:opportunityId'),
+      FluxDynamicInputs: workflowScreenLinking('flux-inputs/:opportunityId'),
+      DynamicInputs: workflowScreenLinking('dynamic-inputs/:opportunityId'),
+      SolarArraysInputs: workflowScreenLinking('solar-arrays/:opportunityId'),
+      Pricing: workflowScreenLinking('pricing/:opportunityId'),
       
       // Workflow screens
-      SolarWorkflow: 'solar-workflow/:opportunityId',
+      SolarWorkflow: workflowScreenLinking('solar-workflow/:opportunityId'),
       TemplateSelection: {
         path: 'template-selection/:opportunityId',
         parse: {
-          opportunityId: (id: string) => id,
+          ...workflowLinkingParse,
           calculatorType: (v: string) => (v === 'epvs' ? 'flux' : v),
         },
+        stringify: workflowLinkingStringify,
       },
-      CustomerDetails: 'customer-details/:opportunityId?',
+      CustomerDetails: workflowScreenLinking('customer-details/:opportunityId'),
       
       // Contract and signing screens
       ContractGeneration: 'contract-generation/:opportunityId',
@@ -398,25 +456,25 @@ const linking: LinkingOptions<RootStackParamList> = {
       DirectDocuSeal: 'direct-docuseal/:opportunityId',
       
       // Installation and booking
-      InstallationBooking: 'installation-booking/:opportunityId',
+      InstallationBooking: workflowScreenLinking('installation-booking/:opportunityId'),
       
       // OpenSolar integration
-      OpenSolarPublic: 'opensolar/:opportunityId',
-      OpenSolarWebView: 'opensolar-webview/:opportunityId',
+      OpenSolarPublic: workflowScreenLinking('opensolar/:opportunityId'),
+      OpenSolarWebView: workflowScreenLinking('opensolar-webview/:opportunityId'),
       
       // Presentation screens
-      Presentation: 'presentation/:opportunityId',
-      VideoPresentation: 'video-presentation/:opportunityId',
+      Presentation: workflowScreenLinking('presentation/:opportunityId'),
+      VideoPresentation: workflowScreenLinking('video-presentation/:opportunityId'),
       PresentationViewer: 'presentation-viewer/:opportunityId',
       PDFViewer: 'pdf-viewer/:opportunityId',
       
       // Survey and other screens
-      Survey: 'survey/:opportunityId',
-      SolarProjection: 'solar-projection/:opportunityId',
-      HometreeData: 'hometree/:opportunityId',
-      Payment: 'payment/:opportunityId',
-      WelcomeEmail: 'welcome-email/:opportunityId',
-      FinishAppointment: 'finish-appointment/:opportunityId',
+      Survey: workflowScreenLinking('survey/:opportunityId'),
+      SolarProjection: workflowScreenLinking('solar-projection/:opportunityId'),
+      HometreeData: workflowScreenLinking('hometree/:opportunityId'),
+      Payment: workflowScreenLinking('payment/:opportunityId'),
+      WelcomeEmail: workflowScreenLinking('welcome-email/:opportunityId'),
+      FinishAppointment: workflowScreenLinking('finish-appointment/:opportunityId'),
       
       // Admin and debug screens
       AdminPanel: 'admin',
@@ -926,18 +984,9 @@ function AppNavigator() {
 
   console.log('AppNavigator: Rendering navigator, isAuthenticated:', isAuthenticated, 'isLoading:', isLoading);
 
-  // Show loading UI while authentication is being checked without mounting a navigator
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
-
   return (
     <Stack.Navigator
-      initialRouteName={isAuthenticated ? "MainTabs" : "Login"}
+      initialRouteName={isAuthenticated ? 'MainTabs' : 'Login'}
       screenOptions={{
         headerShown: false,
         gestureEnabled: true,
@@ -957,21 +1006,17 @@ function AppNavigator() {
         },
       }}
     >
-      {!isAuthenticated ? (
-        <>
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Register" component={RegisterScreen} />
-          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-          <Stack.Screen
-            name="CalculatorTestingPublic"
-            component={CalculatorTestingScreen}
-            initialParams={{ publicMode: true }}
-            options={{ headerShown: false }}
-          />
-        </>
-      ) : (
-        <>
-          <Stack.Screen name="MainTabs" component={TabNavigator} />
+      <Stack.Screen name="Loading" component={LoadingScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="Register" component={RegisterScreen} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <Stack.Screen
+        name="CalculatorTestingPublic"
+        component={CalculatorTestingScreen}
+        initialParams={{ publicMode: true }}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen name="MainTabs" component={TabNavigator} />
 
           <Stack.Screen 
             name="OpportunityDetails" 
@@ -1474,9 +1519,6 @@ function AppNavigator() {
             }}
           />
 
-
-        </>
-      )}
     </Stack.Navigator>
   );
 }

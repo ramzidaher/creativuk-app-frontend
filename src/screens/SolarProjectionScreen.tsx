@@ -935,16 +935,6 @@ export default function SolarProjectionScreen() {
           }
         ]}
       >
-        {/* Hero Section */}
-        <View style={styles.heroSection}>
-          <View style={[styles.heroIcon, { backgroundColor: theme.primaryButton + '20' }]}>
-            <Feather name="file-text" size={32} color={theme.primaryButton} />
-          </View>
-          <Text style={[styles.heroTitle, { color: theme.primaryText }]}>
-            Select the calculator for solar projections
-          </Text>
-        </View>
-
         <View style={[styles.formCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
           <ExcelSheetPicker
             sheets={availableSheets}
@@ -2518,34 +2508,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
     color: '#64748b',
-  },
-
-  // Hero Section Styles
-  heroSection: {
-    alignItems: 'center',
-    marginBottom: 32,
-    paddingHorizontal: 4,
-  },
-  heroIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    shadowColor: 'rgba(0, 0, 0, 0.06)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  heroTitle: {
-    fontSize: width < 768 ? 24 : 28,
-    fontWeight: '700',
-    color: '#1e293b',
-    textAlign: 'center',
-    marginBottom: 8,
-    letterSpacing: -0.4,
   },
 
   // Form Cards

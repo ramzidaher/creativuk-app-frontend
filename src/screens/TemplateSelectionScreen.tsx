@@ -551,21 +551,6 @@ export default function TemplateSelectionScreen() {
       >
         {/* Main Content */}
         <View style={styles.content}>
-          {/* Title Section */}
-          <View style={styles.titleSection}>
-            <View style={styles.titleIconContainer}>
-              <View style={[styles.titleIconBackground, { backgroundColor: theme.primaryButton + '15' }]}>
-                <View style={[styles.titleIcon, { backgroundColor: theme.primaryButton }]}>
-                  <Feather name="settings" size={32} color="#ffffff" />
-                </View>
-              </View>
-            </View>
-            <Text style={[styles.mainTitle, { color: theme.primaryText }]}>Select System Components</Text>
-            <Text style={[styles.mainSubtitle, { color: theme.secondaryText }]}>
-              Choose which components you want to include in your {calculatorType === 'epvs' ? 'EPVS' : 'off-peak'} system quote
-            </Text>
-          </View>
-
           {/* System Components */}
           <View style={styles.componentsSection}>
             {renderComponentCard(
@@ -833,53 +818,6 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     paddingTop: 0,
-  },
-  titleSection: {
-    alignItems: 'center',
-    marginBottom: 32,
-    paddingTop: 32,
-  },
-  titleIconContainer: {
-    marginBottom: 16,
-  },
-  titleIconBackground: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 32,
-    shadowColor: 'rgba(0, 0, 0, 0.1)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  titleIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: 'rgba(0, 0, 0, 0.2)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  mainTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 8,
-    textAlign: 'center',
-    letterSpacing: -0.5,
-  },
-  mainSubtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 24,
-    maxWidth: width * 0.8,
-    opacity: 0.9,
   },
   componentsSection: {
     marginBottom: 32,

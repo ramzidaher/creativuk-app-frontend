@@ -18,6 +18,11 @@ import BottomNavigation from '../components/BottomNavigation';
 import { useTheme } from '../context/ThemeContext';
 import CalculatorDataService from '../services/CalculatorDataService';
 import CalculatorProgressService from '../services/CalculatorProgressService';
+import {
+  getCustomerDetailsFromRouteParams,
+  normalizeRouteParams,
+  parseSelectedOptions,
+} from '../utils/deepLinkParams';
 
 const { width, height } = Dimensions.get('window');
 
@@ -155,63 +160,16 @@ export default function FluxRadioButtonScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { theme, isDark, toggleTheme } = useTheme();
-  const opportunityId = route.params?.opportunityId;
-  const templateFileName = route.params?.templateFileName;
   
-  // Validate and fix template options from route params (same as Off-Peak)
-  const rawSelectedTemplateOptions = route.params?.selectedOptions;
-  let selectedTemplateOptions: {
-    solar?: boolean;
-    battery?: boolean;
-    solarHybrid?: boolean;
-    batteryInverter?: boolean;
-  } | undefined;
+  const params = normalizeRouteParams(route.params as Record<string, unknown>);
+  const opportunityId = params.opportunityId as string;
+  const templateFileName = typeof params.templateFileName === 'string' ? params.templateFileName : undefined;
+  const selectedTemplateOptions = parseSelectedOptions(params.selectedOptions);
+  const passedCustomerDetails = getCustomerDetailsFromRouteParams(params);
+  const calculatorType = (params.calculatorType as string) || 'epvs';
   
-  // Validate template options - handle stringified [object Object]
-  if (rawSelectedTemplateOptions) {
-    if (typeof rawSelectedTemplateOptions === 'object' && rawSelectedTemplateOptions !== null && !Array.isArray(rawSelectedTemplateOptions)) {
-      // Check if it's the stringified [object Object] pattern (object with numeric keys)
-      const keys = Object.keys(rawSelectedTemplateOptions);
-      if (keys.length > 0 && keys[0] === '0' && keys.some(k => /^\d+$/.test(k))) {
-        const values = keys.map(k => rawSelectedTemplateOptions[k]).join('');
-        if (values === '[object Object]') {
-          console.warn('⚠️ EPVSRadioButtonScreen: Template options is stringified [object Object], ignoring');
-          selectedTemplateOptions = undefined;
-        } else {
-          // Has numeric keys but not [object Object] - check if it has expected properties
-          if ('solar' in rawSelectedTemplateOptions || 'battery' in rawSelectedTemplateOptions || 'solarHybrid' in rawSelectedTemplateOptions || 'batteryInverter' in rawSelectedTemplateOptions) {
-            selectedTemplateOptions = rawSelectedTemplateOptions;
-          } else {
-            selectedTemplateOptions = undefined;
-          }
-        }
-      } else {
-        // Normal object - check if it has expected properties
-        if ('solar' in rawSelectedTemplateOptions || 'battery' in rawSelectedTemplateOptions || 'solarHybrid' in rawSelectedTemplateOptions || 'batteryInverter' in rawSelectedTemplateOptions) {
-          selectedTemplateOptions = rawSelectedTemplateOptions;
-        }
-      }
-    } else if (typeof rawSelectedTemplateOptions === 'string' && rawSelectedTemplateOptions !== '[object Object]') {
-      try {
-        const parsed = JSON.parse(rawSelectedTemplateOptions);
-        if (parsed && typeof parsed === 'object') {
-          selectedTemplateOptions = parsed;
-        }
-      } catch (e) {
-        console.warn('⚠️ EPVSRadioButtonScreen: Could not parse template options from string:', e);
-        selectedTemplateOptions = undefined;
-      }
-    } else if (typeof rawSelectedTemplateOptions === 'string' && rawSelectedTemplateOptions === '[object Object]') {
-      console.warn('⚠️ EPVSRadioButtonScreen: Template options is stringified [object Object], ignoring');
-      selectedTemplateOptions = undefined;
-    }
-  }
-  
-  console.log('🔍 EPVSRadioButtonScreen: Raw template options from route:', rawSelectedTemplateOptions);
+  console.log('🔍 EPVSRadioButtonScreen: Raw template options from route:', params.selectedOptions);
   console.log('🔍 EPVSRadioButtonScreen: Validated template options:', selectedTemplateOptions);
-  
-  const passedCustomerDetails = route.params?.customerDetails;
-  const calculatorType = route.params?.calculatorType || 'epvs';
   
   const [loading, setLoading] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
@@ -453,36 +411,7 @@ export default function FluxRadioButtonScreen() {
     }
   };
   
-  // Helper function to validate template options (same as in init)
-  const validateTemplateOptions = (options: any): {
-    solar: boolean;
-    battery: boolean;
-    solarHybrid: boolean;
-    batteryInverter: boolean;
-  } | undefined => {
-    if (!options) return undefined;
-    
-    if (typeof options === 'object' && options !== null && !Array.isArray(options)) {
-      const keys = Object.keys(options);
-      if (keys.length > 0 && keys[0] === '0' && keys.some(k => /^\d+$/.test(k))) {
-        const values = keys.map(k => options[k]).join('');
-        if (values === '[object Object]') {
-          return undefined;
-        }
-      }
-      
-      if ('solar' in options || 'battery' in options || 'solarHybrid' in options || 'batteryInverter' in options) {
-        return {
-          solar: options.solar === true,
-          battery: options.battery === true,
-          solarHybrid: options.solarHybrid === true,
-          batteryInverter: options.batteryInverter === true
-        };
-      }
-    }
-    
-    return undefined;
-  };
+  const validateTemplateOptions = (options: unknown) => parseSelectedOptions(options);
 
   const saveProgress = async (options?: Record<string, string>) => {
     try {
@@ -844,21 +773,6 @@ export default function FluxRadioButtonScreen() {
         ]}
       >
         <View style={styles.content}>
-          {/* Hero Section */}
-          <View style={styles.heroSection}>
-            <View style={[styles.heroIconContainer, { backgroundColor: theme.primaryButton + '15' }]}>
-              <View style={[styles.heroIcon, { backgroundColor: theme.primaryButton }]}>
-                <Feather name="settings" size={32} color="#ffffff" />
-              </View>
-            </View>
-            <Text style={[styles.heroTitle, { color: theme.primaryText }]}>
-              Configure Your Flux System
-            </Text>
-            <Text style={[styles.heroDescription, { color: theme.secondaryText }]}>
-              Select the appropriate options for each category to customize your solar system
-            </Text>
-          </View>
-
           {/* Progress automatically restored - no dialog needed */}
 
           {/* Template Info */}
@@ -1154,51 +1068,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     opacity: 0.8,
-  },
-  heroSection: {
-    alignItems: 'center',
-    marginBottom: 48,
-    paddingTop: 32,
-  },
-  heroIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 32,
-    shadowColor: 'rgba(0, 0, 0, 0.1)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  heroIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: 'rgba(0, 0, 0, 0.2)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  heroTitle: {
-    fontSize: 32,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 40,
-    letterSpacing: -0.5,
-  },
-  heroDescription: {
-    fontSize: 18,
-    textAlign: 'center',
-    lineHeight: 26,
-    maxWidth: width * 0.85,
-    opacity: 0.9,
   },
   templateInfo: {
     padding: 24,

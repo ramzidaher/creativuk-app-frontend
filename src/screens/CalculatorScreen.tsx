@@ -18,6 +18,11 @@ import InputFieldRulesTest from '../components/InputFieldRulesTest';
 import BottomNavigation from '../components/BottomNavigation';
 import { useTheme } from '../context/ThemeContext';
 import CalculatorProgressService from '../services/CalculatorProgressService';
+import {
+  getCustomerDetailsFromRouteParams,
+  normalizeRouteParams,
+  parseSelectedOptions,
+} from '../utils/deepLinkParams';
 
 const { width, height } = Dimensions.get('window');
 
@@ -192,11 +197,12 @@ export default function CalculatorScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { theme, isDark, toggleTheme } = useTheme();
-  const opportunityId = route.params?.opportunityId;
-  const templateFileName = route.params?.templateFileName;
-  const selectedTemplateOptions = route.params?.selectedOptions;
-  const passedCustomerDetails = route.params?.customerDetails;
-  const calculatorType = route.params?.calculatorType || 'off-peak';
+  const params = normalizeRouteParams(route.params as Record<string, unknown>);
+  const opportunityId = params.opportunityId as string | undefined;
+  const templateFileName = typeof params.templateFileName === 'string' ? params.templateFileName : undefined;
+  const selectedTemplateOptions = parseSelectedOptions(params.selectedOptions);
+  const passedCustomerDetails = getCustomerDetailsFromRouteParams(params);
+  const calculatorType = (params.calculatorType as string) || 'off-peak';
   
   // Debug logging for route params
   console.log('🔍 CalculatorScreen route params:', {
@@ -764,21 +770,6 @@ export default function CalculatorScreen() {
         ]}
       >
         <View style={styles.content}>
-          {/* Hero Section */}
-          <View style={styles.heroSection}>
-            <View style={[styles.heroIconContainer, { backgroundColor: theme.primaryButton + '15' }]}>
-              <View style={[styles.heroIcon, { backgroundColor: theme.primaryButton }]}>
-                <Feather name="settings" size={32} color="#ffffff" />
-              </View>
-            </View>
-            <Text style={[styles.heroTitle, { color: theme.primaryText }]}>
-              Configure Your Off Peak System
-            </Text>
-            <Text style={[styles.heroDescription, { color: theme.secondaryText }]}>
-              Select the appropriate options for each category to customize your solar system
-            </Text>
-          </View>
-
           {/* Progress automatically restored - no dialog needed */}
 
           {/* Customer Info */}
@@ -1068,51 +1059,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     opacity: 0.8,
-  },
-  heroSection: {
-    alignItems: 'center',
-    marginBottom: 48,
-    paddingTop: 32,
-  },
-  heroIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 32,
-    shadowColor: 'rgba(0, 0, 0, 0.1)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  heroIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: 'rgba(0, 0, 0, 0.2)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  heroTitle: {
-    fontSize: 32,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 40,
-    letterSpacing: -0.5,
-  },
-  heroDescription: {
-    fontSize: 18,
-    textAlign: 'center',
-    lineHeight: 26,
-    maxWidth: width * 0.85,
-    opacity: 0.9,
   },
   customerInfo: {
     padding: 24,

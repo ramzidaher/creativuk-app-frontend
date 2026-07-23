@@ -24,8 +24,6 @@ export const DEVELOPMENT_CONFIG = {
   
   // Current active URL - change this to switch backends
   ACTIVE_URL: 'WINDOWS_DEV', // Options: PRODUCTION, LOCAL, WINDOWS_DEV, RELATIVE, CUSTOM
-  
-  // Development mode settings
   DEV_MODE: true,
   
   // Auto-detect working URL on startup

@@ -3,6 +3,39 @@
 
 import { DEVELOPMENT_CONFIG, getCurrentBackendUrl } from '../config/development.js';
 
+function isLocalhostHost(hostname) {
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname.includes('192.168.') ||
+    hostname.includes('10.0.')
+  );
+}
+
+/** Expo / Metro web dev (localhost:8081, etc.) */
+function isExpoDevServer() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return (
+    isLocalhostHost(window.location.hostname) &&
+    (window.location.port === '8081' ||
+      window.location.port === '19006' ||
+      window.location.port === '19000' ||
+      window.location.port === '19001' ||
+      window.location.port === '19002' ||
+      !window.location.port)
+  );
+}
+
+/** ngrok tunnels expire — never trust saved ngrok URLs */
+function isStaleSavedUrl(url) {
+  if (!url || typeof url !== 'string') {
+    return true;
+  }
+  return /ngrok-free\.app|ngrok\.io|ngrok\.app/i.test(url);
+}
+
 // URL Management System
 class URLManager {
   constructor() {
@@ -21,70 +54,69 @@ class URLManager {
       return this.overrideUrl;
     }
 
-    // 2. Check localStorage for saved URL
+    const expoDev = isExpoDevServer();
+
+    // 2. Expo web dev — always use development.js ACTIVE_URL (ignore stale localStorage/ngrok)
+    if (expoDev && DEVELOPMENT_CONFIG.DEV_MODE) {
+      const devUrl = getCurrentBackendUrl();
+      console.log('🔧 Expo dev server — using development config URL:', devUrl);
+      return devUrl;
+    }
+
+    // 3. Check localStorage for saved URL (skip dead ngrok tunnels)
     if (typeof window !== 'undefined' && window.localStorage) {
       const savedUrl = window.localStorage.getItem(this.storageKey);
-      if (savedUrl) {
+      if (savedUrl && isStaleSavedUrl(savedUrl)) {
+        window.localStorage.removeItem(this.storageKey);
+        console.warn('🔧 Removed stale ngrok API URL from localStorage:', savedUrl);
+      } else if (savedUrl) {
         console.log('🔧 Using saved URL:', savedUrl);
         return savedUrl;
       }
     }
 
-    // 3. Check window.__ENV__ for web environment
+    // 4. Check window.__ENV__ for web environment
     if (typeof window !== 'undefined' && window.__ENV__?.API_BASE_URL) {
-      console.log('🔧 Using window.__ENV__ URL:', window.__ENV__?.API_BASE_URL);
-      return window.__ENV__?.API_BASE_URL;
+      const envUrl = window.__ENV__.API_BASE_URL;
+      if (!isStaleSavedUrl(envUrl)) {
+        console.log('🔧 Using window.__ENV__ URL:', envUrl);
+        return envUrl;
+      }
+      console.warn('🔧 Ignoring stale window.__ENV__ API URL:', envUrl);
     }
 
-    // 4. Auto-detect environment and use appropriate URL
+    // 5. Auto-detect environment and use appropriate URL
     if (typeof window !== 'undefined') {
-      const isLocalhost = window.location.hostname === 'localhost' || 
-                         window.location.hostname === '127.0.0.1' ||
-                         window.location.hostname.includes('192.168.') ||
-                         window.location.hostname.includes('10.0.');
+      const isLocalhost = isLocalhostHost(window.location.hostname);
       
       // Check if this is a production build (has been built for deployment)
-      // Look for the specific script tag pattern that indicates a production build
       const scriptTags = document.querySelectorAll('script[src*="_expo"]');
       const isProductionBuild = scriptTags.length > 0 && 
                                Array.from(scriptTags).some(script => 
                                  script.src.includes('_expo/static/js/web/')
                                );
       
-      // Check if this is the Expo development server (localhost:8081, 19006, etc.)
-      const isExpoDevServer = isLocalhost && (
-        window.location.port === '8081' || 
-        window.location.port === '19006' || 
-        window.location.port === '19000' ||
-        window.location.hostname === 'localhost'
-      );
-      
-      // Use development config if in development mode
       if (DEVELOPMENT_CONFIG.DEV_MODE && isLocalhost) {
         console.log('🔧 Development mode detected, using configured URL:', this.defaultUrl);
         return this.defaultUrl;
       }
       
-      if (isExpoDevServer) {
-        // Expo development server - always use production backend for testing
-        console.log('🔧 Expo development server detected, using production URL for testing:', this.defaultUrl);
+      if (expoDev) {
+        console.log('🔧 Expo development server detected, using configured URL:', this.defaultUrl);
         return this.defaultUrl;
       } else if (isLocalhost && !isProductionBuild) {
-        // Local development - use production backend for testing
-        console.log('🔧 Local development detected, using production URL for testing:', this.defaultUrl);
+        console.log('🔧 Local development detected, using configured URL:', this.defaultUrl);
         return this.defaultUrl;
       } else if (isLocalhost && isProductionBuild) {
-        // Local testing of production build - use relative URLs (should fail)
         console.log('🔧 Local testing of production build detected, using relative URL:', this.fallbackUrl);
         return this.fallbackUrl;
       } else {
-        // Production deployment - use relative URLs
         console.log('🔧 Production environment detected, using relative URL:', this.fallbackUrl);
         return this.fallbackUrl;
       }
     }
 
-    // 5. Use default URL as final fallback
+    // 6. Use default URL as final fallback
     console.log('🔧 Using default URL:', this.defaultUrl);
     return this.defaultUrl;
   }

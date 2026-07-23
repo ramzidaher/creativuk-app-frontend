@@ -15,6 +15,11 @@ import InputFieldRulesTest from '../components/InputFieldRulesTest';
 import ProgressRestoreComponent from '../components/ProgressRestoreComponent';
 import BottomNavigation from '../components/BottomNavigation';
 import CalculatorDataService from '../services/CalculatorDataService';
+import {
+  getCustomerDetailsFromRouteParams,
+  normalizeRouteParams,
+  parseSelectedOptions,
+} from '../utils/deepLinkParams';
 
 interface RadioButtonGroup {
   title: string;
@@ -186,11 +191,12 @@ const radioButtonGroups: RadioButtonGroup[] = [
 export default function FluxCalculatorScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const opportunityId = route.params?.opportunityId;
-  const templateFileName = route.params?.templateFileName;
-  const selectedTemplateOptions = route.params?.selectedOptions;
-  const passedCustomerDetails = route.params?.customerDetails;
-  const calculatorType = route.params?.calculatorType || 'flux';
+  const params = normalizeRouteParams(route.params as Record<string, unknown>);
+  const opportunityId = params.opportunityId as string | undefined;
+  const templateFileName = typeof params.templateFileName === 'string' ? params.templateFileName : undefined;
+  const selectedTemplateOptions = parseSelectedOptions(params.selectedOptions);
+  const passedCustomerDetails = getCustomerDetailsFromRouteParams(params);
+  const calculatorType = (params.calculatorType as string) || 'flux';
   
   const [loading, setLoading] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});

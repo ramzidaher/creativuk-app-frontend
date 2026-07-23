@@ -1984,21 +1984,6 @@ export default function ContractSigningScreen() {
 
       {/* Streamlined Contract Signing Interface */}
       <View style={styles.signingContainer}>
-        <View style={styles.contractHeader}>
-          <View style={[styles.contractIcon, { backgroundColor: theme.primaryButton + '20' }]}>
-            <Ionicons name="document-text-outline" size={32} color={theme.primaryButton} />
-          </View>
-          <Text style={[styles.contractTitle, { color: theme.primaryText }]}>
-            Contract Signing
-          </Text>
-          <Text style={[styles.contractSubtitle, { color: theme.secondaryText }]}>
-            {selectedCalculatorType 
-              ? `Sign your ${selectedCalculatorType === 'v44' ? 'EPVS v4.4' : selectedCalculatorType === 'flux' ? 'Flux' : 'Off Peak'} contract digitally`
-              : 'Select calculator type to begin'
-            }
-          </Text>
-        </View>
-
         {/* Calculator Type Selection */}
         {!selectedCalculatorType && calculatorSettingsLoaded && (
           <View style={[styles.contractInfo, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
@@ -2334,32 +2319,6 @@ const styles = StyleSheet.create({
       alignSelf: 'center',
       width: '100%',
     }),
-  },
-  contractHeader: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  contractIcon: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  contractTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 10,
-    letterSpacing: -0.5,
-  },
-  contractSubtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 22,
-    fontWeight: '500',
-    paddingHorizontal: 20,
   },
   contractInfo: {
     padding: 24,

@@ -362,10 +362,13 @@ export const api = {
                           (error instanceof TypeError && errorMessage.includes('fetch'));
         
         if (isCorsError) {
-          console.error(`API CORS Error (attempt ${attempt}/${retries}):`, errorMessage);
-          // Return immediately for CORS errors - retrying won't help
+          console.error(`API CORS/Network Error (attempt ${attempt}/${retries}):`, errorMessage);
+          const currentUrl = buildApiUrl('').replace(/\/$/, '');
           const corsResponse: ApiResponse<T> = {
-            error: 'CORS Error: The backend server does not allow requests from this origin. Please check backend CORS configuration.',
+            error:
+              `Cannot reach the backend at ${currentUrl}. ` +
+              'Restart Expo after changing API URL, or run in the browser console: ' +
+              'localStorage.removeItem("creativ_solar_api_url"); location.reload()',
             success: false,
           };
           (corsResponse as any).isCorsError = true;

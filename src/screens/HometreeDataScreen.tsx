@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,15 +15,13 @@ import {
   View,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import { useAuthReady } from '../hooks/useAuthReady';
 import { api, buildApiUrl, getStorage, presentationApi, workflowApi } from '../utils/api';
+import { resolveOpportunityIdFromRoute } from '../utils/deepLinkParams';
 import { ExcelSheetInfo } from '../utils/excelSheetVersion';
 import ExcelSheetPicker from '../components/ExcelSheetPicker';
 
 const HOMETREE_URL = 'https://hometreefinance.co.uk/dashboard/login';
-
-interface RouteParams {
-  opportunityId: string;
-}
 
 type SheetInfo = ExcelSheetInfo & {
   filePath: string;
@@ -216,7 +214,8 @@ async function downloadCalculatorSheet(opportunityId: string, sheet: SheetInfo) 
 export default function HometreeDataScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
-  const { opportunityId } = route.params as RouteParams;
+  const opportunityId = resolveOpportunityIdFromRoute(route.params, 'hometree');
+  const { isAuthReady, isLoading: authLoading, isAuthenticated } = useAuthReady();
   const { theme, isDark, toggleTheme } = useTheme();
 
   const [step, setStep] = useState<Step>('sheets');
@@ -229,34 +228,19 @@ export default function HometreeDataScreen() {
   const [error, setError] = useState<string | null>(null);
   const [openingHometree, setOpeningHometree] = useState(false);
   const [downloading, setDownloading] = useState(false);
-
-  const loadAvailableSheets = useCallback(async () => {
-    try {
-      setLoadingSheets(true);
-      setError(null);
-      const sheetsResponse = await api.post('/opportunity-workflow/get-opportunity-sheets', {
-        opportunityId,
-      });
-
-      if (sheetsResponse.success) {
-        const responseData = sheetsResponse.data as any;
-        const actualData = responseData?.data || responseData;
-        const sheets = Array.isArray(actualData) ? actualData : [];
-        setAvailableSheets(sheets as SheetInfo[]);
-      } else {
-        throw new Error('Failed to load available calculators');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load calculators');
-    } finally {
-      setLoadingSheets(false);
-    }
-  }, [opportunityId]);
+  const loadInFlightRef = useRef(false);
+  const sheetsLoadedRef = useRef(false);
 
   const loadHometreeData = useCallback(
-    async (sheet: SheetInfo) => {
-      try {
+    async (sheet: SheetInfo, options?: { background?: boolean }) => {
+      if (!opportunityId || loadInFlightRef.current) {
+        return;
+      }
+      loadInFlightRef.current = true;
+      if (!options?.background) {
         setLoadingData(true);
+      }
+      try {
         setError(null);
         const response = await presentationApi.getHometreeQuoteData(
           opportunityId,
@@ -265,6 +249,7 @@ export default function HometreeDataScreen() {
         );
         if (response.success && response.data) {
           setData(response.data);
+          setSelectedSheet(sheet);
           setStep('data');
         } else {
           throw new Error(response.error || 'Failed to load Hometree data');
@@ -274,14 +259,65 @@ export default function HometreeDataScreen() {
       } finally {
         setLoadingData(false);
         setRefreshing(false);
+        loadInFlightRef.current = false;
       }
     },
     [opportunityId],
   );
 
+  const loadAvailableSheets = useCallback(async () => {
+    if (!isAuthReady) {
+      return;
+    }
+    if (!opportunityId) {
+      setError('Missing opportunity ID in link. Use /hometree/{opportunityId}');
+      setLoadingSheets(false);
+      return;
+    }
+    if (loadInFlightRef.current) {
+      return;
+    }
+    try {
+      setLoadingSheets(true);
+      setError(null);
+      const sheetsResponse = await api.post('/opportunity-workflow/get-opportunity-sheets', {
+        opportunityId,
+      });
+
+      if (sheetsResponse.success) {
+        const responseData = sheetsResponse.data as any;
+        const actualData = responseData?.data ?? responseData?.sheets ?? responseData;
+        const sheets = Array.isArray(actualData) ? actualData : [];
+        setAvailableSheets(sheets as SheetInfo[]);
+
+        if (sheets.length === 1 && !sheetsLoadedRef.current) {
+          sheetsLoadedRef.current = true;
+          await loadHometreeData(sheets[0] as SheetInfo);
+        } else if (sheets.length > 1) {
+          const v44Sheet = sheets.find(
+            (s: SheetInfo) =>
+              s.calculatorType === 'v44' ||
+              (s.fileName || '').toLowerCase().includes('v4.4'),
+          );
+          if (v44Sheet) {
+            setSelectedSheet(v44Sheet as SheetInfo);
+          }
+        }
+      } else {
+        throw new Error(sheetsResponse.error || 'Failed to load available calculators');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load calculators');
+    } finally {
+      setLoadingSheets(false);
+    }
+  }, [opportunityId, isAuthReady, loadHometreeData]);
+
   useEffect(() => {
-    loadAvailableSheets();
-  }, [loadAvailableSheets]);
+    if (isAuthReady) {
+      loadAvailableSheets();
+    }
+  }, [loadAvailableSheets, isAuthReady]);
 
   const handleRefresh = () => {
     if (step === 'data' && selectedSheet) {
@@ -611,6 +647,26 @@ export default function HometreeDataScreen() {
         Platform.OS === 'web' && { height: '100vh' as any, maxHeight: '100vh' as any },
       ]}
     >
+      {authLoading || (loadingSheets && step === 'sheets') || loadingData ? (
+        <View style={[styles.centeredState, { flex: 1 }]}>
+          <ActivityIndicator size="large" color={theme.primaryButton} />
+          <Text style={[styles.centeredStateText, { color: theme.secondaryText }]}>
+            {authLoading ? 'Signing in…' : loadingData ? 'Loading Hometree data…' : 'Loading calculators…'}
+          </Text>
+        </View>
+      ) : !isAuthenticated ? (
+        <View style={[styles.centeredState, { flex: 1 }]}>
+          <Text style={[styles.centeredStateText, { color: theme.primaryText }]}>
+            Please log in to open this Hometree link.
+          </Text>
+          <TouchableOpacity onPress={() => navigation.replace('Login')}>
+            <Text style={{ color: theme.primaryButton, marginTop: 12, fontWeight: '600' }}>
+              Go to login
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <>
       <View style={[styles.header, { backgroundColor: theme.cardBackground, borderBottomColor: theme.cardBorder }]}>
         <View style={styles.headerTop}>
           <View style={styles.headerLeft}>
@@ -645,12 +701,23 @@ export default function HometreeDataScreen() {
       </View>
 
       {step === 'sheets' ? renderSheetSelection() : renderDataView()}
+        </>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  centeredState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  centeredStateText: {
+    fontSize: 16,
+    textAlign: 'center',
+  },
   header: {
     paddingTop: Platform.OS === 'web' ? 16 : 8,
     paddingBottom: 12,

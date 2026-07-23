@@ -5,6 +5,7 @@
  */
 
 import { rangeOptions } from './dynamicInputFields';
+import { parseRadioButtonSelections } from '../utils/deepLinkParams';
 
 export interface EPVSInputFieldDefinition {
   id: string;
@@ -513,23 +514,7 @@ export function getEPVSEnabledFields(
     );
   }
 
-  // Validate radioButtonSelections - ensure it's an object, not a string
-  let validRadioButtonSelections: Record<string, string> | undefined;
-  if (radioButtonSelections) {
-    if (typeof radioButtonSelections === 'object' && radioButtonSelections !== null && !Array.isArray(radioButtonSelections)) {
-      validRadioButtonSelections = radioButtonSelections;
-    } else if (typeof radioButtonSelections === 'string' && radioButtonSelections !== '[object Object]') {
-      try {
-        validRadioButtonSelections = JSON.parse(radioButtonSelections);
-      } catch (e) {
-        console.warn('⚠️ Could not parse radioButtonSelections, treating as invalid:', e);
-        validRadioButtonSelections = undefined;
-      }
-    } else {
-      console.warn('⚠️ radioButtonSelections is invalid type, treating as undefined');
-      validRadioButtonSelections = undefined;
-    }
-  }
+  const validRadioButtonSelections = parseRadioButtonSelections(radioButtonSelections);
 
   return EPVS_DYNAMIC_INPUT_FIELDS.filter(field => {
     // ====== STEP 1: Check disabledByRadioButton condition FIRST (highest priority) ======

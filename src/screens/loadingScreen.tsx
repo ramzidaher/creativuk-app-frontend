@@ -1,4 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
@@ -182,6 +183,18 @@ export default function LoadingScreen({ navigation }: Props) {
     // Do not navigate here; allow React Navigation to mount with deep link state
     // Once auth completes, AppNavigator will mount the stack and linking will handle the route
   }, [navigation, isAuthenticated, isLoading]);
+
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+    const state = navigation.getState();
+    const current = state?.routes?.[state.index]?.name;
+    if (current !== 'Loading') {
+      return;
+    }
+    navigation.replace(isAuthenticated ? 'MainTabs' : 'Login');
+  }, [isLoading, isAuthenticated, navigation]);
 
   const circleRotation = circleAnim.interpolate({
     inputRange: [0, 1],

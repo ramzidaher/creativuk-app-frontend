@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,8 +14,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BottomNavigation from '../components/BottomNavigation';
 import { useTheme } from '../context/ThemeContext';
+import { useAuthReady } from '../hooks/useAuthReady';
 import CalculatorProgressService from '../services/CalculatorProgressService';
 import { api } from '../utils/api';
+import {
+  getCustomerDetailsFromRouteParams,
+  normalizeRouteParams,
+  parseJsonParam,
+} from '../utils/deepLinkParams';
 import {
   V44_QUESTIONS_GROUP_IDS,
   V44RadioGroup,
@@ -43,11 +49,19 @@ type RouteParams = {
  */
 export default function V44CalculatorQuestionsScreen() {
   const { theme, isDark } = useTheme();
+  const { isAuthReady, isLoading: authLoading, isAuthenticated } = useAuthReady();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { opportunityId } = route.params as RouteParams;
-  const routeCustomer = (route.params as RouteParams).customerDetails;
-  const [customerDetails, setCustomerDetails] = useState<RouteParams['customerDetails']>(routeCustomer);
+  const params = normalizeRouteParams(route.params as RouteParams as Record<string, unknown>);
+  const opportunityId = params.opportunityId as string;
+  const routeCustomerRef = useRef(getCustomerDetailsFromRouteParams(params));
+  const pendingRadiosRef = useRef(parseJsonParam<Record<string, number>>(params.pendingRadios));
+  const isAuthReadyRef = useRef(isAuthReady);
+  isAuthReadyRef.current = isAuthReady;
+  const loadedOnceRef = useRef(false);
+  const [customerDetails, setCustomerDetails] = useState<RouteParams['customerDetails']>(
+    routeCustomerRef.current,
+  );
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -58,6 +72,9 @@ export default function V44CalculatorQuestionsScreen() {
   const [savedRadios, setSavedRadios] = useState<Record<string, number> | null>(null);
 
   const load = useCallback(async () => {
+    if (!isAuthReadyRef.current) {
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -74,10 +91,13 @@ export default function V44CalculatorQuestionsScreen() {
       const progress = await CalculatorProgressService.getProgress(opportunityId, 'v44');
       if (progress?.customerDetails) {
         setCustomerDetails(progress.customerDetails);
-      } else if (routeCustomer) {
-        setCustomerDetails(routeCustomer);
+      } else if (routeCustomerRef.current) {
+        setCustomerDetails(routeCustomerRef.current);
       }
       const restored = radiosFromProgress(progress?.radioButtonSelections, allGroups);
+      if (pendingRadiosRef.current) {
+        Object.assign(restored, pendingRadiosRef.current);
+      }
       // If a previously saved selection is now disabled (e.g. Octopus Flux), reset it
       if (isBatterySavingsOptionDisabled(restored.battery_savings)) {
         const batteryGroup = allGroups.find((g) => g.id === 'battery_savings');
@@ -102,13 +122,16 @@ export default function V44CalculatorQuestionsScreen() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
+      loadedOnceRef.current = true;
       setLoading(false);
     }
-  }, [opportunityId, routeCustomer]);
+  }, [opportunityId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (isAuthReady && opportunityId) {
+      load();
+    }
+  }, [load, isAuthReady, opportunityId]);
 
   const questionGroups = groups.filter((g) =>
     (V44_QUESTIONS_GROUP_IDS as readonly string[]).includes(g.id),
@@ -191,14 +214,29 @@ export default function V44CalculatorQuestionsScreen() {
     }
   };
 
-  if (loading) {
+  if ((authLoading && !loadedOnceRef.current) || loading) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
         <View style={styles.center}>
           <ActivityIndicator size="large" color={theme.primaryButton} />
           <Text style={{ color: theme.secondaryText, marginTop: 12 }}>
-            Loading questions…
+            {authLoading && !loadedOnceRef.current ? 'Signing in…' : 'Loading questions…'}
           </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+        <View style={styles.center}>
+          <Text style={{ color: theme.primaryText, textAlign: 'center', marginBottom: 12 }}>
+            Please log in to open this calculator link.
+          </Text>
+          <TouchableOpacity onPress={() => navigation.replace('Login')} style={styles.retry}>
+            <Text style={{ color: theme.primaryButton }}>Go to login</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );

@@ -15,19 +15,24 @@ import {
 import BottomNavigation from '../components/BottomNavigation';
 import { useTheme } from '../context/ThemeContext';
 import CalculatorProgressService from '../services/CalculatorProgressService';
+import {
+  getCustomerDetailsFromRouteParams,
+  parseSelectedOptions,
+  type RouteCustomerDetails,
+  type TemplateSelectedOptions,
+} from '../utils/deepLinkParams';
 
 const { width } = Dimensions.get('window');
 
 interface RouteParams {
   templateFileName?: string;
-  selectedOptions?: {
-    solar: boolean;
-    battery: boolean;
-    solarHybrid: boolean;
-    batteryInverter: boolean;
-  };
+  selectedOptions?: TemplateSelectedOptions | string;
   opportunityId?: string;
   calculatorType?: 'flux' | 'off-peak' | 'v44';
+  customerDetails?: RouteCustomerDetails | string;
+  customerName?: string;
+  address?: string;
+  postcode?: string;
 }
 
 interface CustomerDetails {
@@ -40,10 +45,23 @@ export default function CustomerDetailsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { theme, isDark } = useTheme();
-  const { templateFileName, selectedOptions, opportunityId, calculatorType } = route.params as RouteParams;
+  const rawParams = route.params as RouteParams;
+  const {
+    templateFileName,
+    opportunityId,
+    calculatorType,
+  } = rawParams;
+  const selectedOptions = parseSelectedOptions(rawParams.selectedOptions);
+  const urlCustomerDetails = getCustomerDetailsFromRouteParams(rawParams as Record<string, unknown>);
   
   console.log('🔍 CustomerDetailsScreen: Component loaded');
-  console.log('🔍 CustomerDetailsScreen: Route params:', { templateFileName, selectedOptions, opportunityId, calculatorType });
+  console.log('🔍 CustomerDetailsScreen: Route params:', {
+    templateFileName,
+    selectedOptions,
+    opportunityId,
+    calculatorType,
+    urlCustomerDetails,
+  });
   
   const [customerName, setCustomerName] = useState('');
   const [address, setAddress] = useState('');
@@ -97,10 +115,17 @@ export default function CustomerDetailsScreen() {
       console.log('🔍 CustomerDetailsScreen: Starting restore progress...');
       const progress = await CalculatorProgressService.restoreProgress(
         opportunityId,
-        'off-peak' // Default to off-peak for now
+        calculatorType || 'off-peak',
       );
       
-      if (progress && progress.customerDetails) {
+      if (urlCustomerDetails) {
+        console.log('🔗 Applying customer details from URL query params:', urlCustomerDetails);
+        setSavedCustomerDetails(urlCustomerDetails);
+        setCustomerName(urlCustomerDetails.customerName || '');
+        setAddress(urlCustomerDetails.address || '');
+        setPostcode(urlCustomerDetails.postcode || '');
+        setHasRestoredProgress(true);
+      } else if (progress && progress.customerDetails) {
         console.log('🔄 Auto-restoring customer details from saved progress:', progress.customerDetails);
         
         // Store the saved data for comparison
@@ -123,7 +148,7 @@ export default function CustomerDetailsScreen() {
     } finally {
       setIsInitialized(true);
     }
-  }, [opportunityId, isInitialized]);
+  }, [opportunityId, isInitialized, calculatorType, urlCustomerDetails]);
 
   // Auto-save progress function
   const saveProgress = useCallback(async () => {
@@ -159,10 +184,12 @@ export default function CustomerDetailsScreen() {
 
   useEffect(() => {
     const init = async () => {
-      // First restore progress automatically
       await restoreProgress();
-      // Then load customer details from opportunity
-      await loadCustomerDetails();
+      if (!urlCustomerDetails) {
+        await loadCustomerDetails();
+      } else {
+        setIsLoading(false);
+      }
     };
     
     init();
@@ -173,7 +200,7 @@ export default function CustomerDetailsScreen() {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [opportunityId, restoreProgress]);
+  }, [opportunityId, restoreProgress, urlCustomerDetails]);
 
   // Auto-save when customer details change
   useEffect(() => {
@@ -754,22 +781,6 @@ export default function CustomerDetailsScreen() {
         ]}
       >
         <View style={styles.content}>
-          {/* Hero Section */}
-          <View style={styles.heroSection}>
-            <View style={[styles.heroIcon, { backgroundColor: theme.primaryButton + '20' }]}>
-              <Feather name="user" size={32} color={theme.primaryButton} />
-            </View>
-            <Text style={[styles.heroTitle, { color: theme.primaryText }]}>
-              {isEditing ? 'Edit Customer Details' : 'Customer Information'}
-            </Text>
-            <Text style={[styles.heroSubtitle, { color: theme.secondaryText }]}>
-              {isEditing 
-                ? 'Update the customer details as needed'
-                : 'Please confirm the customer details to create a personalized calculation file.'
-              }
-            </Text>
-          </View>
-
           {/* Auto-fill Notification */}
           {!isEditing && autoFilledDetails && (
             <View style={[styles.autoFillCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
@@ -1096,38 +1107,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     fontWeight: '500',
-  },
-  heroSection: {
-    alignItems: 'center',
-    marginBottom: 32,
-    paddingHorizontal: 4,
-  },
-  heroIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    shadowColor: 'rgba(0, 0, 0, 0.06)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  heroTitle: {
-    fontSize: width < 768 ? 24 : 28,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 8,
-    letterSpacing: -0.4,
-  },
-  heroSubtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 22,
-    fontWeight: '500',
-    paddingHorizontal: 20,
   },
   autoFillCard: {
     marginBottom: 24,

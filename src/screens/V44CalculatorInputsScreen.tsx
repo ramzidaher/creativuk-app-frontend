@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -16,9 +16,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BottomNavigation from '../components/BottomNavigation';
 import { useTheme } from '../context/ThemeContext';
+import { useAuthReady } from '../hooks/useAuthReady';
 import CalculatorProgressService from '../services/CalculatorProgressService';
 import { api } from '../utils/api';
 import { showAlert } from '../utils/crossPlatformAlert';
+import { getCustomerDetailsFromRouteParams, normalizeRouteParams, parseJsonParam } from '../utils/deepLinkParams';
 import {
   V44Field,
   V44RadioGroup,
@@ -77,37 +79,28 @@ const ALWAYS_RENDER_SECTIONS = new Set(['current_tariff', ...TARIFF_OVERRIDE_SEC
 const EQUIPMENT_SECTION_IDS = new Set(['solar_pv', 'battery', 'inverter']);
 const NEW_TARIFF_SECTION_IDS = new Set(['new_overnight', 'export_tariff']);
 
-function parseRouteCustomerDetails(
-  raw: unknown,
-): RouteParams['customerDetails'] | undefined {
-  if (!raw || typeof raw !== 'object') return undefined;
-  if (Array.isArray(raw)) return undefined;
-  const c = raw as Record<string, unknown>;
-  if (
-    typeof c.customerName !== 'string' &&
-    typeof c.address !== 'string' &&
-    typeof c.postcode !== 'string'
-  ) {
-    return undefined;
-  }
-  return {
-    customerName: String(c.customerName ?? ''),
-    address: String(c.address ?? ''),
-    postcode: String(c.postcode ?? ''),
-  };
-}
-
 /**
  * v4.4 Inputs — schema-driven show/hide/clear (Excel Toggle logic in the app).
  */
 export default function V44CalculatorInputsScreen() {
   const { theme, isDark } = useTheme();
+  const { isAuthReady, isLoading: authLoading, isAuthenticated } = useAuthReady();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { opportunityId } = route.params as RouteParams;
-  const routeCustomer = parseRouteCustomerDetails(
-    (route.params as RouteParams).customerDetails,
+  const params = normalizeRouteParams(route.params as Record<string, unknown>);
+  const opportunityId = params.opportunityId as string;
+  /** Capture deep-link params once — URL sync recreates route.params and would reload in a loop. */
+  const routeCustomerRef = useRef(getCustomerDetailsFromRouteParams(params));
+  const isAuthReadyRef = useRef(isAuthReady);
+  isAuthReadyRef.current = isAuthReady;
+  /** Capture deep-link radios once — do not re-read route.params (URL sync causes reload loops). */
+  const pendingRadiosRef = useRef(
+    parseJsonParam<Record<string, number>>(params.pendingRadios),
   );
+  const pendingRadiosAppliedRef = useRef(false);
+  const loadInFlightRef = useRef(false);
+  const loadedOnceRef = useRef(false);
+  const skipInitialFocusReloadRef = useRef(true);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -118,7 +111,9 @@ export default function V44CalculatorInputsScreen() {
   const [equipment, setEquipment] = useState<Equipment | null>(null);
   const [radios, setRadios] = useState<Record<string, number>>({});
   const [inputs, setInputs] = useState<Record<string, string>>({});
-  const [customerDetails, setCustomerDetails] = useState<RouteParams['customerDetails']>(routeCustomer);
+  const [customerDetails, setCustomerDetails] = useState<RouteParams['customerDetails']>(
+    routeCustomerRef.current,
+  );
   const [dropdown, setDropdown] = useState<{
     fieldId: string;
     label: string;
@@ -132,8 +127,14 @@ export default function V44CalculatorInputsScreen() {
   const [savedInputs, setSavedInputs] = useState<Record<string, string> | null>(null);
   const [savedRadios, setSavedRadios] = useState<Record<string, number> | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options?: { background?: boolean }) => {
+    if (!isAuthReadyRef.current || !opportunityId || loadInFlightRef.current) {
+      return;
+    }
+    loadInFlightRef.current = true;
+    if (!options?.background) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const [schemaRes, equipmentRes] = await Promise.all([
@@ -145,8 +146,15 @@ export default function V44CalculatorInputsScreen() {
         }>('/calculator-testing/schema'),
         api.get<Equipment & { success: boolean }>('/calculator-testing/equipment'),
       ]);
-      if (!schemaRes.success || !schemaRes.data) throw new Error('Failed to load schema');
-      if (!equipmentRes.success || !equipmentRes.data) throw new Error('Failed to load equipment');
+      if (!schemaRes.success || !schemaRes.data?.radioGroups) {
+        throw new Error(
+          schemaRes.error ||
+            'Failed to load calculator schema. Check you are logged in and the backend is running.',
+        );
+      }
+      if (!equipmentRes.success || !equipmentRes.data) {
+        throw new Error(equipmentRes.error || 'Failed to load equipment catalog');
+      }
 
       setGroups(schemaRes.data.radioGroups);
       setSections(sortSectionsByExcelOrder(schemaRes.data.sections));
@@ -158,23 +166,22 @@ export default function V44CalculatorInputsScreen() {
         progress?.radioButtonSelections,
         schemaRes.data.radioGroups,
       );
-      const pending = (route.params as RouteParams).pendingRadios;
-      if (pending) {
+      if (pendingRadiosRef.current && !pendingRadiosAppliedRef.current) {
         Object.assign(
           restoredRadios,
-          normalizeV44Radios(pending, schemaRes.data.radioGroups),
+          normalizeV44Radios(pendingRadiosRef.current, schemaRes.data.radioGroups),
         );
-        navigation.setParams({ pendingRadios: undefined } as Partial<RouteParams>);
+        pendingRadiosAppliedRef.current = true;
       }
       setRadios(restoredRadios);
 
       const restoredInputs = { ...(progress?.dynamicInputs || {}) };
-      if (progress?.customerDetails) {
-        setCustomerDetails(progress.customerDetails);
-        const c = progress.customerDetails;
-        restoredInputs.customer_name = c.customerName || '';
-        restoredInputs.address = c.address || '';
-        restoredInputs.postcode = c.postcode || '';
+      const effectiveCustomer = progress?.customerDetails ?? routeCustomerRef.current;
+      if (effectiveCustomer) {
+        setCustomerDetails(effectiveCustomer);
+        restoredInputs.customer_name = effectiveCustomer.customerName || '';
+        restoredInputs.address = effectiveCustomer.address || '';
+        restoredInputs.postcode = effectiveCustomer.postcode || '';
       }
       // Clear stale panel selections that are no longer supported
       // (only Eurener Nexa 475W is sold — see V44_SUPPORTED_PANELS)
@@ -250,9 +257,11 @@ export default function V44CalculatorInputsScreen() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
+      loadedOnceRef.current = true;
       setLoading(false);
+      loadInFlightRef.current = false;
     }
-  }, [opportunityId, navigation]);
+  }, [opportunityId]);
 
   const modeSummary = useMemo(() => {
     const savings = v44Radio(radios, 'battery_savings');
@@ -268,12 +277,23 @@ export default function V44CalculatorInputsScreen() {
     return `${savingsLabels[savings] ?? '—'} · ${tariffLabels[tariff] ?? '—'}`;
   }, [radios]);
 
-  // Reload whenever the screen gains focus so changes made on the Questions
-  // page (e.g. switching tariff type) are picked up immediately when the rep
-  // navigates back and forth — no manual refresh needed.
+  useEffect(() => {
+    if (isAuthReady && opportunityId) {
+      load();
+    }
+  }, [isAuthReady, opportunityId, load]);
+
+  // Background refresh when returning from Calculator Questions (no full-screen spinner).
   useFocusEffect(
     useCallback(() => {
-      load();
+      if (skipInitialFocusReloadRef.current) {
+        skipInitialFocusReloadRef.current = false;
+        return;
+      }
+      if (!loadedOnceRef.current || !isAuthReadyRef.current) {
+        return;
+      }
+      load({ background: true });
     }, [load]),
   );
 
@@ -818,11 +838,29 @@ export default function V44CalculatorInputsScreen() {
     }
   };
 
-  if (loading) {
+  if ((authLoading && !loadedOnceRef.current) || loading) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
         <View style={styles.center}>
           <ActivityIndicator size="large" color={theme.primaryButton} />
+          <Text style={{ color: theme.secondaryText, marginTop: 12 }}>
+            {authLoading ? 'Signing in…' : 'Loading calculator…'}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+        <View style={styles.center}>
+          <Text style={{ color: theme.primaryText, textAlign: 'center', marginBottom: 12 }}>
+            Please log in to open this calculator link.
+          </Text>
+          <TouchableOpacity onPress={() => navigation.replace('Login')}>
+            <Text style={{ color: theme.primaryButton }}>Go to login</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -833,7 +871,7 @@ export default function V44CalculatorInputsScreen() {
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
         <View style={styles.center}>
           <Text style={{ color: theme.dangerButton }}>{error}</Text>
-          <TouchableOpacity onPress={load}>
+          <TouchableOpacity onPress={() => load()}>
             <Text style={{ color: theme.primaryButton, marginTop: 12 }}>Retry</Text>
           </TouchableOpacity>
         </View>
