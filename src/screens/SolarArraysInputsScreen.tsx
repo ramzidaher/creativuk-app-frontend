@@ -445,7 +445,7 @@ export default function SolarArraysInputsScreen() {
     try {
       setImporting(true);
       const { api } = await import('../utils/api');
-      const calc: any = await api.get(`/opensolar/calculator-data/${opportunityId}`);
+      const calc: any = await api.get(`/opensolar/calculator-data/${opportunityId}?refresh=true`);
       console.log('🔍 Import - OpenSolar calculator data response:', calc?.data);
       if (calc?.data?.success && calc.data.data?.arrays) {
         const arrays = calc.data.data.arrays as any[];
@@ -491,14 +491,8 @@ export default function SolarArraysInputsScreen() {
             pitchDeg = validatePitch(String(tilt));
           }
           
-          // Convert shading from percentage to decimal
-          let shadingFactor = '';
-          if (a.shading?.annualLoss != null) {
-            const annualLoss = parseFloat(a.shading.annualLoss);
-            // Convert from percentage loss to shading factor (100% = 1, 50% = 0.5)
-            const shadingFactorValue = 1 - (annualLoss / 100);
-            shadingFactor = validateShading(String(Math.round(shadingFactorValue * 100) / 100));
-          }
+          // Convert shading — prefer sunAccess (matches OpenSolar UI), fall back to annual loss
+          const shadingFactor = openSolarShadingToFactor(a.shading);
           
           return {
             ...r,
@@ -508,6 +502,7 @@ export default function SolarArraysInputsScreen() {
             pitchDeg,
             shadingFactor,
             source: 'opensolar' as const,
+            overrideOpenSolar: false,
           };
         }));
         
@@ -624,6 +619,29 @@ export default function SolarArraysInputsScreen() {
     // Allow values like ".96", "0.96", "96" - don't restrict during typing
     // Full validation (0-1 range) happens on save only
     return cleanedValue;
+  };
+
+  // Convert OpenSolar shading (sun access or annual loss) to calculator shading factor (0-1)
+  const openSolarShadingToFactor = (shading?: { sunAccess?: number; annualLoss?: number }): string => {
+    if (!shading) return '';
+
+    if (shading.sunAccess != null) {
+      const sunAccess = parseFloat(String(shading.sunAccess));
+      if (!Number.isNaN(sunAccess)) {
+        return validateShading(String(Math.round(sunAccess * 100) / 100));
+      }
+    }
+
+    if (shading.annualLoss != null) {
+      const annualLoss = parseFloat(String(shading.annualLoss));
+      if (!Number.isNaN(annualLoss)) {
+        const lossPercent = annualLoss > 1 ? annualLoss : annualLoss * 100;
+        const shadingFactorValue = 1 - lossPercent / 100;
+        return validateShading(String(Math.round(shadingFactorValue * 100) / 100));
+      }
+    }
+
+    return '';
   };
 
   // Validation function to check if shading value is valid (for save validation)
