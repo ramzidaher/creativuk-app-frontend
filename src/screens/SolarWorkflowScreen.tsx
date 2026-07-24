@@ -25,6 +25,19 @@ import CalculatorProgressService, { PricingOverrideOption } from '../services/Ca
 
 const { width, height } = Dimensions.get('window');
 
+/** Steps surveyors cannot re-run on legacy Off Peak / Flux opportunities. */
+const LEGACY_REGENERATION_STEP_TYPES = new Set([
+  'CALCULATOR',
+  'SOLAR_PROJECTION',
+  'FOLLOW_UP',
+  'PROPOSAL_GENERATION',
+  'INSTALLATION_SCHEDULING',
+  'CONTRACT_SIGNING',
+]);
+
+const LEGACY_REGENERATION_MESSAGE =
+  'This customer uses the previous Off Peak / Flux calculator. Proposal, HomeTree, contract, and calculator regeneration are only available to administrators.';
+
 interface RouteParams {
   opportunityId: string;
   opportunity?: any;
@@ -52,6 +65,19 @@ export default function SolarWorkflowScreen() {
   const [selectedCalculatorType, setSelectedCalculatorType] = useState<'off-peak' | 'flux' | 'epvs' | null>(null);
   const [overridePriceInput, setOverridePriceInput] = useState('');
   const [isApplyingOverride, setIsApplyingOverride] = useState(false);
+
+  const legacyRegenerationBlocked = !!workflowProgress?.legacyRegenerationBlocked;
+
+  const blockLegacyRegenerationStep = (stepType?: string): boolean => {
+    if (!legacyRegenerationBlocked || !stepType) {
+      return false;
+    }
+    if (!LEGACY_REGENERATION_STEP_TYPES.has(stepType)) {
+      return false;
+    }
+    Alert.alert('Previous calculator', LEGACY_REGENERATION_MESSAGE);
+    return true;
+  };
   
   // Welcome Email state removed - now using dedicated WelcomeEmailScreen
   
@@ -1001,6 +1027,10 @@ export default function SolarWorkflowScreen() {
     console.log('🔍 Step pressed:', stepNumber);
     const stepInfo = workflowSteps.find(step => step.stepNumber === stepNumber);
     console.log('🔍 Step info:', stepInfo?.title, stepInfo?.stepType, 'Step number:', stepInfo?.stepNumber);
+
+    if (blockLegacyRegenerationStep(stepInfo?.stepType)) {
+      return;
+    }
     
     // Check step navigation permission
     // If step navigation is disabled, enforce step order

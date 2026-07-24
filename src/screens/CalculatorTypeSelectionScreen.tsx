@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,81 +9,45 @@ import {
   Dimensions,
   Image,
   ScrollView,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import BottomNavigation from '../components/BottomNavigation';
 import { useTheme } from '../context/ThemeContext';
-import { systemSettingsApi } from '../utils/api';
 import {
   getCustomerDetailsFromRouteParams,
   normalizeRouteParams,
-  parseSelectedOptions,
 } from '../utils/deepLinkParams';
 
 const { width, height } = Dimensions.get('window');
+
+const V44_TEMPLATE_FILE =
+  'EPVS Member Calculator v4.4 - (Creativ) 15th June 2026 (1).xlsm';
+const V44_SELECTED_OPTIONS = {
+  solar: true,
+  battery: true,
+  solarHybrid: false,
+  batteryInverter: false,
+};
 
 export default function CalculatorTypeSelectionScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { theme, isDark, toggleTheme } = useTheme();
   const [pressedCalculator, setPressedCalculator] = useState<string | null>(null);
-  const [offPeakEnabled, setOffPeakEnabled] = useState(true);
-  const [fluxEnabled, setFluxEnabled] = useState(true);
-  const [loadingSettings, setLoadingSettings] = useState(true);
 
   const params = normalizeRouteParams(route.params as Record<string, unknown>);
   const opportunityId = params.opportunityId as string | undefined;
-  const templateFileName = typeof params.templateFileName === 'string' ? params.templateFileName : undefined;
-  const selectedOptions = parseSelectedOptions(params.selectedOptions);
   const customerDetails = getCustomerDetailsFromRouteParams(params);
 
-  useEffect(() => {
-    const loadCalculatorSettings = async () => {
-      try {
-        const [offPeakRes, fluxRes] = await Promise.all([
-          systemSettingsApi.getSettingValue('calculator_off_peak_enabled'),
-          systemSettingsApi.getSettingValue('calculator_flux_enabled'),
-        ]);
-        if (offPeakRes.success && offPeakRes.data != null) {
-          try { setOffPeakEnabled(JSON.parse(offPeakRes.data || 'true')); } catch { setOffPeakEnabled(true); }
-        }
-        if (fluxRes.success && fluxRes.data != null) {
-          try { setFluxEnabled(JSON.parse(fluxRes.data || 'true')); } catch { setFluxEnabled(true); }
-        }
-      } catch {
-        // keep defaults
-      } finally {
-        setLoadingSettings(false);
-      }
-    };
-    loadCalculatorSettings();
-  }, []);
-
-  const handleCalculatorTypeSelection = (calculatorType: 'flux' | 'off-peak') => {
-    // If we have template selection data, go to Customer Details
-    if (templateFileName && selectedOptions) {
-      navigation.navigate('CustomerDetails', {
-        opportunityId,
-        templateFileName,
-        selectedOptions,
-        calculatorType: calculatorType
-      });
-    } else {
-      // If no template selection yet, go to the appropriate template selection screen
-          if (calculatorType === 'flux') {
-      navigation.navigate('FluxTemplateSelection', {
-          opportunityId,
-          calculatorType: calculatorType
-        });
-      } else {
-        navigation.navigate('TemplateSelection', {
-          opportunityId,
-          calculatorType: calculatorType
-        });
-      }
-    }
+  const startV44Calculator = () => {
+    navigation.navigate('CustomerDetails', {
+      opportunityId,
+      calculatorType: 'v44',
+      templateFileName: V44_TEMPLATE_FILE,
+      selectedOptions: V44_SELECTED_OPTIONS,
+      customerDetails,
+    });
   };
 
   return (
@@ -122,7 +86,7 @@ export default function CalculatorTypeSelectionScreen() {
             <View style={styles.headerTextContainer}>
               <Text style={[styles.headerTitle, { color: theme.primaryText }]}>Choose Calculator Type</Text>
               <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
-                Select the type of calculation you want to perform
+                v4.4 calculator (Off Peak and Flux are no longer available for new jobs)
               </Text>
             </View>
           </View>
@@ -177,130 +141,42 @@ export default function CalculatorTypeSelectionScreen() {
         )}
 
         <View style={styles.optionsContainer}>
-          {loadingSettings ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={theme.primaryButton} />
-              <Text style={[styles.loadingText, { color: theme.secondaryText }]}>Loading...</Text>
+          <TouchableOpacity
+            style={[
+              styles.calculatorOption,
+              {
+                backgroundColor: pressedCalculator === 'v44'
+                  ? (isDark ? 'rgba(51, 65, 85, 0.9)' : 'rgba(219, 234, 254, 0.5)')
+                  : theme.cardBackground,
+                borderColor: pressedCalculator === 'v44' ? '#2563EB' : theme.cardBorder,
+                borderLeftWidth: 5,
+                borderLeftColor: '#2563EB',
+              },
+              styles.calculatorOptionInteractive,
+            ]}
+            onPress={startV44Calculator}
+            onPressIn={() => setPressedCalculator('v44')}
+            onPressOut={() => setPressedCalculator(null)}
+            activeOpacity={1}
+          >
+            <View style={styles.calculatorIconContainer}>
+              <View style={[styles.iconBackground, { backgroundColor: '#DBEAFE' }]}>
+                <Feather name="sun" size={36} color="#2563EB" />
+              </View>
             </View>
-          ) : !offPeakEnabled && !fluxEnabled ? (
-            <View style={[styles.noCalculatorsCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
-              <Feather name="calculator" size={48} color={theme.secondaryText} />
-              <Text style={[styles.noCalculatorsTitle, { color: theme.primaryText }]}>No calculators available</Text>
-              <Text style={[styles.noCalculatorsText, { color: theme.secondaryText }]}>
-                Calculators are currently disabled. Please contact your administrator.
-              </Text>
+            <Text style={[styles.calculatorTitle, { color: theme.primaryText }]}>v4.4 Calculator</Text>
+            <Text style={[styles.calculatorSubtitle, { color: theme.secondaryText }]}>
+              Current Creativ EPVS calculator with NewSavings and updated defaults
+            </Text>
+            <View style={styles.calculatorHoverEffect}>
+              <Feather name="arrow-right" size={28} color="#2563EB" />
             </View>
-          ) : (
-            <>
-              {/* Off Peak Calculator Option - only show if enabled */}
-              {offPeakEnabled && (
-                <TouchableOpacity
-                  style={[
-                    styles.calculatorOption,
-                    {
-                      backgroundColor: pressedCalculator === 'offpeak'
-                        ? (isDark ? 'rgba(51, 65, 85, 0.9)' : 'rgba(254, 243, 199, 0.4)')
-                        : theme.cardBackground,
-                      borderColor: pressedCalculator === 'offpeak' ? '#F59E0B' : theme.cardBorder,
-                      borderLeftWidth: 5,
-                      borderLeftColor: '#F59E0B',
-                    },
-                    styles.calculatorOptionInteractive
-                  ]}
-                  onPress={() => handleCalculatorTypeSelection('off-peak')}
-                  onPressIn={() => setPressedCalculator('offpeak')}
-                  onPressOut={() => setPressedCalculator(null)}
-                  activeOpacity={1}
-                >
-                  <View style={styles.calculatorIconContainer}>
-                    <View style={[styles.iconBackground, { backgroundColor: '#FEF3C7' }]}>
-                      <Feather name="zap" size={36} color="#F59E0B" />
-                    </View>
-                  </View>
-                  <Text style={[styles.calculatorTitle, { color: theme.primaryText }]}>Off Peak Calculator</Text>
-                  <Text style={[styles.calculatorSubtitle, { color: theme.secondaryText }]}>
-                    For single or dual rate tariffs, EV and off-peak customers
-                  </Text>
-                  <View style={styles.calculatorPoints}>
-                    <View style={styles.pointItem}>
-                      <View style={[styles.pointDot, { backgroundColor: '#F59E0B' }]} />
-                      <Text style={[styles.calculatorPoint, { color: theme.primaryText }]}>Use for single or dual rate tariff</Text>
-                    </View>
-                    <View style={styles.pointItem}>
-                      <View style={[styles.pointDot, { backgroundColor: '#F59E0B' }]} />
-                      <Text style={[styles.calculatorPoint, { color: theme.primaryText }]}>Ideal for EV customers</Text>
-                    </View>
-                    <View style={styles.pointItem}>
-                      <View style={[styles.pointDot, { backgroundColor: '#F59E0B' }]} />
-                      <Text style={[styles.calculatorPoint, { color: theme.primaryText }]}>Customers with off-peak rates or moving to one</Text>
-                    </View>
-                    <View style={styles.pointItem}>
-                      <View style={[styles.pointDot, { backgroundColor: '#F59E0B' }]} />
-                      <Text style={[styles.calculatorPoint, { color: theme.primaryText }]}>For low users under 3kW</Text>
-                    </View>
-                  </View>
-                  <View style={styles.calculatorHoverEffect}>
-                    <Feather name="arrow-right" size={28} color="#F59E0B" />
-                  </View>
-                </TouchableOpacity>
-              )}
-
-              {/* Flux Calculator Option - only show if enabled */}
-              {fluxEnabled && (
-                <TouchableOpacity
-                  style={[
-                    styles.calculatorOption,
-                    {
-                      backgroundColor: pressedCalculator === 'flux'
-                        ? (isDark ? 'rgba(51, 65, 85, 0.9)' : 'rgba(237, 233, 254, 0.5)')
-                        : theme.cardBackground,
-                      borderColor: pressedCalculator === 'flux' ? '#8B5CF6' : theme.cardBorder,
-                      borderLeftWidth: 5,
-                      borderLeftColor: '#8B5CF6',
-                    },
-                    styles.calculatorOptionInteractive
-                  ]}
-                  onPress={() => handleCalculatorTypeSelection('flux')}
-                  onPressIn={() => setPressedCalculator('flux')}
-                  onPressOut={() => setPressedCalculator(null)}
-                  activeOpacity={1}
-                >
-                  <View style={styles.calculatorIconContainer}>
-                    <View style={[styles.iconBackground, { backgroundColor: '#EDE9FE' }]}>
-                      <Feather name="trending-up" size={36} color="#8B5CF6" />
-                    </View>
-                  </View>
-                  <Text style={[styles.calculatorTitle, { color: theme.primaryText }]}>Flux Calculator</Text>
-                  <Text style={[styles.calculatorSubtitle, { color: theme.secondaryText }]}>
-                    For single rate and Octopus Flux customers with higher usage
-                  </Text>
-                  <View style={styles.calculatorPoints}>
-                    <View style={styles.pointItem}>
-                      <View style={[styles.pointDot, { backgroundColor: '#8B5CF6' }]} />
-                      <Text style={[styles.calculatorPoint, { color: theme.primaryText }]}>Useful for single rate customers</Text>
-                    </View>
-                    <View style={styles.pointItem}>
-                      <View style={[styles.pointDot, { backgroundColor: '#8B5CF6' }]} />
-                      <Text style={[styles.calculatorPoint, { color: theme.primaryText }]}>Octopus Flux customers</Text>
-                    </View>
-                    <View style={styles.pointItem}>
-                      <View style={[styles.pointDot, { backgroundColor: '#8B5CF6' }]} />
-                      <Text style={[styles.calculatorPoint, { color: theme.primaryText }]}>High energy usage over 4kW</Text>
-                    </View>
-                  </View>
-                  <View style={styles.calculatorHoverEffect}>
-                    <Feather name="arrow-right" size={28} color="#8B5CF6" />
-                  </View>
-                </TouchableOpacity>
-              )}
-            </>
-          )}
+          </TouchableOpacity>
         </View>
 
-        {/* Footer */}
         <View style={[styles.footer, { backgroundColor: theme.cardBackground, borderTopColor: theme.cardBorder }]}>
           <Text style={[styles.footerText, { color: theme.secondaryText }]}>
-            💡 Both calculators use the same customer details and template selection
+            Existing Off Peak / Flux jobs stay in your progress list; ask an admin to regenerate proposals or contracts on those.
           </Text>
         </View>
       </ScrollView>
