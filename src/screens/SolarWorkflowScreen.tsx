@@ -22,12 +22,12 @@ import { useTheme } from '../context/ThemeContext';
 import { api, opportunitiesApi, systemSettingsApi, workflowApi } from '../utils/api';
 import BottomNavigation from '../components/BottomNavigation';
 import CalculatorProgressService, { PricingOverrideOption } from '../services/CalculatorProgressService';
+import { normalizeRouteParams, resolveOpportunityIdFromRoute } from '../utils/deepLinkParams';
 
 const { width, height } = Dimensions.get('window');
 
-/** Steps surveyors cannot re-run on legacy Off Peak / Flux opportunities. */
+/** Steps surveyors cannot re-run on legacy Off Peak opportunities (calculator entry stays open). */
 const LEGACY_REGENERATION_STEP_TYPES = new Set([
-  'CALCULATOR',
   'SOLAR_PROJECTION',
   'FOLLOW_UP',
   'PROPOSAL_GENERATION',
@@ -36,7 +36,7 @@ const LEGACY_REGENERATION_STEP_TYPES = new Set([
 ]);
 
 const LEGACY_REGENERATION_MESSAGE =
-  'This customer uses the previous Off Peak / Flux calculator. Proposal, HomeTree, contract, and calculator regeneration are only available to administrators.';
+  'This customer uses the previous Off Peak calculator. Proposal, HomeTree, contract, and calculator regeneration are only available to administrators.';
 
 interface RouteParams {
   opportunityId: string;
@@ -46,7 +46,12 @@ interface RouteParams {
 export default function SolarWorkflowScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
-  const { opportunityId, opportunity: passedOpportunity } = route.params as RouteParams;
+  const params = normalizeRouteParams(route.params as Record<string, unknown>);
+  const opportunityId =
+    resolveOpportunityIdFromRoute(route.params, 'solar-workflow') ??
+    (params.opportunityId as string | undefined) ??
+    '';
+  const passedOpportunity = (route.params as RouteParams)?.opportunity;
   const { user, isAuthenticated } = useAuth();
   const isAdminUser = user?.role === 'ADMIN';
   const { theme, isDark, toggleTheme } = useTheme();
@@ -75,7 +80,11 @@ export default function SolarWorkflowScreen() {
     if (!LEGACY_REGENERATION_STEP_TYPES.has(stepType)) {
       return false;
     }
-    Alert.alert('Previous calculator', LEGACY_REGENERATION_MESSAGE);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.alert(LEGACY_REGENERATION_MESSAGE);
+    } else {
+      Alert.alert('Previous calculator', LEGACY_REGENERATION_MESSAGE);
+    }
     return true;
   };
   
@@ -99,6 +108,31 @@ export default function SolarWorkflowScreen() {
   const [showOutcomeSelection, setShowOutcomeSelection] = useState(false);
   const [isProcessingOutcome, setIsProcessingOutcome] = useState(false);
   const [isTrainingOpportunity, setIsTrainingOpportunity] = useState(false);
+
+  const getCustomerDetailsForCalculator = () => {
+    const name =
+      opportunity?.name ||
+      customerInfo?.name ||
+      passedOpportunity?.name ||
+      '';
+    const address =
+      opportunity?.contactAddress ||
+      passedOpportunity?.contactAddress ||
+      '';
+    const postcode =
+      opportunity?.contactPostcode ||
+      passedOpportunity?.contactPostcode ||
+      customerInfo?.postcode ||
+      '';
+    if (!name && !address && !postcode) {
+      return undefined;
+    }
+    return {
+      customerName: name,
+      address: address || '',
+      postcode: postcode || '',
+    };
+  };
 
   useEffect(() => {
     // Load all data in parallel for faster loading
@@ -1157,8 +1191,11 @@ export default function SolarWorkflowScreen() {
     }
     
     if (stepInfo?.stepType === 'CALCULATOR') {
-      console.log('🔍 Navigating to calculator');
-      // Combined v4.4 calculator only — no calculator-file / type picker.
+      console.log('🔍 Navigating to v4.4 calculator');
+      if (!opportunityId) {
+        Alert.alert('Error', 'Missing opportunity ID. Refresh the page and try again.');
+        return;
+      }
       navigation.navigate('CustomerDetails', {
         opportunityId,
         calculatorType: 'v44',
@@ -1170,6 +1207,9 @@ export default function SolarWorkflowScreen() {
           solarHybrid: false,
           batteryInverter: false,
         },
+        ...(getCustomerDetailsForCalculator()
+          ? { customerDetails: getCustomerDetailsForCalculator() }
+          : {}),
       });
       return;
     }

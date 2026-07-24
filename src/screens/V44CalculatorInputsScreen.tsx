@@ -328,9 +328,11 @@ export default function V44CalculatorInputsScreen() {
         const res = await api.get<{
           success: boolean;
           rates?: {
+            standing_charge?: number;
             parsed_rates?: {
               import?: { day: number; flux: number; peak: number };
               export?: { day: number; flux: number; peak: number };
+              standing_charge?: number;
             };
           };
           error?: string;
@@ -349,6 +351,10 @@ export default function V44CalculatorInputsScreen() {
 
         const rates = body.rates.parsed_rates;
         const round = (n: number) => (Math.round(n * 100) / 100).toString();
+        const standingRaw =
+          rates.standing_charge ??
+          body.rates?.standing_charge ??
+          null;
 
         setInputs((prev) => {
           const next = { ...prev };
@@ -359,6 +365,9 @@ export default function V44CalculatorInputsScreen() {
             next.flux_day_rate_export = round(rates.export.day);
             next.flux_flux_rate_export = round(rates.export.flux);
             next.flux_peak_rate_export = round(rates.export.peak);
+            if (standingRaw != null && Number.isFinite(Number(standingRaw))) {
+              next.flux_standing_charge = round(Number(standingRaw));
+            }
           } else if (variant === 'intelligent' && rates.import && rates.export) {
             next.if_peak_rate_import = round(rates.import.peak);
             next.if_offpeak_rate_import = round(
@@ -368,6 +377,9 @@ export default function V44CalculatorInputsScreen() {
             next.if_offpeak_rate_export = round(
               rates.export.flux ?? rates.export.day,
             );
+            if (standingRaw != null && Number.isFinite(Number(standingRaw))) {
+              next.if_standing_charge = round(Number(standingRaw));
+            }
           }
           return applyNewTariffDefaults(radios, next, { force: true });
         });

@@ -887,6 +887,9 @@ export default function SolarArraysInputsScreen() {
       await CalculatorProgressService.saveProgress(opportunityId!, calculatorType || 'off-peak', {
         currentStep: 'arrays' as const,
         arraysData,
+        dynamicInputs: {
+          no_of_arrays: String(enabledCount),
+        },
         completedSteps: {
           'arrays': true,
         },

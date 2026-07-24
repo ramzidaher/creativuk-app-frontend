@@ -53,11 +53,8 @@ export const V44_QUESTIONS_GROUP_IDS = [
 /** Rep-visible battery savings options in Excel visual order (SC, Flux, Overnight) */
 export const V44_REP_BATTERY_SAVINGS = [1, 3, 2];
 
-/**
- * Shown but not selectable by reps. Octopus Flux (3) stays visible while we
- * confirm whether it remains available at launch.
- */
-export const V44_REP_DISABLED_BATTERY_SAVINGS = [3];
+/** Rep-selectable battery savings options (value 3 = Octopus Flux). */
+export const V44_REP_DISABLED_BATTERY_SAVINGS: number[] = [];
 
 export function isBatterySavingsOptionDisabled(value: number): boolean {
   return V44_REP_DISABLED_BATTERY_SAVINGS.includes(value);
@@ -240,13 +237,16 @@ export function applyNewTariffDefaults(
     next.new_standing_charge = V44_NEW_STANDING_CHARGE_DEFAULT;
   }
 
-  // These modes are not currently selectable by reps, but keep their hidden
-  // workbook values consistent if an existing record uses them.
+  // Hidden Flux standing — Octopus pull fills this; 47.5p only when still empty (never clobber API value).
   if (savings === 3 || savings === 8) {
-    next.flux_standing_charge = V44_STANDING_CHARGE_DEFAULT;
+    if (!String(next.flux_standing_charge ?? '').trim()) {
+      next.flux_standing_charge = V44_STANDING_CHARGE_DEFAULT;
+    }
   }
   if (savings === 4) {
-    next.if_standing_charge = V44_STANDING_CHARGE_DEFAULT;
+    if (!String(next.if_standing_charge ?? '').trim()) {
+      next.if_standing_charge = V44_STANDING_CHARGE_DEFAULT;
+    }
   }
 
   // Self-Consumption (1) has no New Electricity Tariff — clear any stale values
