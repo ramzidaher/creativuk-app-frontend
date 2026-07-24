@@ -203,9 +203,11 @@ export default function PresentationScreen() {
       const result = await presentationApi.generateVideoPresentation({
         opportunityId,
         calculatorType: currentSheet.calculatorType,
+        fileName: currentSheet.fileName,
         customerName: data.customerName,
         date: data.date,
         postcode: data.postcode,
+        extractedVariables: data,
         solarData: {
           p_w: data.p_w,
           p_q: data.p_q,

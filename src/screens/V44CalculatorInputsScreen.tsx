@@ -20,7 +20,7 @@ import { useAuthReady } from '../hooks/useAuthReady';
 import CalculatorProgressService from '../services/CalculatorProgressService';
 import { api } from '../utils/api';
 import { showAlert } from '../utils/crossPlatformAlert';
-import { getCustomerDetailsFromRouteParams, normalizeRouteParams, parseJsonParam } from '../utils/deepLinkParams';
+import { getCustomerDetailsFromRouteParams, cleanLegacyWorkflowUrl, mergeWorkflowRouteParams, parseJsonParam, resolveOpportunityIdFromRoute } from '../utils/deepLinkParams';
 import {
   V44Field,
   V44RadioGroup,
@@ -85,15 +85,24 @@ export default function V44CalculatorInputsScreen() {
   const { isAuthReady, isLoading: authLoading, isAuthenticated } = useAuthReady();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const params = normalizeRouteParams(route.params as Record<string, unknown>);
-  const opportunityId = params.opportunityId as string;
-  /** Capture deep-link params once — URL sync recreates route.params and would reload in a loop. */
-  const routeCustomerRef = useRef(getCustomerDetailsFromRouteParams(params));
+  const mergedParamsRef = useRef(mergeWorkflowRouteParams(route.params as Record<string, unknown>));
+  const opportunityId =
+    resolveOpportunityIdFromRoute(route.params, 'calculator-inputs') ?? '';
+
+  useEffect(() => {
+    cleanLegacyWorkflowUrl(
+      typeof mergedParamsRef.current.calculatorType === 'string'
+        ? mergedParamsRef.current.calculatorType
+        : 'v44',
+    );
+  }, []);
+  /** Capture navigate() / legacy URL params once — not re-read on URL bar sync. */
+  const routeCustomerRef = useRef(getCustomerDetailsFromRouteParams(mergedParamsRef.current));
   const isAuthReadyRef = useRef(isAuthReady);
   isAuthReadyRef.current = isAuthReady;
   /** Capture deep-link radios once — do not re-read route.params (URL sync causes reload loops). */
   const pendingRadiosRef = useRef(
-    parseJsonParam<Record<string, number>>(params.pendingRadios),
+    parseJsonParam<Record<string, number>>(mergedParamsRef.current.pendingRadios),
   );
   const pendingRadiosAppliedRef = useRef(false);
   const loadInFlightRef = useRef(false);
@@ -264,10 +273,22 @@ export default function V44CalculatorInputsScreen() {
   }, [radios]);
 
   useEffect(() => {
-    if (isAuthReady && opportunityId) {
+    if (authLoading) {
+      return;
+    }
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
+    if (!opportunityId) {
+      setError('This calculator link is missing an opportunity ID.');
+      setLoading(false);
+      return;
+    }
+    if (isAuthReady) {
       load();
     }
-  }, [isAuthReady, opportunityId, load]);
+  }, [authLoading, isAuthenticated, isAuthReady, opportunityId, load]);
 
   // Background refresh when returning from Calculator Questions (no full-screen spinner).
   useFocusEffect(
@@ -794,13 +815,13 @@ export default function V44CalculatorInputsScreen() {
     }
   };
 
-  if ((authLoading && !loadedOnceRef.current) || loading) {
+  if (authLoading && !loadedOnceRef.current) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.primaryBackground }]}>
         <View style={styles.center}>
           <ActivityIndicator size="large" color={theme.primaryButton} />
           <Text style={{ color: theme.secondaryText, marginTop: 12 }}>
-            {authLoading ? 'Signing in…' : 'Loading calculator…'}
+            Signing in…
           </Text>
         </View>
       </SafeAreaView>
@@ -809,7 +830,7 @@ export default function V44CalculatorInputsScreen() {
 
   if (!isAuthenticated) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.primaryBackground }]}>
         <View style={styles.center}>
           <Text style={{ color: theme.primaryText, textAlign: 'center', marginBottom: 12 }}>
             Please log in to open this calculator link.
@@ -822,9 +843,22 @@ export default function V44CalculatorInputsScreen() {
     );
   }
 
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.primaryBackground }]}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.primaryButton} />
+          <Text style={{ color: theme.secondaryText, marginTop: 12 }}>
+            Loading calculator…
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (error) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.primaryBackground }]}>
         <View style={styles.center}>
           <Text style={{ color: theme.dangerButton }}>{error}</Text>
           <TouchableOpacity onPress={() => load()}>

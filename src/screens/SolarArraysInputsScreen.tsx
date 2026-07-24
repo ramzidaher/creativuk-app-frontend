@@ -8,6 +8,7 @@ import CalculatorProgressService from '../services/CalculatorProgressService';
 import {
   getCustomerDetailsFromRouteParams,
   normalizeRouteParams,
+  resolveOpportunityIdFromRoute,
 } from '../utils/deepLinkParams';
 
 type ArrayRow = {
@@ -35,7 +36,10 @@ export default function SolarArraysInputsScreen() {
   const { width } = useWindowDimensions();
   const isNarrow = width < 768;
   const params = normalizeRouteParams(route.params as Record<string, unknown>);
-  const opportunityId = params.opportunityId as string | undefined;
+  const routeParams = params as RouteParams;
+  const opportunityId =
+    resolveOpportunityIdFromRoute(route.params, 'solar-arrays') ??
+    (params.opportunityId as string | undefined);
   const initialCalculatorType = (params.calculatorType as RouteParams['calculatorType']) || 'off-peak';
   const initialCustomerDetails = getCustomerDetailsFromRouteParams(params);
 

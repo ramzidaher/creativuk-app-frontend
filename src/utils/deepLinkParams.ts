@@ -1,6 +1,9 @@
 /**
- * Helpers for React Navigation web deep links.
- * Query params must be strings — objects need JSON encode/decode (not default toString).
+ * Workflow routing helpers.
+ *
+ * In-app navigation passes objects via navigate() params (not the URL).
+ * Share links use path-only URLs (/calculator-inputs/:id?calculatorType=v44);
+ * customer details and radios load from saved progress on the server.
  */
 
 import { Platform } from 'react-native';
@@ -27,6 +30,51 @@ export function isInvalidObjectString(value: unknown): boolean {
   );
 }
 
+/** Decode query values that were URL-encoded more than once (legacy share links). */
+function fullyDecodeURIComponent(value: string): string {
+  let current = value.trim();
+  for (let i = 0; i < 5; i++) {
+    if (!current.includes('%')) {
+      break;
+    }
+    try {
+      const decoded = decodeURIComponent(current);
+      if (decoded === current) {
+        break;
+      }
+      current = decoded;
+    } catch {
+      break;
+    }
+  }
+  return current;
+}
+
+/** Parse JSON that may be wrapped in quotes and/or multiply URL-encoded. */
+function parseJsonStringDeep<T>(raw: string): T | undefined {
+  let current: unknown = fullyDecodeURIComponent(raw);
+
+  for (let i = 0; i < 3; i++) {
+    if (typeof current === 'object' && current !== null) {
+      return current as T;
+    }
+    if (typeof current !== 'string') {
+      return undefined;
+    }
+    const s = current.trim();
+    if (!s || isInvalidObjectString(s)) {
+      return undefined;
+    }
+    try {
+      current = JSON.parse(s);
+    } catch {
+      return i === 0 ? undefined : (current as T);
+    }
+  }
+
+  return typeof current === 'object' && current !== null ? (current as T) : undefined;
+}
+
 export function parseJsonParam<T = unknown>(value: unknown): T | undefined {
   if (value == null || value === '') {
     return undefined;
@@ -44,20 +92,7 @@ export function parseJsonParam<T = unknown>(value: unknown): T | undefined {
     return undefined;
   }
 
-  const trimmed = value.trim();
-  if (!trimmed || isInvalidObjectString(trimmed)) {
-    return undefined;
-  }
-
-  try {
-    return JSON.parse(decodeURIComponent(trimmed)) as T;
-  } catch {
-    try {
-      return JSON.parse(trimmed) as T;
-    } catch {
-      return undefined;
-    }
-  }
+  return parseJsonStringDeep<T>(value);
 }
 
 /** Detect {0:'[',1:'o',...} shape from broken URL object params */
@@ -78,7 +113,8 @@ function isStringifiedObjectObject(value: object): boolean {
 }
 
 export function stringifyJsonParam(value: unknown): string {
-  return encodeURIComponent(JSON.stringify(value));
+  // React Navigation / URLSearchParams encode once — do not pre-encodeURIComponent.
+  return JSON.stringify(value);
 }
 
 export function normalizeParamValue(value: unknown): unknown {
@@ -156,66 +192,53 @@ export function resolveOpportunityIdFromRoute(
   return undefined;
 }
 
-function stringifyParamsForUrl(params: Record<string, unknown>): Record<string, unknown> {
+/** Drop legacy JSON query params from the address bar after they are read once. */
+export function cleanLegacyWorkflowUrl(calculatorType?: string) {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    return;
+  }
+  const search = window.location.search;
+  if (
+    !search.includes('customerDetails') &&
+    !search.includes('pendingRadios') &&
+    !search.includes('selectedOptions')
+  ) {
+    return;
+  }
+  const params = new URLSearchParams();
+  if (calculatorType) {
+    params.set('calculatorType', calculatorType);
+  }
+  const next = params.toString();
+  const url = next
+    ? `${window.location.pathname}?${next}`
+    : window.location.pathname;
+  window.history.replaceState({}, '', url);
+}
+
+/** One-time read of legacy query params (old GHL share links). Not synced to the URL bar. */
+export function readInitialUrlQueryParams(): Record<string, unknown> {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    return {};
+  }
   const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(params)) {
-    if (value == null) {
-      continue;
-    }
-    if (typeof value === 'object') {
-      out[key] = JSON.stringify(value);
-    } else {
-      out[key] = value;
+  for (const [key, value] of new URLSearchParams(window.location.search)) {
+    const normalized = normalizeParamValue(value);
+    if (normalized !== undefined) {
+      out[key] = normalized;
     }
   }
   return out;
 }
 
-type NavigationStateLike = {
-  routes?: Array<{
-    params?: Record<string, unknown>;
-    state?: NavigationStateLike;
-  }>;
-};
-
-/** Before building a URL — stringify object params so they are not [object Object]. */
-export function patchNavigationStateForUrl<T extends NavigationStateLike>(state: T): T {
-  if (!state?.routes?.length) {
-    return state;
-  }
+/** In-app route params win over legacy URL query params. */
+export function mergeWorkflowRouteParams(
+  routeParams: Record<string, unknown> | undefined,
+): Record<string, unknown> {
   return {
-    ...state,
-    routes: state.routes.map((route) => {
-      const next = { ...route };
-      if (next.params && typeof next.params === 'object') {
-        next.params = stringifyParamsForUrl(next.params);
-      }
-      if (next.state) {
-        next.state = patchNavigationStateForUrl(next.state);
-      }
-      return next;
-    }),
-  } as T;
-}
-
-/** After parsing a URL — decode JSON query params and drop broken [object Object]. */
-export function patchNavigationStateFromUrl<T extends NavigationStateLike>(state: T | undefined): T | undefined {
-  if (!state?.routes?.length) {
-    return state;
-  }
-  return {
-    ...state,
-    routes: state.routes.map((route) => {
-      const next = { ...route };
-      if (next.params && typeof next.params === 'object') {
-        next.params = normalizeRouteParams(next.params);
-      }
-      if (next.state) {
-        next.state = patchNavigationStateFromUrl(next.state);
-      }
-      return next;
-    }),
-  } as T;
+    ...readInitialUrlQueryParams(),
+    ...normalizeRouteParams(routeParams),
+  };
 }
 
 export function parseSelectedOptions(value: unknown): TemplateSelectedOptions | undefined {
@@ -395,49 +418,17 @@ export function buildV44SingleSelfConsumptionInputsUrl(
   });
 }
 
-/** Shared linking.parse / linking.stringify entries for JSON object params. */
-export const linkingJsonObjectParam = {
-  parse: (value: string) => parseJsonParam(value),
-  stringify: (value: unknown) => stringifyJsonParam(value),
-};
-
-export const linkingCustomerDetailsParam = {
-  parse: (value: string) => parseRouteCustomerDetails(value),
-  stringify: (value: unknown) => stringifyJsonParam(value),
-};
-
-export const linkingPlainStringParam = {
-  parse: (value: string) => decodeRouteString(value) ?? value,
-  stringify: (value: string) => encodeURIComponent(value),
-};
-
-/** Common workflow screen params — use in per-screen linking config. */
+/**
+ * Path-only deep links — only opportunityId (path) and calculatorType (query).
+ * Objects (customerDetails, pendingRadios, etc.) stay in navigation state / progress API.
+ */
 export const workflowLinkingParse = {
   opportunityId: (id: string) => id,
   calculatorType: (v: string) => v,
-  templateFileName: linkingPlainStringParam.parse,
-  selectedOptions: linkingJsonObjectParam.parse,
-  selectedTemplateOptions: linkingJsonObjectParam.parse,
-  customerDetails: linkingCustomerDetailsParam.parse,
-  customerName: linkingPlainStringParam.parse,
-  address: linkingPlainStringParam.parse,
-  postcode: linkingPlainStringParam.parse,
-  opportunity: linkingJsonObjectParam.parse,
-  radioButtonSelections: linkingJsonObjectParam.parse,
-  pendingRadios: linkingJsonObjectParam.parse,
 };
 
 export const workflowLinkingStringify = {
-  templateFileName: linkingPlainStringParam.stringify,
-  selectedOptions: linkingJsonObjectParam.stringify,
-  selectedTemplateOptions: linkingJsonObjectParam.stringify,
-  customerDetails: linkingCustomerDetailsParam.stringify,
-  customerName: linkingPlainStringParam.stringify,
-  address: linkingPlainStringParam.stringify,
-  postcode: linkingPlainStringParam.stringify,
-  opportunity: linkingJsonObjectParam.stringify,
-  radioButtonSelections: linkingJsonObjectParam.stringify,
-  pendingRadios: linkingJsonObjectParam.stringify,
+  calculatorType: (v: string) => v,
 };
 
 export function workflowScreenLinking(path: string) {

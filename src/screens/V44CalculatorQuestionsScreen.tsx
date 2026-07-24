@@ -18,9 +18,11 @@ import { useAuthReady } from '../hooks/useAuthReady';
 import CalculatorProgressService from '../services/CalculatorProgressService';
 import { api } from '../utils/api';
 import {
+  cleanLegacyWorkflowUrl,
   getCustomerDetailsFromRouteParams,
-  normalizeRouteParams,
+  mergeWorkflowRouteParams,
   parseJsonParam,
+  resolveOpportunityIdFromRoute,
 } from '../utils/deepLinkParams';
 import {
   V44_QUESTIONS_GROUP_IDS,
@@ -52,10 +54,19 @@ export default function V44CalculatorQuestionsScreen() {
   const { isAuthReady, isLoading: authLoading, isAuthenticated } = useAuthReady();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const params = normalizeRouteParams(route.params as RouteParams as Record<string, unknown>);
-  const opportunityId = params.opportunityId as string;
-  const routeCustomerRef = useRef(getCustomerDetailsFromRouteParams(params));
-  const pendingRadiosRef = useRef(parseJsonParam<Record<string, number>>(params.pendingRadios));
+  const mergedParamsRef = useRef(mergeWorkflowRouteParams(route.params as Record<string, unknown>));
+  const opportunityId =
+    resolveOpportunityIdFromRoute(route.params, 'calculator-questions') ?? '';
+
+  useEffect(() => {
+    cleanLegacyWorkflowUrl(
+      typeof mergedParamsRef.current.calculatorType === 'string'
+        ? mergedParamsRef.current.calculatorType
+        : 'v44',
+    );
+  }, []);
+  const routeCustomerRef = useRef(getCustomerDetailsFromRouteParams(mergedParamsRef.current));
+  const pendingRadiosRef = useRef(parseJsonParam<Record<string, number>>(mergedParamsRef.current.pendingRadios));
   const isAuthReadyRef = useRef(isAuthReady);
   isAuthReadyRef.current = isAuthReady;
   const loadedOnceRef = useRef(false);
@@ -128,10 +139,22 @@ export default function V44CalculatorQuestionsScreen() {
   }, [opportunityId]);
 
   useEffect(() => {
-    if (isAuthReady && opportunityId) {
+    if (authLoading) {
+      return;
+    }
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
+    if (!opportunityId) {
+      setError('This calculator link is missing an opportunity ID.');
+      setLoading(false);
+      return;
+    }
+    if (isAuthReady) {
       load();
     }
-  }, [load, isAuthReady, opportunityId]);
+  }, [authLoading, isAuthenticated, isAuthReady, opportunityId, load]);
 
   const questionGroups = groups.filter((g) =>
     (V44_QUESTIONS_GROUP_IDS as readonly string[]).includes(g.id),
@@ -214,13 +237,13 @@ export default function V44CalculatorQuestionsScreen() {
     }
   };
 
-  if ((authLoading && !loadedOnceRef.current) || loading) {
+  if (authLoading && !loadedOnceRef.current) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.primaryBackground }]}>
         <View style={styles.center}>
           <ActivityIndicator size="large" color={theme.primaryButton} />
           <Text style={{ color: theme.secondaryText, marginTop: 12 }}>
-            {authLoading && !loadedOnceRef.current ? 'Signing in…' : 'Loading questions…'}
+            Signing in…
           </Text>
         </View>
       </SafeAreaView>
@@ -229,7 +252,7 @@ export default function V44CalculatorQuestionsScreen() {
 
   if (!isAuthenticated) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.primaryBackground }]}>
         <View style={styles.center}>
           <Text style={{ color: theme.primaryText, textAlign: 'center', marginBottom: 12 }}>
             Please log in to open this calculator link.
@@ -242,9 +265,22 @@ export default function V44CalculatorQuestionsScreen() {
     );
   }
 
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.primaryBackground }]}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.primaryButton} />
+          <Text style={{ color: theme.secondaryText, marginTop: 12 }}>
+            Loading questions…
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (error) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+      <SafeAreaView style={[styles.safe, { backgroundColor: theme.primaryBackground }]}>
         <View style={styles.center}>
           <Text style={{ color: theme.dangerButton, textAlign: 'center' }}>{error}</Text>
           <TouchableOpacity onPress={load} style={styles.retry}>

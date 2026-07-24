@@ -696,20 +696,25 @@ export default function SolarProjectionScreen() {
     return `£${numericValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  // Calculate yearly saving from Total Benefit column
+  // Calculate yearly saving from Current Energy Bill (v4.4 NewSavings col O), else Total Benefit
   const calculateYearlySaving = (year: number): number | null => {
     if (!solarData?.table?.rows || !solarData?.table?.headers) return null;
-    
-    const totalBenefitIndex = solarData.table.headers.findIndex(header => 
-      header.toLowerCase().includes('total benefit')
+
+    const currentBillIndex = solarData.table.headers.findIndex((header) =>
+      header.toLowerCase().includes('current energy bill'),
     );
-    
-    if (totalBenefitIndex === -1) return null;
+    const totalBenefitIndex = solarData.table.headers.findIndex((header) =>
+      header.toLowerCase().includes('total benefit'),
+    );
+    const columnIndex =
+      currentBillIndex !== -1 ? currentBillIndex : totalBenefitIndex;
+
+    if (columnIndex === -1) return null;
     
     const rowIndex = year - 1; // Convert year to 0-based index
     if (rowIndex < 0 || rowIndex >= solarData.table.rows.length) return null;
     
-    const cellValue = solarData.table.rows[rowIndex][totalBenefitIndex];
+    const cellValue = solarData.table.rows[rowIndex][columnIndex];
     if (!cellValue) return null;
     
     // Extract numeric value (remove £ symbol and commas)

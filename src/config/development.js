@@ -1,6 +1,19 @@
 // Development configuration
 // This file can be easily modified to switch between different backend URLs
 
+/** Expo exposes EXPO_PUBLIC_* to the browser; API_BASE_URL is also read when present. */
+function getEnvApiBaseUrl() {
+  const raw =
+    (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_BASE_URL) ||
+    (typeof process !== 'undefined' && process.env?.API_BASE_URL) ||
+    '';
+  const url = String(raw).trim();
+  if (!url) {
+    return null;
+  }
+  return url.endsWith('/') ? url : `${url}/`;
+}
+
 export const DEVELOPMENT_CONFIG = {
   // Backend URL options for local development
   BACKEND_URLS: {
@@ -22,8 +35,8 @@ export const DEVELOPMENT_CONFIG = {
     CUSTOM: 'https://your-custom-backend.com/api/'
   },
   
-  // Current active URL - change this to switch backends
-  ACTIVE_URL: 'WINDOWS_DEV', // Options: PRODUCTION, LOCAL, WINDOWS_DEV, RELATIVE, CUSTOM
+  // Fallback when .env is not set — change ACTIVE_URL or use npm run switch-url
+  ACTIVE_URL: 'PRODUCTION', // Options: PRODUCTION, LOCAL, WINDOWS_DEV, RELATIVE, CUSTOM
   DEV_MODE: true,
   
   // Auto-detect working URL on startup
@@ -35,6 +48,14 @@ export const DEVELOPMENT_CONFIG = {
 
 // Helper function to get the current backend URL
 export const getCurrentBackendUrl = () => {
+  const fromEnv = getEnvApiBaseUrl();
+  if (fromEnv) {
+    if (DEVELOPMENT_CONFIG.DEBUG) {
+      console.log('🔧 Development Config: using .env API URL:', fromEnv);
+    }
+    return fromEnv;
+  }
+
   const config = DEVELOPMENT_CONFIG;
   const selectedUrl = config.BACKEND_URLS[config.ACTIVE_URL];
   

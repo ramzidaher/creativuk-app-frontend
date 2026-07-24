@@ -1407,11 +1407,13 @@ export const presentationApi = {
 
   async generateVideoPresentation(data: {
     opportunityId: string;
-    calculatorType?: 'flux' | 'off-peak' | 'epvs';
+    calculatorType?: 'flux' | 'off-peak' | 'epvs' | 'v44';
+    fileName?: string;
     customerName?: string;
     date?: string;
     postcode?: string;
     solarData?: any;
+    extractedVariables?: Record<string, any>;
   }): Promise<ApiResponse<any>> {
     try {
       console.log('🎯 Video Presentation API: Starting generateVideoPresentation...');
@@ -1545,7 +1547,7 @@ export const presentationApi = {
     }
   },
 
-  async extractVariables(opportunityId: string, calculatorType: 'flux' | 'off-peak' | 'epvs', fileName?: string): Promise<ApiResponse<any>> {
+  async extractVariables(opportunityId: string, calculatorType: 'flux' | 'off-peak' | 'epvs' | 'v44', fileName?: string): Promise<ApiResponse<any>> {
     try {
       console.log('🎯 Presentation API: Starting extractVariables...');
       console.log('🎯 Presentation API: OpportunityId:', opportunityId, 'CalculatorType:', calculatorType, 'FileName:', fileName);

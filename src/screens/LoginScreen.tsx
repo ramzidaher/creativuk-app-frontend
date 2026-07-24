@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
-import { useNavigation } from '@react-navigation/native';
+import { CommonActions, useNavigation } from '@react-navigation/native';
 
 const { width, height } = Dimensions.get('window');
 const isLargeScreen = width > 768; // Tablet/laptop breakpoint
@@ -29,8 +29,23 @@ const LoginScreen: React.FC = () => {
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(50));
   
-  const { login } = useAuth();
+  const { login, isAuthenticated } = useAuth();
   const navigation = useNavigation<any>();
+
+  const goToApp = React.useCallback(() => {
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'MainTabs' }],
+      }),
+    );
+  }, [navigation]);
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      goToApp();
+    }
+  }, [isAuthenticated, goToApp]);
 
   React.useEffect(() => {
     Animated.parallel([
@@ -58,6 +73,7 @@ const LoginScreen: React.FC = () => {
       const result = await login(username.trim(), password);
       if (result.success) {
         console.log('Login successful');
+        goToApp();
       } else {
         Alert.alert('Login Failed', result.error || 'Invalid credentials');
       }

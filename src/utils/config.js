@@ -56,10 +56,10 @@ class URLManager {
 
     const expoDev = isExpoDevServer();
 
-    // 2. Expo web dev — always use development.js ACTIVE_URL (ignore stale localStorage/ngrok)
+    // 2. Expo web dev — .env first, then development.js ACTIVE_URL (ignore stale localStorage/ngrok)
     if (expoDev && DEVELOPMENT_CONFIG.DEV_MODE) {
       const devUrl = getCurrentBackendUrl();
-      console.log('🔧 Expo dev server — using development config URL:', devUrl);
+      console.log('🔧 Expo dev server — using backend URL:', devUrl);
       return devUrl;
     }
 

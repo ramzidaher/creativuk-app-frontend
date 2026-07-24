@@ -1,8 +1,10 @@
 import {
   getPathFromState as defaultGetPathFromState,
   getStateFromPath as defaultGetStateFromPath,
+  CommonActions,
   LinkingOptions,
-  NavigationContainer
+  NavigationContainer,
+  useNavigation,
 } from '@react-navigation/native';
 import React from 'react';
 // @ts-ignore - stack navigator types resolved at runtime in Expo/React Native env
@@ -14,9 +16,6 @@ import {
 import {
   createBottomTabNavigator
 } from '@react-navigation/bottom-tabs';
-import {
-  useNavigation
-} from '@react-navigation/native';
 import {
   createStackNavigator
 } from '@react-navigation/stack';
@@ -46,8 +45,6 @@ import {
   useTheme
 } from './src/context/ThemeContext';
 import {
-  patchNavigationStateForUrl,
-  patchNavigationStateFromUrl,
   workflowLinkingParse,
   workflowLinkingStringify,
   workflowScreenLinking,
@@ -374,12 +371,10 @@ const WORKFLOW_DEEP_LINK_SCREENS = new Set([
 const linking: LinkingOptions<RootStackParamList> = {
   prefixes: ['https://app.creativuk.co.uk', 'http://localhost:8081', 'http://127.0.0.1:8081', webLinkingPrefix],
   getPathFromState(state, options) {
-    return defaultGetPathFromState(patchNavigationStateForUrl(state as any) as any, options);
+    return defaultGetPathFromState(state, options);
   },
   getStateFromPath(path, options) {
-    const parsed = patchNavigationStateFromUrl(
-      defaultGetStateFromPath(path, options) as any,
-    ) as any;
+    const parsed = defaultGetStateFromPath(path, options) as any;
     if (!parsed?.routes?.length) {
       return parsed;
     }
@@ -975,6 +970,41 @@ function ProfileScreen() {
       </Modal>
     </View>
   );
+}
+
+function AuthNavigationSync() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const navigation = useNavigation<any>();
+
+  React.useEffect(() => {
+    if (isLoading) return;
+
+    const state = navigation.getState();
+    const route = state?.routes?.[state.index ?? 0];
+    const routeName = route?.name;
+    const authScreens = new Set(['Login', 'Register', 'ForgotPassword', 'Loading']);
+
+    if (isAuthenticated && routeName && authScreens.has(routeName)) {
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'MainTabs' }],
+        }),
+      );
+      return;
+    }
+
+    if (!isAuthenticated && routeName === 'MainTabs') {
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        }),
+      );
+    }
+  }, [isAuthenticated, isLoading, navigation]);
+
+  return null;
 }
 
 function AppNavigator() {
@@ -1784,6 +1814,7 @@ export default function App() {
                 console.log('🔗 NavigationContainer ready');
               }}
             >
+              <AuthNavigationSync />
               <AppNavigator />
             </NavigationContainer>
           </AuthProvider>
