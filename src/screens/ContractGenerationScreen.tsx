@@ -20,7 +20,7 @@ import CustomAlert from '../components/CustomAlert';
 import ExcelSheetPicker from '../components/ExcelSheetPicker';
 import { useTheme } from '../context/ThemeContext';
 import { ExcelSheetInfo, sortSheetsByVersion } from '../utils/excelSheetVersion';
-
+import { buildApiUrl } from '../utils/api';
 
 interface RouteParams {
   opportunityId: string;
@@ -31,6 +31,51 @@ type SheetInfo = ExcelSheetInfo & {
   size?: number;
   lastModified: string;
 };
+
+/** Backend may return HTTP 200 with success:false and no pdfUrl — avoid .startsWith on undefined. */
+function resolveContractPdfFromApiResponse(
+  pdfData: Record<string, unknown> | null | undefined,
+  opportunityId: string,
+  isEpvsFamily: boolean,
+): { pdfUrl: string | null; pdfPath: string | null; error?: string } {
+  if (!pdfData) {
+    return { pdfUrl: null, pdfPath: null, error: 'Empty response from server' };
+  }
+  if (pdfData.success === false) {
+    return {
+      pdfUrl: null,
+      pdfPath: null,
+      error: String(pdfData.error || pdfData.message || 'PDF generation failed on the server'),
+    };
+  }
+
+  const pdfPath = typeof pdfData.pdfPath === 'string' ? pdfData.pdfPath : null;
+  let pdfUrl = typeof pdfData.pdfUrl === 'string' ? pdfData.pdfUrl : null;
+
+  if (!pdfUrl) {
+    pdfUrl = isEpvsFamily
+      ? `/epvs-automation/pdf/${opportunityId}`
+      : `/excel-automation/pdf/${opportunityId}`;
+  }
+
+  return { pdfUrl, pdfPath };
+}
+
+function toAbsolutePdfUrl(relativeOrAbsoluteUrl: string): string {
+  if (!relativeOrAbsoluteUrl?.trim()) {
+    throw new Error('PDF URL is missing from the server response');
+  }
+  if (relativeOrAbsoluteUrl.startsWith('http')) {
+    return relativeOrAbsoluteUrl;
+  }
+  if (relativeOrAbsoluteUrl.startsWith('/')) {
+    const cleanPath = relativeOrAbsoluteUrl.startsWith('/api/')
+      ? relativeOrAbsoluteUrl.substring(5)
+      : relativeOrAbsoluteUrl.substring(1);
+    return buildApiUrl(cleanPath);
+  }
+  return buildApiUrl(relativeOrAbsoluteUrl);
+}
 
 export default function ContractGenerationScreen() {
   const navigation = useNavigation<any>();
@@ -83,7 +128,11 @@ export default function ContractGenerationScreen() {
       console.log('🔧 DEBUG ContractGeneration: Original pdfUrl:', pdfUrl);
       
       // First, trim any leading/trailing whitespace
-      downloadUrl = downloadUrl.trim();
+      downloadUrl = (downloadUrl || '').trim();
+
+      if (!downloadUrl) {
+        throw new Error('Contract PDF URL is missing. Please try generating the contract again.');
+      }
       
       if (!downloadUrl.startsWith('http')) {
         // If the URL already starts with /api/, don't add it again
@@ -704,44 +753,35 @@ export default function ContractGenerationScreen() {
       console.log('🔍 PDF Result success:', pdfResult.success);
       console.log('🔍 PDF Result data:', pdfResult.data);
       console.log('🔍 PDF Result error:', pdfResult.error);
-       
-      if (pdfResult.success && pdfResult.data) {
-        const pdfData = pdfResult.data as any;
+
+      const pdfData = (pdfResult.data || {}) as Record<string, unknown>;
+      const resolved = resolveContractPdfFromApiResponse(pdfData, opportunityId, isEpvsFamily);
+
+      if (pdfResult.success && pdfResult.data && !resolved.error && resolved.pdfUrl) {
         console.log('📄 PDF Data:', pdfData);
-        console.log('📄 PDF URL:', pdfData.pdfUrl);
+        console.log('📄 PDF URL:', resolved.pdfUrl);
+        console.log('📄 PDF Path:', resolved.pdfPath);
         console.log('📄 PDF Filename:', pdfData.pdfFileName || pdfData.filename || pdfData.fileName);
         
         // Store the PDF filename from backend if available
-        const backendFileName = pdfData.pdfFileName || pdfData.filename || pdfData.fileName;
+        const backendFileName =
+          (typeof pdfData.pdfFileName === 'string' && pdfData.pdfFileName) ||
+          (typeof pdfData.filename === 'string' && pdfData.filename) ||
+          (typeof pdfData.fileName === 'string' && pdfData.fileName) ||
+          null;
         if (backendFileName) {
           setPdfFileName(backendFileName);
           console.log('📄 Using backend PDF filename:', backendFileName);
-          console.log('📄 Set pdfFileName state to:', backendFileName);
         } else {
-          // Fallback: extract filename from URL or use default
-          const urlFileName = pdfData.pdfUrl?.split('/').pop()?.split('?')[0];
+          const urlFileName = resolved.pdfUrl.split('/').pop()?.split('?')[0];
           const fallbackFileName = urlFileName || `Contract-${opportunityId}.pdf`;
           setPdfFileName(fallbackFileName);
-          console.log('📄 Using extracted filename from URL:', urlFileName);
-          console.log('📄 Set pdfFileName state to:', fallbackFileName);
+          console.log('📄 Using fallback filename:', fallbackFileName);
         }
         
-        // For web platform, we need the full URL
-        let fullPdfUrl = pdfData.pdfUrl;
-        
+        let fullPdfUrl = resolved.pdfUrl;
         if (Platform.OS === 'web') {
-          // Import buildApiUrl to construct proper full URL
-          const { buildApiUrl } = await import('../utils/api');
-          
-          // If it's a relative URL, build the full URL
-          if (fullPdfUrl.startsWith('/')) {
-            // Remove /api/ prefix if present since buildApiUrl adds it
-            const cleanPath = fullPdfUrl.startsWith('/api/') ? fullPdfUrl.substring(5) : fullPdfUrl.substring(1);
-            fullPdfUrl = buildApiUrl(cleanPath);
-          } else if (!fullPdfUrl.startsWith('http')) {
-            // If it doesn't start with http, assume it's a relative path
-            fullPdfUrl = buildApiUrl(fullPdfUrl);
-          }
+          fullPdfUrl = toAbsolutePdfUrl(fullPdfUrl);
         }
         
         console.log('🔧 DEBUG ContractGeneration: fullPdfUrl after API prefix logic:', fullPdfUrl);
@@ -751,7 +791,7 @@ export default function ContractGenerationScreen() {
         
         console.log('📄 Full PDF URL:', fullPdfUrl);
         setPdfUrl(fullPdfUrl);
-        setPdfPath(pdfData.pdfPath);
+        setPdfPath(resolved.pdfPath);
         
         // For web, fetch PDF as blob to create a blob URL for viewing
         if (Platform.OS === 'web' && fullPdfUrl) {
@@ -830,7 +870,12 @@ export default function ContractGenerationScreen() {
         setStep('preview');
         setGenerating(false);
       } else {
-        const errorMessage = pdfResult.error || 'Unknown error occurred';
+        const errorMessage =
+          resolved.error ||
+          pdfResult.error ||
+          (typeof pdfData.error === 'string' ? pdfData.error : null) ||
+          (typeof pdfData.message === 'string' ? pdfData.message : null) ||
+          'Unknown error occurred';
         console.error('❌ PDF generation failed:', errorMessage);
         setError(errorMessage);
         setStep('sheets');

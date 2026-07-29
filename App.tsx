@@ -83,6 +83,7 @@ import FluxDynamicInputsScreen from './src/screens/EPVSDynamicInputsScreen';
 import FluxRadioButtonScreen from './src/screens/EPVSRadioButtonScreen';
 import FluxTemplateSelectionScreen from './src/screens/FluxTemplateSelectionScreen';
 import HometreeDataScreen from './src/screens/HometreeDataScreen';
+import CustomerPhotoUploadScreen from './src/screens/CustomerPhotoUploadScreen';
 import InstallationBookingScreen from './src/screens/InstallationBookingScreen';
 import LoadingScreen from './src/screens/loadingScreen';
 import SignComScreen from './src/screens/SignComScreen';
@@ -314,6 +315,7 @@ export type RootStackParamList = {
   TrainingHub: undefined;
   CalculatorTesting: undefined;
   CalculatorTestingPublic: { publicMode?: boolean } | undefined;
+  CustomerPhotoUpload: { token: string };
   CalculatorQuestions: {
     opportunityId: string;
     customerDetails?: { customerName: string; address: string; postcode: string };
@@ -482,6 +484,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       TrainingHub: 'training',
       CalculatorTesting: 'admin/calculator-testing',
       CalculatorTestingPublic: 'dev/calculator-testing',
+      CustomerPhotoUpload: 'customer-photos/:token',
       Debug: 'debug',
       DebugAuth: 'debug/auth',
       DebugSign: 'debug/sign',
@@ -983,6 +986,7 @@ function AuthNavigationSync() {
     const route = state?.routes?.[state.index ?? 0];
     const routeName = route?.name;
     const authScreens = new Set(['Login', 'Register', 'ForgotPassword', 'Loading']);
+    const publicScreens = new Set(['CalculatorTestingPublic', 'CustomerPhotoUpload', 'FreeDocumentSigning']);
 
     if (isAuthenticated && routeName && authScreens.has(routeName)) {
       navigation.dispatch(
@@ -1001,6 +1005,10 @@ function AuthNavigationSync() {
           routes: [{ name: 'Login' }],
         }),
       );
+    }
+
+    if (!isAuthenticated && routeName && publicScreens.has(routeName)) {
+      return;
     }
   }, [isAuthenticated, isLoading, navigation]);
 
@@ -1044,6 +1052,11 @@ function AppNavigator() {
         name="CalculatorTestingPublic"
         component={CalculatorTestingScreen}
         initialParams={{ publicMode: true }}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="CustomerPhotoUpload"
+        component={CustomerPhotoUploadScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen name="MainTabs" component={TabNavigator} />

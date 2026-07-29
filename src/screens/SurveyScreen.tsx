@@ -58,6 +58,7 @@ import {
   SurveyUploadCompressionError,
   SurveyUploadTooLargeError,
 } from '../utils/imageCompression';
+import CustomerPhotoUploadLinkButton from '../components/CustomerPhotoUploadLinkButton';
 
 const { width, height } = Dimensions.get('window');
 
@@ -6425,6 +6426,13 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
             </View>
           </View>
         )}
+
+        {opportunityId ? (
+          <CustomerPhotoUploadLinkButton
+            opportunityId={opportunityId}
+            customerLabel={customerInfo?.name}
+          />
+        ) : null}
       </View>
 
       {/* Dropdown Options Overlay - Rendered at root level */}

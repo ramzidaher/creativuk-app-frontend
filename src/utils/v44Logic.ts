@@ -115,7 +115,6 @@ export function applyDefaultPanelInputs(
  */
 export const V44_SUPPORTED_BATTERY = {
   manufacturer: 'EcoFlow',
-  model: 'PowerOcean LFP',
 } as const;
 
 export function isSupportedBatteryManufacturer(manufacturer: string): boolean {
@@ -125,8 +124,12 @@ export function isSupportedBatteryManufacturer(manufacturer: string): boolean {
   );
 }
 
+/** EcoFlow Ocean 2 (single-phase stack); PowerOcean LFP is no longer sold to reps. */
 export function isSupportedBatteryModel(model: string): boolean {
-  return model.trim().toLowerCase() === V44_SUPPORTED_BATTERY.model.toLowerCase();
+  const m = model.trim();
+  if (!m) return false;
+  if (/powerocean\s*lfp/i.test(m)) return false;
+  return /ocean\s*2/i.test(m);
 }
 
 /**

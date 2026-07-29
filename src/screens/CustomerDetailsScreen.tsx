@@ -115,7 +115,7 @@ export default function CustomerDetailsScreen() {
       console.log('🔍 CustomerDetailsScreen: Starting restore progress...');
       const progress = await CalculatorProgressService.restoreProgress(
         opportunityId,
-        calculatorType || 'off-peak',
+        calculatorType || 'v44',
       );
       
       if (urlCustomerDetails) {
@@ -161,7 +161,7 @@ export default function CustomerDetailsScreen() {
         postcode: postcode.trim(),
       };
 
-      await CalculatorProgressService.saveProgress(opportunityId, 'off-peak', {
+      await CalculatorProgressService.saveProgress(opportunityId, calculatorType || 'v44', {
         currentStep: 'template-selection' as const,
         customerDetails,
       });
@@ -586,7 +586,7 @@ export default function CustomerDetailsScreen() {
       console.log('✅ Customer details confirmed');
 
       // Save progress to JSON (NO COM call - Excel update happens on final submit)
-      const calcType = calculatorType || 'off-peak'; // Default to off-peak if not specified
+      const calcType = calculatorType || 'v44'; // Default to v4.4 for new jobs
       await CalculatorProgressService.saveProgress(opportunityId!, calcType, {
         currentStep: 'template-selection' as const,
         customerDetails: details,
@@ -653,7 +653,7 @@ export default function CustomerDetailsScreen() {
       };
       
       // Navigate to the appropriate calculator based on calculator type
-      const calcType = calculatorType || 'off-peak';
+      const calcType = calculatorType || 'v44';
       if (calcType === 'v44') {
         (navigation as any).navigate('CalculatorQuestions', {
           opportunityId,
@@ -884,7 +884,7 @@ export default function CustomerDetailsScreen() {
                 console.log('🔍 CustomerDetailsScreen Skip button pressed - navigating to next screen');
                 try {
                   // Mark customer details step as completed
-                  const calcType = (route.params as any)?.calculatorType || 'off-peak';
+                  const calcType = (route.params as any)?.calculatorType || 'v44';
                   await CalculatorProgressService.saveProgress(opportunityId!, calcType, {
                     currentStep: 'template-selection' as const,
                     completedSteps: {
@@ -944,7 +944,7 @@ export default function CustomerDetailsScreen() {
                     };
                     
                     // Navigate to the appropriate calculator based on calculator type
-                    const calcType = calculatorType || 'off-peak';
+                    const calcType = calculatorType || 'v44';
                     if (calcType === 'v44') {
                       (navigation as any).navigate('CalculatorQuestions', {
                         opportunityId,

@@ -1165,6 +1165,65 @@ export const surveyApi = {
       `/surveys/${ghlOpportunityId}/images/${encodeURIComponent(fieldName)}${cacheSuffix}`,
     );
   },
+
+  async createCustomerUploadLink(
+    ghlOpportunityId: string,
+    options?: { customerLabel?: string; allowedFields?: string[]; ttlDays?: number },
+  ): Promise<
+    ApiResponse<{
+      token: string;
+      url: string;
+      expiresAt: string;
+      allowedFields: string[];
+    }>
+  > {
+    return api.post(`/surveys/${ghlOpportunityId}/customer-upload-link`, options ?? {});
+  },
+
+  async listCustomerUploadLinks(ghlOpportunityId: string): Promise<ApiResponse<any[]>> {
+    return api.get<any[]>(`/surveys/${ghlOpportunityId}/customer-upload-links`);
+  },
+};
+
+/** Public customer photo upload (no login). */
+export const surveyCustomerUploadApi = {
+  async getSession(token: string): Promise<
+    ApiResponse<{
+      customerLabel?: string | null;
+      expiresAt: string;
+      fields: Array<{
+        field: string;
+        label: string;
+        hint: string;
+        minRequired: number;
+        uploadedCount: number;
+      }>;
+    }>
+  > {
+    const response = await fetch(buildApiUrl(`/survey-customer-upload/${encodeURIComponent(token)}`), {
+      headers: { 'ngrok-skip-browser-warning': 'true' },
+    });
+    return response.json();
+  },
+
+  async upload(
+    token: string,
+    fieldName: string,
+    images: Array<{ name: string; mimeType: string; size: number; base64Data: string }>,
+  ): Promise<ApiResponse<{ urls: string[] }>> {
+    const response = await fetch(
+      buildApiUrl(`/survey-customer-upload/${encodeURIComponent(token)}/upload`),
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: JSON.stringify({ fieldName, images }),
+      },
+    );
+    return response.json();
+  },
 };
 
 // Auto-save API functions

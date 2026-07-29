@@ -1218,7 +1218,7 @@ export default function SolarWorkflowScreen() {
       console.log('🔍 Navigating to solar projection');
       // Get calculator type from workflow progress
       const calculatorStep = workflowProgress?.steps?.find((s: any) => s.stepType === 'CALCULATOR');
-      const calculatorType = calculatorStep?.data?.calculatorType || 'off-peak';
+      const calculatorType = calculatorStep?.data?.calculatorType || 'v44';
       navigation.navigate('SolarProjection', { 
         opportunityId,
         calculatorType 

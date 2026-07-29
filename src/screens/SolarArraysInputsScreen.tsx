@@ -40,7 +40,7 @@ export default function SolarArraysInputsScreen() {
   const opportunityId =
     resolveOpportunityIdFromRoute(route.params, 'solar-arrays') ??
     (params.opportunityId as string | undefined);
-  const initialCalculatorType = (params.calculatorType as RouteParams['calculatorType']) || 'off-peak';
+  const initialCalculatorType = (params.calculatorType as RouteParams['calculatorType']) || 'v44';
   const initialCustomerDetails = getCustomerDetailsFromRouteParams(params);
 
   const [calculatorType, setCalculatorType] = useState<'flux' | 'off-peak' | 'v44'>(initialCalculatorType);
@@ -198,12 +198,12 @@ export default function SolarArraysInputsScreen() {
       console.log('🔍 Initializing SolarArraysInputsScreen for opportunity:', opportunityId);
 
       // Resolve calculator type + customer from progress when URL only has opportunityId
-      let resolvedType: 'flux' | 'off-peak' | 'v44' = routeParams.calculatorType || 'off-peak';
+      let resolvedType: 'flux' | 'off-peak' | 'v44' = routeParams.calculatorType || 'v44';
       let progress: any = null;
       if (opportunityId) {
         const tryTypes: Array<'v44' | 'flux' | 'off-peak' | 'epvs'> = routeParams.calculatorType
           ? [routeParams.calculatorType as any]
-          : ['v44', 'flux', 'epvs', 'off-peak'];
+          : ['v44', 'flux', 'epvs'];
         for (const t of tryTypes) {
           try {
             const p = await CalculatorProgressService.getProgress(opportunityId, t as any);
@@ -884,7 +884,7 @@ export default function SolarArraysInputsScreen() {
       };
       
       // Step 10: Save arrays data to JSON (NO COM call - Excel update happens on final submit)
-      await CalculatorProgressService.saveProgress(opportunityId!, calculatorType || 'off-peak', {
+      await CalculatorProgressService.saveProgress(opportunityId!, calculatorType || 'v44', {
         currentStep: 'arrays' as const,
         arraysData,
         dynamicInputs: {

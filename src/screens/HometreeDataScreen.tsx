@@ -18,7 +18,11 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuthReady } from '../hooks/useAuthReady';
 import { api, buildApiUrl, getStorage, presentationApi, workflowApi } from '../utils/api';
 import { resolveOpportunityIdFromRoute } from '../utils/deepLinkParams';
-import { ExcelSheetInfo } from '../utils/excelSheetVersion';
+import {
+  ExcelSheetInfo,
+  filterRepVisibleSheets,
+  pickPreferredRepSheet,
+} from '../utils/excelSheetVersion';
 import ExcelSheetPicker from '../components/ExcelSheetPicker';
 
 const HOMETREE_URL = 'https://hometreefinance.co.uk/dashboard/login';
@@ -289,24 +293,16 @@ export default function HometreeDataScreen() {
       if (sheetsResponse.success) {
         const responseData = sheetsResponse.data as any;
         const actualData = responseData?.data ?? responseData?.sheets ?? responseData;
-        const sheets = Array.isArray(actualData) ? actualData : [];
-        setAvailableSheets(sheets as SheetInfo[]);
+        const allSheets = Array.isArray(actualData) ? actualData : [];
+        const sheets = filterRepVisibleSheets(allSheets as SheetInfo[]) as SheetInfo[];
+        setAvailableSheets(sheets);
 
-        if (sheets.length === 1 && !sheetsLoadedRef.current) {
+        // Always show the picker — never auto-load a calculator (reps choose explicitly).
+        if (!sheetsLoadedRef.current) {
           sheetsLoadedRef.current = true;
-          await loadHometreeData(sheets[0] as SheetInfo);
-        } else if (sheets.length > 1) {
-          const v44Sheet = sheets.find(
-            (s: SheetInfo) =>
-              s.calculatorType === 'v44' ||
-              (s.fileName || '').toLowerCase().includes('v4.4'),
-          );
-          if (v44Sheet) {
-            setSelectedSheet(v44Sheet as SheetInfo);
-            if (!sheetsLoadedRef.current) {
-              sheetsLoadedRef.current = true;
-              await loadHometreeData(v44Sheet as SheetInfo);
-            }
+          const preferred = pickPreferredRepSheet(sheets);
+          if (preferred) {
+            setSelectedSheet(preferred);
           }
         }
       } else {
@@ -422,7 +418,7 @@ export default function HometreeDataScreen() {
         loading={loadingSheets}
         emptyTitle="No calculator found"
         emptyMessage="Complete the calculator step first, then return here to fill in Hometree."
-        introText="Select which calculator to use. Values come from your completed calculator — the same data used when you generate the contract next."
+        introText="Select which calculator to use, then tap Load Hometree Data. Values come from your completed calculator — the same data used when you generate the contract next."
         emptyAction={
           <TouchableOpacity
             style={[styles.secondaryAction, { borderColor: theme.primaryButton }]}

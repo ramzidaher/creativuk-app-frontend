@@ -8,13 +8,13 @@ export const BATTERY_MANUFACTURERS = [
 ];
 
 export const BATTERY_MODELS: Record<string, string[]> = {
-  'EcoFlow': [
-    'PowerOcean LFP - 5.1 kWh',
-    'PowerOcean LFP - 10.2 kWh',
-    'PowerOcean LFP - 15.3 kWh',
-    'PowerOcean LFP - 20.4 kWh',
-    'PowerOcean LFP - 25.5 kWh',
-    'PowerOcean LFP - 30.6 kWh',
+  EcoFlow: [
+    'Ocean 2 - 5 kWh',
+    'Ocean 2 - 10 kWh',
+    'Ocean 2 - 15 kWh',
+    'Ocean 2 - 20 kWh',
+    'Ocean 2 - 25 kWh',
+    'Ocean 2 - 30 kWh',
   ],
 };
 
@@ -24,36 +24,3 @@ export const BATTERY_MODELS: Record<string, string[]> = {
 export function getBatteryModels(manufacturer: string): string[] {
   return BATTERY_MODELS[manufacturer] || [];
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

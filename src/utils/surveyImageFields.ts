@@ -119,3 +119,51 @@ export function getImageFieldsForSurveyPage(
     return true;
   }).map((f) => f.field);
 }
+
+/** Fields customers can upload via public link (online appointments). */
+export const CUSTOMER_SURVEY_UPLOAD_FIELDS = [
+  'energyBill',
+  'epcCertificate',
+  'frontDoor',
+  'frontProperty',
+  'targetRoofs',
+  'propertySides',
+] as const;
+
+export type CustomerSurveyUploadField = (typeof CUSTOMER_SURVEY_UPLOAD_FIELDS)[number];
+
+export const CUSTOMER_SURVEY_UPLOAD_FIELD_LABELS: Record<
+  CustomerSurveyUploadField,
+  { label: string; hint: string; minRequired: number }
+> = {
+  energyBill: {
+    label: 'Energy bill',
+    hint: 'Photo of your latest electricity bill (all pages if multi-page)',
+    minRequired: 1,
+  },
+  epcCertificate: {
+    label: 'EPC certificate',
+    hint: 'Photo of your Energy Performance Certificate if you have one',
+    minRequired: 1,
+  },
+  frontDoor: {
+    label: 'Front door',
+    hint: 'Clear photo showing your front door and house number',
+    minRequired: 1,
+  },
+  frontProperty: {
+    label: 'Front of property',
+    hint: 'Photo of the full front of the house from the street',
+    minRequired: 1,
+  },
+  targetRoofs: {
+    label: 'Roof(s) for panels',
+    hint: 'Photo of the roof area where solar panels will go',
+    minRequired: 1,
+  },
+  propertySides: {
+    label: 'Side of property',
+    hint: 'Photo of the side of the house if relevant',
+    minRequired: 1,
+  },
+};

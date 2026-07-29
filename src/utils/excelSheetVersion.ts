@@ -75,6 +75,27 @@ export function sortSheetsByVersion(sheets: ExcelSheetInfo[]): ExcelSheetInfo[] 
   return [...sheets].sort((a, b) => getExcelSheetVersion(a) - getExcelSheetVersion(b));
 }
 
+export function isOffPeakSheet(sheet?: ExcelSheetInfo | null): boolean {
+  if (!sheet) return false;
+  return getSheetGroupKey(sheet) === 'off-peak';
+}
+
+/** Reps and surveyors must not pick legacy Off Peak files for new work. */
+export function filterRepVisibleSheets(sheets: ExcelSheetInfo[]): ExcelSheetInfo[] {
+  return sheets.filter((s) => !isOffPeakSheet(s));
+}
+
+/** Prefer latest v4.4 sheet, then latest flux/epvs, for default picker selection. */
+export function pickPreferredRepSheet(sheets: ExcelSheetInfo[]): ExcelSheetInfo | null {
+  const visible = filterRepVisibleSheets(sheets);
+  if (visible.length === 0) return null;
+  const grouped = groupSheetsByCalculator(visible);
+  const v44Latest = grouped.v44[grouped.v44.length - 1];
+  if (v44Latest) return v44Latest;
+  const fluxLatest = grouped.flux[grouped.flux.length - 1];
+  return fluxLatest ?? visible[visible.length - 1] ?? null;
+}
+
 export function groupSheetsByCalculator(
   sheets: ExcelSheetInfo[],
 ): Record<SheetGroupKey, ExcelSheetInfo[]> {
