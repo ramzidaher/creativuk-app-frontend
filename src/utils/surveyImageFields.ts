@@ -134,36 +134,48 @@ export type CustomerSurveyUploadField = (typeof CUSTOMER_SURVEY_UPLOAD_FIELDS)[n
 
 export const CUSTOMER_SURVEY_UPLOAD_FIELD_LABELS: Record<
   CustomerSurveyUploadField,
-  { label: string; hint: string; minRequired: number }
+  { label: string; hint: string; minRequired: number; page: number }
 > = {
   energyBill: {
     label: 'Energy bill',
     hint: 'Photo of your latest electricity bill (all pages if multi-page)',
-    minRequired: 1,
+    minRequired: 2,
+    page: 4,
   },
   epcCertificate: {
     label: 'EPC certificate',
     hint: 'Photo of your Energy Performance Certificate if you have one',
-    minRequired: 1,
+    minRequired: 2,
+    page: 5,
   },
   frontDoor: {
     label: 'Front door',
     hint: 'Clear photo showing your front door and house number',
-    minRequired: 1,
+    minRequired: 2,
+    page: 6,
   },
   frontProperty: {
     label: 'Front of property',
     hint: 'Photo of the full front of the house from the street',
-    minRequired: 1,
+    minRequired: 2,
+    page: 6,
   },
   targetRoofs: {
     label: 'Roof(s) for panels',
     hint: 'Photo of the roof area where solar panels will go',
-    minRequired: 1,
+    minRequired: 2,
+    page: 6,
   },
   propertySides: {
     label: 'Side of property',
     hint: 'Photo of the side of the house if relevant',
-    minRequired: 1,
+    minRequired: 2,
+    page: 6,
   },
+};
+
+export const CUSTOMER_SURVEY_PAGE_TITLES: Record<number, string> = {
+  4: 'Energy & bills',
+  5: 'EPC',
+  6: 'Property exterior',
 };

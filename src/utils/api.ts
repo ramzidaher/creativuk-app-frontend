@@ -1173,6 +1173,7 @@ export const surveyApi = {
     ApiResponse<{
       token: string;
       url: string;
+      password: string;
       expiresAt: string;
       allowedFields: string[];
     }>
@@ -1185,19 +1186,13 @@ export const surveyApi = {
   },
 };
 
-/** Public customer photo upload (no login). */
+/** Public customer photo upload (no login — password on link). */
 export const surveyCustomerUploadApi = {
-  async getSession(token: string): Promise<
+  async getLinkMeta(token: string): Promise<
     ApiResponse<{
+      requiresPassword: boolean;
       customerLabel?: string | null;
       expiresAt: string;
-      fields: Array<{
-        field: string;
-        label: string;
-        hint: string;
-        minRequired: number;
-        uploadedCount: number;
-      }>;
     }>
   > {
     const response = await fetch(buildApiUrl(`/survey-customer-upload/${encodeURIComponent(token)}`), {
@@ -1206,8 +1201,41 @@ export const surveyCustomerUploadApi = {
     return response.json();
   },
 
+  async verify(
+    token: string,
+    password: string,
+  ): Promise<
+    ApiResponse<{
+      customerLabel?: string | null;
+      expiresAt: string;
+      fields: Array<{
+        field: string;
+        page: number;
+        label: string;
+        hint: string;
+        minRequired: number;
+        uploadedCount: number;
+        uploadedImages: Array<{ url: string; name: string }>;
+      }>;
+    }>
+  > {
+    const response = await fetch(
+      buildApiUrl(`/survey-customer-upload/${encodeURIComponent(token)}/verify`),
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: JSON.stringify({ password }),
+      },
+    );
+    return response.json();
+  },
+
   async upload(
     token: string,
+    password: string,
     fieldName: string,
     images: Array<{ name: string; mimeType: string; size: number; base64Data: string }>,
   ): Promise<ApiResponse<{ urls: string[] }>> {
@@ -1219,7 +1247,7 @@ export const surveyCustomerUploadApi = {
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true',
         },
-        body: JSON.stringify({ fieldName, images }),
+        body: JSON.stringify({ password, fieldName, images }),
       },
     );
     return response.json();
