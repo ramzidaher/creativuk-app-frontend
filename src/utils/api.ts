@@ -778,6 +778,19 @@ export const opportunitiesApi = {
     return api.get<any>('/health');
   },
 
+  async getVisitType(opportunityId: string): Promise<
+    ApiResponse<{ visitType: 'home-visit' | 'remote' | null; source: 'manual' | 'tag' | 'stage' | null }>
+  > {
+    return api.get(`/opportunities/${opportunityId}/visit-type`);
+  },
+
+  async setVisitType(
+    opportunityId: string,
+    visitType: 'home-visit' | 'remote',
+  ): Promise<ApiResponse<{ visitType: 'home-visit' | 'remote'; source: 'manual' }>> {
+    return api.put(`/opportunities/${opportunityId}/visit-type`, { visitType });
+  },
+
   async getSalesPerformanceStats(month?: string, year?: string): Promise<ApiResponse<any>> {
     console.log('API: Fetching sales performance stats...');
     const params = new URLSearchParams();

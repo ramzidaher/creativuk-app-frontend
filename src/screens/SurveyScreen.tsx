@@ -58,7 +58,7 @@ import {
   SurveyUploadCompressionError,
   SurveyUploadTooLargeError,
 } from '../utils/imageCompression';
-import CustomerPhotoUploadLinkButton from '../components/CustomerPhotoUploadLinkButton';
+import AppointmentVisitTypePanel from '../components/AppointmentVisitTypePanel';
 
 const { width, height } = Dimensions.get('window');
 
@@ -6428,7 +6428,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         )}
 
         {opportunityId ? (
-          <CustomerPhotoUploadLinkButton
+          <AppointmentVisitTypePanel
             opportunityId={opportunityId}
             customerLabel={customerInfo?.name}
           />

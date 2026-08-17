@@ -14,6 +14,7 @@ import { surveyApi } from '../utils/api';
 type Props = {
   opportunityId: string;
   customerLabel?: string;
+  onCreated?: () => void;
 };
 
 type CreatedLink = {
@@ -91,7 +92,11 @@ function buildCopyBlock(link: CreatedLink): string {
   return `Photo upload link:\n${link.url}\n\n(Link valid 14 days.)`;
 }
 
-export default function CustomerPhotoUploadLinkButton({ opportunityId, customerLabel }: Props) {
+export default function CustomerPhotoUploadLinkButton({
+  opportunityId,
+  customerLabel,
+  onCreated,
+}: Props) {
   const [loading, setLoading] = useState(false);
   const [created, setCreated] = useState<CreatedLink | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -112,6 +117,7 @@ export default function CustomerPhotoUploadLinkButton({ opportunityId, customerL
       });
       const link = unwrapUploadLinkPayload(response);
       setCreated(link);
+      onCreated?.();
 
       const copyBlock = buildCopyBlock(link);
       const copied = await copyTextToClipboard(copyBlock);

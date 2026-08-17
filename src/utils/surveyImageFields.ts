@@ -122,7 +122,8 @@ export function getImageFieldsForSurveyPage(
 
 /** Fields customers can upload via public link (online appointments). */
 export const CUSTOMER_SURVEY_UPLOAD_FIELDS = [
-  'energyBill',
+  'energyBillFront',
+  'energyBillRear',
   'frontDoor',
   'frontProperty',
   'targetRoofs',
@@ -135,10 +136,16 @@ export const CUSTOMER_SURVEY_UPLOAD_FIELD_LABELS: Record<
   CustomerSurveyUploadField,
   { label: string; hint: string; minRequired: number; page: number }
 > = {
-  energyBill: {
-    label: 'Energy bill',
-    hint: 'Photo of your latest electricity bill (all pages if multi-page)',
-    minRequired: 2,
+  energyBillFront: {
+    label: 'Front of energy bill',
+    hint: 'Photograph the whole front of the bill, including name and address.',
+    minRequired: 1,
+    page: 4,
+  },
+  energyBillRear: {
+    label: 'Rear of energy bill',
+    hint: 'Photograph the back of the bill.',
+    minRequired: 1,
     page: 4,
   },
   frontDoor: {
@@ -176,9 +183,13 @@ export const CUSTOMER_SURVEY_UPLOAD_EXAMPLES: Record<
   CustomerSurveyUploadField,
   { image: any; caption: string }
 > = {
-  energyBill: {
+  energyBillFront: {
     image: require('../../assets/survey-examples/energy-bill-example.jpg'),
-    caption: 'Photograph the whole bill so usage and the total are readable. Include every page.',
+    caption: 'Whole front of the bill, including name and address.',
+  },
+  energyBillRear: {
+    image: require('../../assets/survey-examples/energy-bill-example.jpg'),
+    caption: 'The back of the bill.',
   },
   frontDoor: {
     image: require('../../assets/survey-examples/front-door-example.jpg'),

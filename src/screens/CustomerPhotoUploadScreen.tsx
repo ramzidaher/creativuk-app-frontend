@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -80,6 +81,39 @@ export default function CustomerPhotoUploadScreen() {
     },
     [token],
   );
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
+    const html = document.documentElement;
+    const body = document.body;
+    const root = document.getElementById('root');
+    const previous = {
+      htmlOverflow: html.style.overflow,
+      htmlHeight: html.style.height,
+      bodyOverflow: body.style.overflow,
+      bodyHeight: body.style.height,
+      rootOverflow: root?.style.overflow ?? '',
+      rootHeight: root?.style.height ?? '',
+    };
+    html.style.overflow = 'auto';
+    html.style.height = 'auto';
+    body.style.overflow = 'auto';
+    body.style.height = 'auto';
+    if (root) {
+      root.style.overflow = 'visible';
+      root.style.height = 'auto';
+    }
+    return () => {
+      html.style.overflow = previous.htmlOverflow;
+      html.style.height = previous.htmlHeight;
+      body.style.overflow = previous.bodyOverflow;
+      body.style.height = previous.bodyHeight;
+      if (root) {
+        root.style.overflow = previous.rootOverflow;
+        root.style.height = previous.rootHeight;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -227,7 +261,7 @@ export default function CustomerPhotoUploadScreen() {
   ) : step === 'password' ? (
     <View style={styles.passwordPanel}>
       <Text style={[styles.passwordIntro, { color: theme.secondaryText }]}>
-        This page is protected. Enter the password your adviser sent with the link.
+        This is a Creative Energy page. Enter the password your adviser sent with the link.
       </Text>
       <Text style={[styles.inputLabel, { color: theme.primaryText }]}>Password</Text>
       <TextInput
@@ -263,9 +297,9 @@ export default function CustomerPhotoUploadScreen() {
   ) : (
     <>
       <Text style={[styles.intro, { color: theme.secondaryText }]}>
-        Upload photos for each section below — same types your adviser needs in the survey. You
-        can save and come back later using the same link and password. Tap “See example photo”
-        if you are unsure what to take.
+        Take photos for each section below.{'\n'}
+        You can save and come back later using the same link and password. Tap “See example photo” if
+        you are unsure what photo to take.
       </Text>
 
       {fieldsByPage.map(([page, pageFields]) => (
@@ -307,7 +341,7 @@ export default function CustomerPhotoUploadScreen() {
     </>
   );
 
-  return (
+  const page = (
     <SafeAreaView
       style={[
         styles.container,
@@ -316,14 +350,17 @@ export default function CustomerPhotoUploadScreen() {
       ]}
     >
       <View style={[styles.header, { backgroundColor: theme.cardBackground, borderBottomColor: theme.cardBorder }]}>
-        <View style={styles.headerBrand}>
-          <Feather name="clipboard" size={22} color="#166534" />
-          <Text style={[styles.headerTitle, { color: theme.primaryText }]}>Survey photo upload</Text>
-        </View>
+        <Image
+          source={require('../../assets/creativ NB.png')}
+          style={styles.logo}
+          resizeMode="contain"
+          accessibilityLabel="Creative Energy"
+        />
+        <Text style={[styles.headerTitle, { color: theme.primaryText }]}>Property Photos required.</Text>
         <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
           {customerLabel
             ? `Photos for ${customerLabel}`
-            : 'Upload the photos your adviser needs for your solar survey'}
+            : 'Creative Energy — please upload the photos we need for your property'}
         </Text>
         {expiryText ? (
           <Text style={[styles.expiry, { color: theme.secondaryText }]}>Link valid until {expiryText}</Text>
@@ -345,7 +382,26 @@ export default function CustomerPhotoUploadScreen() {
       )}
     </SafeAreaView>
   );
+
+  if (Platform.OS === 'web') {
+    return <div style={webFixedPageStyle}>{page}</div>;
+  }
+
+  return page;
 }
+
+const webFixedPageStyle = {
+  position: 'fixed' as const,
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  display: 'flex',
+  flexDirection: 'column' as const,
+  overflow: 'hidden',
+  backgroundColor: '#fff',
+  zIndex: 20,
+};
 
 const webScrollStyle = {
   display: 'flex',
@@ -356,6 +412,7 @@ const webScrollStyle = {
   overflowY: 'auto',
   WebkitOverflowScrolling: 'touch',
   overscrollBehavior: 'contain',
+  touchAction: 'pan-y',
 } as const;
 
 const styles = StyleSheet.create({
@@ -369,13 +426,18 @@ const styles = StyleSheet.create({
   nativeScrollContent: { padding: 16, paddingBottom: 48 },
   header: {
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'web' ? 24 : 12,
+    paddingTop: Platform.OS === 'web' ? 20 : 12,
     paddingBottom: 16,
     borderBottomWidth: 1,
+    alignItems: 'center',
   },
-  headerBrand: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
-  headerTitle: { fontSize: 22, fontWeight: '700' },
-  headerSubtitle: { fontSize: 15, lineHeight: 22 },
+  logo: {
+    width: 180,
+    height: 56,
+    marginBottom: 10,
+  },
+  headerTitle: { fontSize: 22, fontWeight: '700', textAlign: 'center' },
+  headerSubtitle: { fontSize: 15, lineHeight: 22, textAlign: 'center' },
   expiry: { fontSize: 12, marginTop: 6 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
   centeredText: { fontSize: 16 },

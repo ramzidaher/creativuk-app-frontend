@@ -23,6 +23,7 @@ import { api, opportunitiesApi, systemSettingsApi, workflowApi } from '../utils/
 import BottomNavigation from '../components/BottomNavigation';
 import CalculatorProgressService, { PricingOverrideOption } from '../services/CalculatorProgressService';
 import { normalizeRouteParams, resolveOpportunityIdFromRoute } from '../utils/deepLinkParams';
+import AppointmentVisitTypePanel from '../components/AppointmentVisitTypePanel';
 
 const { width, height } = Dimensions.get('window');
 
@@ -1848,6 +1849,13 @@ export default function SolarWorkflowScreen() {
             )}
           </View>
         )}
+
+        {opportunityId ? (
+          <AppointmentVisitTypePanel
+            opportunityId={opportunityId}
+            customerLabel={customerInfo?.name || opportunity?.name}
+          />
+        ) : null}
 
         {/* Progress Steps */}
         <View style={styles.stepsContainer}>

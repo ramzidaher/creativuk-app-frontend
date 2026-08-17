@@ -32,6 +32,7 @@ type Props = {
   onWebDrop?: (dataTransfer: DataTransfer) => void | Promise<void>;
   exampleImage?: ImageSourcePropType;
   exampleCaption?: string;
+  requirementText?: string;
 };
 
 export default function CustomerSurveyFileUpload({
@@ -46,6 +47,7 @@ export default function CustomerSurveyFileUpload({
   onWebDrop,
   exampleImage,
   exampleCaption,
+  requirementText,
 }: Props) {
   const { theme } = useTheme();
   const [isDragOver, setIsDragOver] = useState(false);
@@ -80,7 +82,11 @@ export default function CustomerSurveyFileUpload({
         {isWeb ? 'Tap to select or drag and drop images here' : 'Tap to take photos or select from gallery'}
       </Text>
       <Text style={[styles.uploadHint, { color: theme.secondaryText }]}>
-        {required ? `Minimum ${minRequired} image${minRequired === 1 ? '' : 's'} required` : 'Optional'}
+        {requirementText
+          ? requirementText
+          : required
+            ? `Minimum ${minRequired} image${minRequired === 1 ? '' : 's'} required`
+            : 'Optional'}
         {isWeb ? ' • Drag & drop' : ''}
       </Text>
     </View>

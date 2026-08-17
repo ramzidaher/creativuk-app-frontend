@@ -21,13 +21,16 @@ export function mapApiImagesToUploadedFiles(images: any[]): Record<string, Surve
     const url = img.filePath || img.url || img.uri;
     if (!url) continue;
 
-    if (!byField[fieldName]) {
-      byField[fieldName] = [];
+    const surveyField =
+      fieldName === 'energyBillFront' || fieldName === 'energyBillRear' ? 'energyBill' : fieldName;
+
+    if (!byField[surveyField]) {
+      byField[surveyField] = [];
     }
 
-    byField[fieldName].push({
+    byField[surveyField].push({
       uri: url,
-      name: img.fileName || img.originalName || `${fieldName}_${byField[fieldName].length + 1}.jpg`,
+      name: img.fileName || img.originalName || `${surveyField}_${byField[surveyField].length + 1}.jpg`,
       mimeType: img.mimeType || 'image/jpeg',
       type: img.mimeType || 'image/jpeg',
       size: img.fileSize || 0,

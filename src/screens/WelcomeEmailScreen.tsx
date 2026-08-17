@@ -15,8 +15,10 @@ import {
   View,
 } from 'react-native';
 import BottomNavigation from '../components/BottomNavigation';
+import AppointmentVisitTypePanel from '../components/AppointmentVisitTypePanel';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { VISIT_TYPE_REMOTE, type VisitType } from '../utils/visitType';
 
 const { width, height } = Dimensions.get('window');
 
@@ -37,6 +39,9 @@ export default function WelcomeEmailScreen() {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [customEmail, setCustomEmail] = useState('');
   const [useCustomEmail, setUseCustomEmail] = useState(false);
+  const [visitType, setVisitType] = useState<VisitType | null>(null);
+  const [photoLinkSent, setPhotoLinkSent] = useState(false);
+  const [acknowledgedExistingLink, setAcknowledgedExistingLink] = useState(false);
 
   useEffect(() => {
     loadCustomerDetails();
@@ -84,6 +89,14 @@ export default function WelcomeEmailScreen() {
   const handleSendWelcomeEmail = async () => {
     try {
       setIsSendingEmail(true);
+
+      if (visitType === VISIT_TYPE_REMOTE && !photoLinkSent && !acknowledgedExistingLink) {
+        Alert.alert(
+          'Send survey photos first',
+          'This is a remote / Zoom job. Copy the survey photo link (or confirm it was already sent) before the welcome email, so install gets the property pictures.',
+        );
+        return;
+      }
       
       const emailToUse = useCustomEmail ? customEmail : customerDetails?.email;
       
@@ -280,6 +293,35 @@ export default function WelcomeEmailScreen() {
             </View>
           </View>
         )}
+
+        {opportunityId ? (
+          <View style={[styles.emailOverrideCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <AppointmentVisitTypePanel
+              opportunityId={opportunityId}
+              customerLabel={customerDetails?.name}
+              requirePhotoLinkForRemote
+              onVisitTypeChange={setVisitType}
+              onPhotoLinkCreated={() => setPhotoLinkSent(true)}
+            />
+            {visitType === VISIT_TYPE_REMOTE ? (
+              <TouchableOpacity
+                style={styles.acknowledgeRow}
+                onPress={() => setAcknowledgedExistingLink((current) => !current)}
+              >
+                <Feather
+                  name={acknowledgedExistingLink || photoLinkSent ? 'check-square' : 'square'}
+                  size={18}
+                  color={theme.primaryButton}
+                />
+                <Text style={[styles.acknowledgeText, { color: theme.primaryText }]}>
+                  {photoLinkSent
+                    ? 'Survey photo link copied — send it to the customer, then send the welcome email.'
+                    : 'I already sent the survey photo link from the survey screen.'}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Email Override Section */}
         <View style={[styles.emailOverrideCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
@@ -665,6 +707,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     flex: 1,
     lineHeight: 20,
+  },
+  acknowledgeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: 12,
+    paddingHorizontal: 4,
+  },
+  acknowledgeText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
   },
   
   // Action Buttons
