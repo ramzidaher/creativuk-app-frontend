@@ -13,7 +13,6 @@ import {
   View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useRoute } from '@react-navigation/native';
 import CustomerSurveyFileUpload, { CustomerUploadFile } from '../components/CustomerSurveyFileUpload';
 import { useTheme } from '../context/ThemeContext';
 import { surveyCustomerUploadApi } from '../utils/api';
@@ -49,9 +48,14 @@ function storePassword(token: string, password: string) {
   }
 }
 
-export default function CustomerPhotoUploadScreen() {
-  const route = useRoute<any>();
-  const token = route.params?.token as string;
+function readTokenFromLocation(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const match = window.location.pathname.match(/\/customer-photos\/([^/?#]+)/);
+  return match?.[1] ? decodeURIComponent(match[1]) : undefined;
+}
+
+export default function CustomerPhotoUploadScreen({ token: tokenProp }: { token?: string } = {}) {
+  const token = tokenProp || readTokenFromLocation();
   const { theme } = useTheme();
 
   const [step, setStep] = useState<'password' | 'upload'>('password');
@@ -81,39 +85,6 @@ export default function CustomerPhotoUploadScreen() {
     },
     [token],
   );
-
-  useEffect(() => {
-    if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
-    const html = document.documentElement;
-    const body = document.body;
-    const root = document.getElementById('root');
-    const previous = {
-      htmlOverflow: html.style.overflow,
-      htmlHeight: html.style.height,
-      bodyOverflow: body.style.overflow,
-      bodyHeight: body.style.height,
-      rootOverflow: root?.style.overflow ?? '',
-      rootHeight: root?.style.height ?? '',
-    };
-    html.style.overflow = 'auto';
-    html.style.height = 'auto';
-    body.style.overflow = 'auto';
-    body.style.height = 'auto';
-    if (root) {
-      root.style.overflow = 'visible';
-      root.style.height = 'auto';
-    }
-    return () => {
-      html.style.overflow = previous.htmlOverflow;
-      html.style.height = previous.htmlHeight;
-      body.style.overflow = previous.bodyOverflow;
-      body.style.height = previous.bodyHeight;
-      if (root) {
-        root.style.overflow = previous.rootOverflow;
-        root.style.height = previous.rootHeight;
-      }
-    };
-  }, []);
 
   useEffect(() => {
     (async () => {
@@ -385,10 +356,10 @@ export default function CustomerPhotoUploadScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   webViewport: {
-    height: '100vh' as any,
-    maxHeight: '100vh' as any,
+    flex: 1,
+    height: '100%' as any,
+    minHeight: '100vh' as any,
     width: '100%',
-    overflow: 'hidden' as any,
   },
   scrollView: { flex: 1, minHeight: 0 as any },
   nativeScrollContent: { padding: 16, paddingBottom: 48 },

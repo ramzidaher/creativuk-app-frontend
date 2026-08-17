@@ -1049,21 +1049,26 @@ function AppNavigator() {
       }
       screenOptions={{
         headerShown: false,
-        gestureEnabled: true,
-        cardStyleInterpolator: ({ current, layouts }: any) => {
-          return {
-            cardStyle: {
-              transform: [
-                {
-                  translateX: current.progress.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [layouts.screen.width, 0],
-                  }),
-                },
-              ],
-            },
-          };
-        },
+        gestureEnabled: Platform.OS !== 'web',
+        animationEnabled: Platform.OS !== 'web',
+        ...(Platform.OS === 'web'
+          ? {}
+          : {
+              cardStyleInterpolator: ({ current, layouts }: any) => {
+                return {
+                  cardStyle: {
+                    transform: [
+                      {
+                        translateX: current.progress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [layouts.screen.width, 0],
+                        }),
+                      },
+                    ],
+                  },
+                };
+              },
+            }),
       }}
     >
       <Stack.Screen name="Loading" component={LoadingScreen} options={{ headerShown: false }} />
@@ -1843,6 +1848,20 @@ function ThemedPaperProvider({ children }: { children: React.ReactNode }) {
 
 // 👇 Main App entry
 export default function App() {
+  const customerPhotoToken = getCustomerPhotoTokenFromLocation();
+  if (customerPhotoToken) {
+    return (
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <ThemedPaperProvider>
+            <CustomerPhotoUploadScreen token={customerPhotoToken} />
+          </ThemedPaperProvider>
+        </ThemeProvider>
+        <StatusBar style="auto" />
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <ThemeProvider>
