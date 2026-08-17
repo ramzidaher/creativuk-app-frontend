@@ -341,7 +341,7 @@ export default function CustomerPhotoUploadScreen() {
     </>
   );
 
-  const page = (
+  return (
     <SafeAreaView
       style={[
         styles.container,
@@ -367,63 +367,38 @@ export default function CustomerPhotoUploadScreen() {
         ) : null}
       </View>
 
-      {Platform.OS === 'web' ? (
-        <div style={webScrollStyle}>
-          <View style={styles.scrollContent}>{pageBody}</View>
-        </div>
-      ) : (
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.nativeScrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          {pageBody}
-        </ScrollView>
-      )}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={
+          Platform.OS === 'web' ? styles.webScrollContent : styles.nativeScrollContent
+        }
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
+        scrollEnabled
+      >
+        {pageBody}
+      </ScrollView>
     </SafeAreaView>
   );
-
-  if (Platform.OS === 'web') {
-    return <div style={webFixedPageStyle}>{page}</div>;
-  }
-
-  return page;
 }
-
-const webFixedPageStyle = {
-  position: 'fixed' as const,
-  top: 0,
-  right: 0,
-  bottom: 0,
-  left: 0,
-  display: 'flex',
-  flexDirection: 'column' as const,
-  overflow: 'hidden',
-  backgroundColor: '#fff',
-  zIndex: 20,
-};
-
-const webScrollStyle = {
-  display: 'flex',
-  flexDirection: 'column',
-  flex: 1,
-  minHeight: 0,
-  height: '100%',
-  overflowY: 'auto',
-  WebkitOverflowScrolling: 'touch',
-  overscrollBehavior: 'contain',
-  touchAction: 'pan-y',
-} as const;
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   webViewport: {
-    height: '100%' as any,
+    height: '100vh' as any,
     maxHeight: '100vh' as any,
-    overflow: 'hidden',
+    width: '100%',
+    overflow: 'hidden' as any,
   },
-  scrollView: { flex: 1 },
+  scrollView: { flex: 1, minHeight: 0 as any },
   nativeScrollContent: { padding: 16, paddingBottom: 48 },
+  webScrollContent: {
+    padding: 16,
+    paddingBottom: 48,
+    maxWidth: 720,
+    width: '100%',
+    alignSelf: 'center',
+  },
   header: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'web' ? 20 : 12,

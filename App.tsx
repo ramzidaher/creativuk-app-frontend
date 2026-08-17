@@ -975,6 +975,14 @@ function ProfileScreen() {
   );
 }
 
+const PUBLIC_SCREENS = new Set(['CalculatorTestingPublic', 'CustomerPhotoUpload', 'FreeDocumentSigning']);
+
+function getCustomerPhotoTokenFromLocation(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const match = window.location.pathname.match(/\/customer-photos\/([^/?#]+)/);
+  return match?.[1] ? decodeURIComponent(match[1]) : undefined;
+}
+
 function AuthNavigationSync() {
   const { isAuthenticated, isLoading } = useAuth();
   const navigation = useNavigation<any>();
@@ -986,7 +994,14 @@ function AuthNavigationSync() {
     const route = state?.routes?.[state.index ?? 0];
     const routeName = route?.name;
     const authScreens = new Set(['Login', 'Register', 'ForgotPassword', 'Loading']);
-    const publicScreens = new Set(['CalculatorTestingPublic', 'CustomerPhotoUpload', 'FreeDocumentSigning']);
+
+    // Customer photo links must stay put even if a rep is already logged in here.
+    if (routeName && PUBLIC_SCREENS.has(routeName)) {
+      return;
+    }
+    if (getCustomerPhotoTokenFromLocation()) {
+      return;
+    }
 
     if (isAuthenticated && routeName && authScreens.has(routeName)) {
       navigation.dispatch(
@@ -1006,10 +1021,6 @@ function AuthNavigationSync() {
         }),
       );
     }
-
-    if (!isAuthenticated && routeName && publicScreens.has(routeName)) {
-      return;
-    }
   }, [isAuthenticated, isLoading, navigation]);
 
   return null;
@@ -1017,6 +1028,11 @@ function AuthNavigationSync() {
 
 function AppNavigator() {
   const { isAuthenticated, isLoading } = useAuth();
+  const customerPhotoToken = getCustomerPhotoTokenFromLocation();
+  const customerPhotoInitialParams = React.useMemo(
+    () => (customerPhotoToken ? { token: customerPhotoToken } : undefined),
+    [customerPhotoToken],
+  );
 
   console.log('AppNavigator: Auth state:', { isAuthenticated, isLoading });
 
@@ -1024,7 +1040,13 @@ function AppNavigator() {
 
   return (
     <Stack.Navigator
-      initialRouteName={isAuthenticated ? 'MainTabs' : 'Login'}
+      initialRouteName={
+        customerPhotoToken
+          ? 'CustomerPhotoUpload'
+          : isAuthenticated
+            ? 'MainTabs'
+            : 'Login'
+      }
       screenOptions={{
         headerShown: false,
         gestureEnabled: true,
@@ -1057,7 +1079,15 @@ function AppNavigator() {
       <Stack.Screen
         name="CustomerPhotoUpload"
         component={CustomerPhotoUploadScreen}
-        options={{ headerShown: false }}
+        initialParams={customerPhotoInitialParams}
+        options={{
+          headerShown: false,
+          gestureEnabled: false,
+          animationEnabled: false,
+          cardStyleInterpolator: () => ({
+            cardStyle: { opacity: 1 },
+          }),
+        }}
       />
       <Stack.Screen name="MainTabs" component={TabNavigator} />
 
