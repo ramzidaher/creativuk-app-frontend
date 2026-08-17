@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  ImageSourcePropType,
   Platform,
   Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +30,8 @@ type Props = {
   uploading?: boolean;
   onPress: () => void;
   onWebDrop?: (dataTransfer: DataTransfer) => void | Promise<void>;
+  exampleImage?: ImageSourcePropType;
+  exampleCaption?: string;
 };
 
 export default function CustomerSurveyFileUpload({
@@ -40,9 +44,12 @@ export default function CustomerSurveyFileUpload({
   uploading = false,
   onPress,
   onWebDrop,
+  exampleImage,
+  exampleCaption,
 }: Props) {
   const { theme } = useTheme();
   const [isDragOver, setIsDragOver] = useState(false);
+  const [showExample, setShowExample] = useState(false);
   const isWeb = Platform.OS === 'web';
   const currentCount = files.length;
   const isComplete = !required || currentCount >= minRequired;
@@ -94,6 +101,28 @@ export default function CustomerSurveyFileUpload({
         <Text style={[styles.hint, { color: theme.secondaryText }]}>{hint}</Text>
       ) : null}
 
+      {exampleImage ? (
+        <View style={styles.exampleWrap}>
+          <TouchableOpacity
+            onPress={() => setShowExample((open) => !open)}
+            style={styles.exampleToggle}
+            accessibilityRole="button"
+            accessibilityLabel={showExample ? `Hide ${label} example` : `Show ${label} example`}
+          >
+            <Ionicons name={showExample ? 'chevron-up' : 'image-outline'} size={16} color="#166534" />
+            <Text style={styles.exampleToggleText}>{showExample ? 'Hide example' : 'See example photo'}</Text>
+          </TouchableOpacity>
+          {showExample ? (
+            <View style={[styles.exampleCard, { borderColor: theme.cardBorder, backgroundColor: theme.tertiaryBackground }]}>
+              <Image source={exampleImage} style={styles.exampleImage} resizeMode="cover" />
+              {exampleCaption ? (
+                <Text style={[styles.exampleCaption, { color: theme.secondaryText }]}>{exampleCaption}</Text>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
       {isWeb && onWebDrop ? (
         <div
           role="button"
@@ -112,6 +141,7 @@ export default function CustomerSurveyFileUpload({
             cursor: isDisabled ? 'not-allowed' : 'pointer',
             boxSizing: 'border-box',
             marginBottom: files.length ? 12 : 0,
+            touchAction: 'pan-y',
           }}
           onClick={() => {
             if (!isDisabled) onPress();
@@ -203,6 +233,23 @@ const styles = StyleSheet.create({
   label: { fontSize: 16, fontWeight: '600', flex: 1 },
   count: { fontSize: 13, fontWeight: '600' },
   hint: { fontSize: 13, lineHeight: 19, marginBottom: 10 },
+  exampleWrap: { marginBottom: 10 },
+  exampleToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+  },
+  exampleToggleText: { color: '#166534', fontWeight: '600', fontSize: 13 },
+  exampleCard: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  exampleImage: { width: '100%', height: 180 },
+  exampleCaption: { fontSize: 13, lineHeight: 19, padding: 10 },
   uploadZone: {
     borderWidth: 2,
     borderRadius: 12,

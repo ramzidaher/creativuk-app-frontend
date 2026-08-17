@@ -123,7 +123,6 @@ export function getImageFieldsForSurveyPage(
 /** Fields customers can upload via public link (online appointments). */
 export const CUSTOMER_SURVEY_UPLOAD_FIELDS = [
   'energyBill',
-  'epcCertificate',
   'frontDoor',
   'frontProperty',
   'targetRoofs',
@@ -141,12 +140,6 @@ export const CUSTOMER_SURVEY_UPLOAD_FIELD_LABELS: Record<
     hint: 'Photo of your latest electricity bill (all pages if multi-page)',
     minRequired: 2,
     page: 4,
-  },
-  epcCertificate: {
-    label: 'EPC certificate',
-    hint: 'Photo of your Energy Performance Certificate if you have one',
-    minRequired: 2,
-    page: 5,
   },
   frontDoor: {
     label: 'Front door',
@@ -176,6 +169,31 @@ export const CUSTOMER_SURVEY_UPLOAD_FIELD_LABELS: Record<
 
 export const CUSTOMER_SURVEY_PAGE_TITLES: Record<number, string> = {
   4: 'Energy & bills',
-  5: 'EPC',
   6: 'Property exterior',
+};
+
+export const CUSTOMER_SURVEY_UPLOAD_EXAMPLES: Record<
+  CustomerSurveyUploadField,
+  { image: any; caption: string }
+> = {
+  energyBill: {
+    image: require('../../assets/survey-examples/energy-bill-example.jpg'),
+    caption: 'Photograph the whole bill so usage and the total are readable. Include every page.',
+  },
+  frontDoor: {
+    image: require('../../assets/survey-examples/front-door-example.jpg'),
+    caption: 'Stand close enough that the door and house number are both clear.',
+  },
+  frontProperty: {
+    image: require('../../assets/survey-examples/front-property-example.jpg'),
+    caption: 'Step back so the full front of the house is in the photo, including the roof.',
+  },
+  targetRoofs: {
+    image: require('../../assets/survey-examples/roof-panels-example.jpg'),
+    caption: 'Capture the roof slope where panels would go. Take extra photos if there is more than one roof.',
+  },
+  propertySides: {
+    image: require('../../assets/survey-examples/side-property-example.jpg'),
+    caption: 'Photograph the side of the house, including the passageway if there is one.',
+  },
 };

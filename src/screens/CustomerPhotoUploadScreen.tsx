@@ -17,7 +17,11 @@ import CustomerSurveyFileUpload, { CustomerUploadFile } from '../components/Cust
 import { useTheme } from '../context/ThemeContext';
 import { surveyCustomerUploadApi } from '../utils/api';
 import { compressSurveyUploadFiles, SurveyUploadTooLargeError } from '../utils/imageCompression';
-import { CUSTOMER_SURVEY_PAGE_TITLES } from '../utils/surveyImageFields';
+import {
+  CUSTOMER_SURVEY_PAGE_TITLES,
+  CUSTOMER_SURVEY_UPLOAD_EXAMPLES,
+  type CustomerSurveyUploadField,
+} from '../utils/surveyImageFields';
 import { filesFromWebFileList, surveyFilesFromDataTransfer } from '../utils/surveyWebImageFiles';
 import type { SurveyWebUploadFile } from '../utils/surveyWebImageFiles';
 
@@ -210,12 +214,105 @@ export default function CustomerPhotoUploadScreen() {
       })
     : null;
 
+  const pageBody = loading ? (
+    <View style={styles.centered}>
+      <ActivityIndicator size="large" color={theme.primaryButton} />
+      <Text style={[styles.centeredText, { color: theme.secondaryText }]}>Loading…</Text>
+    </View>
+  ) : error ? (
+    <View style={styles.centered}>
+      <Feather name="alert-circle" size={40} color="#dc2626" />
+      <Text style={[styles.errorText, { color: theme.primaryText }]}>{error}</Text>
+    </View>
+  ) : step === 'password' ? (
+    <View style={styles.passwordPanel}>
+      <Text style={[styles.passwordIntro, { color: theme.secondaryText }]}>
+        This page is protected. Enter the password your adviser sent with the link.
+      </Text>
+      <Text style={[styles.inputLabel, { color: theme.primaryText }]}>Password</Text>
+      <TextInput
+        style={[
+          styles.passwordInput,
+          {
+            backgroundColor: theme.inputBackground,
+            borderColor: theme.cardBorder,
+            color: theme.primaryText,
+          },
+        ]}
+        value={passwordInput}
+        onChangeText={setPasswordInput}
+        placeholder="e.g. ABCD-1234"
+        placeholderTextColor={theme.secondaryText}
+        autoCapitalize="characters"
+        autoCorrect={false}
+        secureTextEntry
+        onSubmitEditing={handleVerifyPassword}
+      />
+      <TouchableOpacity
+        style={[styles.verifyButton, { backgroundColor: theme.primaryButton }]}
+        onPress={handleVerifyPassword}
+        disabled={verifying}
+      >
+        {verifying ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.verifyButtonText}>Continue to upload photos</Text>
+        )}
+      </TouchableOpacity>
+    </View>
+  ) : (
+    <>
+      <Text style={[styles.intro, { color: theme.secondaryText }]}>
+        Upload photos for each section below — same types your adviser needs in the survey. You
+        can save and come back later using the same link and password. Tap “See example photo”
+        if you are unsure what to take.
+      </Text>
+
+      {fieldsByPage.map(([page, pageFields]) => (
+        <View
+          key={page}
+          style={[
+            styles.section,
+            { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder },
+          ]}
+        >
+          <Text style={[styles.sectionTitle, { color: '#166534' }]}>
+            {CUSTOMER_SURVEY_PAGE_TITLES[page] ?? `Section ${page}`}
+          </Text>
+          {pageFields.map((field) => {
+            const example =
+              CUSTOMER_SURVEY_UPLOAD_EXAMPLES[field.field as CustomerSurveyUploadField];
+            return (
+              <CustomerSurveyFileUpload
+                key={field.field}
+                label={field.label}
+                hint={field.hint}
+                required
+                minRequired={field.minRequired}
+                files={filesForField(field)}
+                uploading={uploadingField === field.field}
+                onPress={() => pickAndUpload(field)}
+                onWebDrop={(dt) => handleWebDrop(field, dt)}
+                exampleImage={example?.image}
+                exampleCaption={example?.caption}
+              />
+            );
+          })}
+        </View>
+      ))}
+
+      <Text style={[styles.footerNote, { color: theme.secondaryText }]}>
+        Photos are sent securely to Creativ UK. Contact your adviser if you need help.
+      </Text>
+    </>
+  );
+
   return (
     <SafeAreaView
       style={[
         styles.container,
         { backgroundColor: theme.primaryBackground },
-        Platform.OS === 'web' && { minHeight: '100vh' as any },
+        Platform.OS === 'web' && styles.webViewport,
       ]}
     >
       <View style={[styles.header, { backgroundColor: theme.cardBackground, borderBottomColor: theme.cardBorder }]}>
@@ -233,97 +330,43 @@ export default function CustomerPhotoUploadScreen() {
         ) : null}
       </View>
 
-      {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={theme.primaryButton} />
-          <Text style={[styles.centeredText, { color: theme.secondaryText }]}>Loading…</Text>
-        </View>
-      ) : error ? (
-        <View style={styles.centered}>
-          <Feather name="alert-circle" size={40} color="#dc2626" />
-          <Text style={[styles.errorText, { color: theme.primaryText }]}>{error}</Text>
-        </View>
-      ) : step === 'password' ? (
-        <View style={styles.passwordPanel}>
-          <Text style={[styles.passwordIntro, { color: theme.secondaryText }]}>
-            This page is protected. Enter the password your adviser sent with the link.
-          </Text>
-          <Text style={[styles.inputLabel, { color: theme.primaryText }]}>Password</Text>
-          <TextInput
-            style={[
-              styles.passwordInput,
-              {
-                backgroundColor: theme.inputBackground,
-                borderColor: theme.cardBorder,
-                color: theme.primaryText,
-              },
-            ]}
-            value={passwordInput}
-            onChangeText={setPasswordInput}
-            placeholder="e.g. ABCD-1234"
-            placeholderTextColor={theme.secondaryText}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            secureTextEntry
-            onSubmitEditing={handleVerifyPassword}
-          />
-          <TouchableOpacity
-            style={[styles.verifyButton, { backgroundColor: theme.primaryButton }]}
-            onPress={handleVerifyPassword}
-            disabled={verifying}
-          >
-            {verifying ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.verifyButtonText}>Continue to upload photos</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+      {Platform.OS === 'web' ? (
+        <div style={webScrollStyle}>
+          <View style={styles.scrollContent}>{pageBody}</View>
+        </div>
       ) : (
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <Text style={[styles.intro, { color: theme.secondaryText }]}>
-            Upload photos for each section below — same types your adviser needs in the survey. You
-            can save and come back later using the same link and password.
-          </Text>
-
-          {fieldsByPage.map(([page, pageFields]) => (
-            <View
-              key={page}
-              style={[
-                styles.section,
-                { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder },
-              ]}
-            >
-              <Text style={[styles.sectionTitle, { color: '#166534' }]}>
-                {CUSTOMER_SURVEY_PAGE_TITLES[page] ?? `Section ${page}`}
-              </Text>
-              {pageFields.map((field) => (
-                <CustomerSurveyFileUpload
-                  key={field.field}
-                  label={field.label}
-                  hint={field.hint}
-                  required
-                  minRequired={field.minRequired}
-                  files={filesForField(field)}
-                  uploading={uploadingField === field.field}
-                  onPress={() => pickAndUpload(field)}
-                  onWebDrop={(dt) => handleWebDrop(field, dt)}
-                />
-              ))}
-            </View>
-          ))}
-
-          <Text style={[styles.footerNote, { color: theme.secondaryText }]}>
-            Photos are sent securely to Creativ UK. Contact your adviser if you need help.
-          </Text>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.nativeScrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {pageBody}
         </ScrollView>
       )}
     </SafeAreaView>
   );
 }
 
+const webScrollStyle = {
+  display: 'flex',
+  flexDirection: 'column',
+  flex: 1,
+  minHeight: 0,
+  height: '100%',
+  overflowY: 'auto',
+  WebkitOverflowScrolling: 'touch',
+  overscrollBehavior: 'contain',
+} as const;
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  webViewport: {
+    height: '100%' as any,
+    maxHeight: '100vh' as any,
+    overflow: 'hidden',
+  },
+  scrollView: { flex: 1 },
+  nativeScrollContent: { padding: 16, paddingBottom: 48 },
   header: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'web' ? 24 : 12,
