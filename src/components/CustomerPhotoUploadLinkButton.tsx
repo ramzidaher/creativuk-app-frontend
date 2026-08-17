@@ -33,6 +33,21 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   return false;
 }
 
+const PRODUCTION_APP_ORIGIN = 'https://app.creativuk.co.uk';
+
+/** Customer links must open on production even when the API was called from localhost. */
+function toCustomerFacingUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (/localhost|127\.0\.0\.1/i.test(parsed.hostname)) {
+      return `${PRODUCTION_APP_ORIGIN}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+    return url;
+  } catch {
+    return url;
+  }
+}
+
 /** api.post wraps the Nest body, so payload may be at data or data.data. */
 function unwrapUploadLinkPayload(response: {
   success: boolean;
@@ -62,11 +77,11 @@ function unwrapUploadLinkPayload(response: {
     throw new Error(
       response.error ||
         outer?.error ||
-        'Upload link was created but no URL came back. Check FRONTEND_URL on the API.',
+        'Upload link was created but no URL came back. Check PUBLIC_APP_URL on the API.',
     );
   }
 
-  return { url, password };
+  return { url: toCustomerFacingUrl(url), password };
 }
 
 function buildCopyBlock(link: CreatedLink): string {
