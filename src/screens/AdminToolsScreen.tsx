@@ -125,6 +125,24 @@ export default function AdminToolsScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={[styles.card, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
           <View style={styles.cardHeader}>
+            <Feather name="folder" size={22} color={theme.primaryButton} />
+            <Text style={[styles.cardTitle, { color: theme.primaryText }]}>Calculator files on server</Text>
+          </View>
+          <Text style={[styles.cardDescription, { color: theme.secondaryText }]}>
+            Browse EPVS opportunity / template folders on the API host. Download any workbook, or upload a
+            normal `.xlsm` file (same name overwrites).
+          </Text>
+          <TouchableOpacity
+            style={[styles.primaryButton, { backgroundColor: theme.primaryButton }]}
+            onPress={() => navigation.navigate('AdminCalculatorFiles')}
+          >
+            <Feather name="hard-drive" size={18} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={styles.primaryButtonText}>Open calculator file browser</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.card, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+          <View style={styles.cardHeader}>
             <Feather name="image" size={22} color={theme.primaryButton} />
             <Text style={[styles.cardTitle, { color: theme.primaryText }]}>Survey placeholder images</Text>
           </View>

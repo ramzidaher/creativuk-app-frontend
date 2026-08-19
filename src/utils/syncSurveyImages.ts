@@ -1,5 +1,5 @@
 import { surveyApi } from './api';
-import { SURVEY_IMAGE_UPLOAD_FIELDS, getPageForSurveyImageField } from './surveyImageFields';
+import { SURVEY_IMAGE_UPLOAD_FIELDS, getPageForSurveyImageField, surveyFieldForCustomerField } from './surveyImageFields';
 
 export type SurveyImageFile = {
   uri: string;
@@ -21,8 +21,7 @@ export function mapApiImagesToUploadedFiles(images: any[]): Record<string, Surve
     const url = img.filePath || img.url || img.uri;
     if (!url) continue;
 
-    const surveyField =
-      fieldName === 'energyBillFront' || fieldName === 'energyBillRear' ? 'energyBill' : fieldName;
+    const surveyField = surveyFieldForCustomerField(fieldName);
 
     if (!byField[surveyField]) {
       byField[surveyField] = [];

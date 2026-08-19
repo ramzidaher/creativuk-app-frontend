@@ -124,6 +124,7 @@ import SolarArraysInputsScreen from './src/screens/SolarArraysInputsScreen';
 import SolarProjectionScreen from './src/screens/SolarProjectionScreen';
 import WelcomeEmailScreen from './src/screens/WelcomeEmailScreen';
 import AdminToolsScreen from './src/screens/AdminToolsScreen';
+import AdminCalculatorFilesScreen from './src/screens/AdminCalculatorFilesScreen';
 import WorkflowOverrideAdminScreen from './src/screens/WorkflowOverrideAdminScreen';
 import AdminTrainingScreen from './src/screens/AdminTrainingScreen';
 import AdminTrainingProgressScreen from './src/screens/AdminTrainingProgressScreen';
@@ -309,6 +310,7 @@ export type RootStackParamList = {
   Reports: undefined;
   AppointmentCycleTime: undefined;
   AdminTools: undefined;
+  AdminCalculatorFiles: undefined;
   WorkflowOverrideAdmin: { opportunityId?: string } | undefined;
   AdminTraining: undefined;
   AdminTrainingProgress: { programId: string };
@@ -479,6 +481,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       AdminUserOpportunities: 'admin/users/:userId/opportunities',
       AdminOpportunityDetails: 'admin/opportunities/:opportunityId',
       WorkflowOverrideAdmin: 'admin/workflow-override',
+      AdminCalculatorFiles: 'admin/calculator-files',
       AdminTraining: 'admin/training',
       AdminTrainingProgress: 'admin/training/:programId',
       TrainingHub: 'training',
@@ -1431,6 +1434,13 @@ function AppNavigator() {
           <Stack.Screen
             name="AdminTools"
             component={AdminToolsScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="AdminCalculatorFiles"
+            component={AdminCalculatorFilesScreen}
             options={{
               headerShown: false,
             }}

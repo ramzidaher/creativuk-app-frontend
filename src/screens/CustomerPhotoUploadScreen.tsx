@@ -89,7 +89,7 @@ export default function CustomerPhotoUploadScreen({ token: tokenProp }: { token?
   useEffect(() => {
     (async () => {
       if (!token) {
-        setError('Invalid link — no upload token found.');
+        setError('Invalid link. No upload token found.');
         setLoading(false);
         return;
       }
@@ -120,7 +120,7 @@ export default function CustomerPhotoUploadScreen({ token: tokenProp }: { token?
 
   const handleVerifyPassword = async () => {
     if (!passwordInput.trim()) {
-      Alert.alert('Password required', 'Enter the password your adviser sent you.');
+      Alert.alert('Password required', 'Enter the password we sent you with the link.');
       return;
     }
     try {
@@ -232,7 +232,7 @@ export default function CustomerPhotoUploadScreen({ token: tokenProp }: { token?
   ) : step === 'password' ? (
     <View style={styles.passwordPanel}>
       <Text style={[styles.passwordIntro, { color: theme.secondaryText }]}>
-        This is a Creative Energy page. Enter the password your adviser sent with the link.
+        This is a Creative Energy page. Enter the password we sent you with the link.
       </Text>
       <Text style={[styles.inputLabel, { color: theme.primaryText }]}>Password</Text>
       <TextInput
@@ -269,7 +269,7 @@ export default function CustomerPhotoUploadScreen({ token: tokenProp }: { token?
     <>
       <Text style={[styles.intro, { color: theme.secondaryText }]}>
         Take photos for each section below.{'\n'}
-        You can save and come back later using the same link and password. Tap “See example photo” if
+        You can save and come back later using the same link and password. Tap "See example photo" if
         you are unsure what photo to take.
       </Text>
 
@@ -292,7 +292,7 @@ export default function CustomerPhotoUploadScreen({ token: tokenProp }: { token?
                 key={field.field}
                 label={field.label}
                 hint={field.hint}
-                required
+                required={field.minRequired > 0}
                 minRequired={field.minRequired}
                 files={filesForField(field)}
                 uploading={uploadingField === field.field}
@@ -307,7 +307,7 @@ export default function CustomerPhotoUploadScreen({ token: tokenProp }: { token?
       ))}
 
       <Text style={[styles.footerNote, { color: theme.secondaryText }]}>
-        Photos are sent securely to Creativ UK. Contact your adviser if you need help.
+        Photos are sent securely to Creativ UK. If you need help, use the same number or email that sent you this link.
       </Text>
     </>
   );
@@ -331,7 +331,7 @@ export default function CustomerPhotoUploadScreen({ token: tokenProp }: { token?
         <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
           {customerLabel
             ? `Photos for ${customerLabel}`
-            : 'Creative Energy — please upload the photos we need for your property'}
+            : 'Creative Energy. Please upload the photos we need for your property'}
         </Text>
         {expiryText ? (
           <Text style={[styles.expiry, { color: theme.secondaryText }]}>Link valid until {expiryText}</Text>

@@ -122,7 +122,7 @@ export default function WelcomeEmailScreen() {
         } else {
           // Fallback: manually complete the step if backend didn't handle it
           const { workflowApi } = await import('../utils/api');
-          await workflowApi.completeStep(opportunityId, 12, { // Use step number 12 directly
+          await workflowApi.completeStep(opportunityId, 13, {
             emailSent: true,
             customerEmail: emailToUse,
             sentAt: new Date().toISOString(),
@@ -315,7 +315,7 @@ export default function WelcomeEmailScreen() {
                 />
                 <Text style={[styles.acknowledgeText, { color: theme.primaryText }]}>
                   {photoLinkSent
-                    ? 'Survey photo link copied — send it to the customer, then send the welcome email.'
+                    ? 'Survey photo link copied. Send it to the customer, then send the welcome email.'
                     : 'I already sent the survey photo link from the survey screen.'}
                 </Text>
               </TouchableOpacity>

@@ -150,7 +150,7 @@ export default function AppointmentOutcomeModal({
                     Customer accepted the proposal
                   </Text>
                   <Text style={[styles.outcomeFolder, { color: theme.tertiaryText }]}>
-                    Files will be saved to: Customer Orders 2026 (temp/ → final/)
+                    Click this last, after signed docs and HP. Copies the Quotes pack into Customer Orders.
                   </Text>
                 </View>
                 {selectedOutcome === 'won' && (
@@ -196,7 +196,7 @@ export default function AppointmentOutcomeModal({
                     Customer declined the proposal
                   </Text>
                   <Text style={[styles.outcomeFolder, { color: theme.tertiaryText }]}>
-                    Files will be saved to: Customer Orders 2026 (temp/ → final/)
+                    Files stay in Customer Quotes so ops can review them without waiting for Won.
                   </Text>
                 </View>
                 {selectedOutcome === 'lost' && (
@@ -241,7 +241,7 @@ export default function AppointmentOutcomeModal({
                 <ActivityIndicator size="small" color="#ffffff" />
               ) : (
                 <Text style={[styles.confirmButtonText, { color: '#ffffff' }]}>
-                  Confirm & Organize Files
+                  Confirm outcome
                 </Text>
               )}
             </TouchableOpacity>

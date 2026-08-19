@@ -87,7 +87,7 @@ function unwrapUploadLinkPayload(response: {
 
 function buildCopyBlock(link: CreatedLink): string {
   if (link.password) {
-    return `Photo upload link:\n${link.url}\n\nPassword:\n${link.password}\n\n(Link valid 14 days — send both to the customer.)`;
+    return `Photo upload link:\n${link.url}\n\nPassword:\n${link.password}\n\n(Link valid 14 days. Send both to the customer.)`;
   }
   return `Photo upload link:\n${link.url}\n\n(Link valid 14 days.)`;
 }
@@ -124,7 +124,7 @@ export default function CustomerPhotoUploadLinkButton({
       if (copied) {
         showCopied(
           link.password
-            ? 'Link & password copied — paste and send both to the customer.'
+            ? 'Link & password copied. Paste and send both to the customer.'
             : 'Link copied (no password returned by API yet).',
         );
       }

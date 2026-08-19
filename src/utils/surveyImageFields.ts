@@ -17,7 +17,19 @@ export type SurveyImageFieldConfig = {
   evChargerOnly?: boolean;
 };
 
-/** Every ModernFileUpload field in the live survey UI, in page order. */
+/** Customer slots that still land on the surveyor's existing survey field. */
+export const CUSTOMER_FIELD_TO_SURVEY_FIELD: Record<string, string> = {
+  energyBillFront: 'energyBill',
+  energyBillRear: 'energyBill',
+  frontRoof: 'targetRoofs',
+  sideRoof: 'propertySides',
+  rearRoof: 'otherRoofPictures',
+};
+
+export function surveyFieldForCustomerField(fieldName: string): string {
+  return CUSTOMER_FIELD_TO_SURVEY_FIELD[fieldName] ?? fieldName;
+}
+
 export const SURVEY_IMAGE_UPLOAD_FIELDS: SurveyImageFieldConfig[] = [
   // Page 4 – Energy & installation (energy bill upload lives on page 4 in UI)
   { field: 'energyBill', page: 'page4', minRequired: 2, placeholderFill: true, skipWhenNoEnergyBill: true },
@@ -120,14 +132,21 @@ export function getImageFieldsForSurveyPage(
   }).map((f) => f.field);
 }
 
-/** Fields customers can upload via public link (online appointments). */
+/** Fields customers can upload via public link (Zoom / remote appointments). */
 export const CUSTOMER_SURVEY_UPLOAD_FIELDS = [
   'energyBillFront',
   'energyBillRear',
   'frontDoor',
   'frontProperty',
-  'targetRoofs',
-  'propertySides',
+  'frontRoof',
+  'sideRoof',
+  'rearRoof',
+  'otherBuildings',
+  'roofTileCloseup',
+  'fuseBoard',
+  'electricMeter',
+  'batteryInverterLocation',
+  'shadingIssues',
 ] as const;
 
 export type CustomerSurveyUploadField = (typeof CUSTOMER_SURVEY_UPLOAD_FIELDS)[number];
@@ -143,68 +162,145 @@ export const CUSTOMER_SURVEY_UPLOAD_FIELD_LABELS: Record<
     page: 4,
   },
   energyBillRear: {
-    label: 'Rear of energy bill',
-    hint: 'Photograph the back of the bill.',
+    label: 'Back of energy bill',
+    hint: 'Photograph the whole back of the bill, including the rates and usage.',
     minRequired: 1,
     page: 4,
   },
   frontDoor: {
     label: 'Front door',
-    hint: 'Clear photo showing your front door and house number',
+    hint: 'Clear photo showing your front door and house number.',
     minRequired: 2,
     page: 6,
   },
   frontProperty: {
     label: 'Front of property',
-    hint: 'Photo of the full front of the house from the street',
+    hint: 'Photo of the full front of the house from the street.',
     minRequired: 2,
     page: 6,
   },
-  targetRoofs: {
-    label: 'Roof(s) for panels',
-    hint: 'Photo of the roof area where solar panels will go',
-    minRequired: 2,
+  frontRoof: {
+    label: 'Front roof',
+    hint: 'Photo of the roof at the front of the house.',
+    minRequired: 1,
     page: 6,
   },
-  propertySides: {
-    label: 'Side of property',
-    hint: 'Photo of the side of the house if relevant',
-    minRequired: 2,
+  sideRoof: {
+    label: 'Side roof',
+    hint: 'Photo of the roof on the side of the house.',
+    minRequired: 1,
     page: 6,
+  },
+  rearRoof: {
+    label: 'Rear roof',
+    hint: 'Photo of the roof at the back of the house.',
+    minRequired: 1,
+    page: 6,
+  },
+  otherBuildings: {
+    label: 'Flat roofs or other buildings',
+    hint: 'Only if you have them — flat roofs, garages, or other buildings.',
+    minRequired: 0,
+    page: 7,
+  },
+  roofTileCloseup: {
+    label: 'Close-up of roof tile',
+    hint: 'Stand close so we can see the tile clearly. You do not need to know the tile type.',
+    minRequired: 1,
+    page: 7,
+  },
+  fuseBoard: {
+    label: 'Fuse board',
+    hint: 'A clear photo of where the fuse board is.',
+    minRequired: 1,
+    page: 7,
+  },
+  electricMeter: {
+    label: 'Electric meter',
+    hint: 'A clear photo of where the electric meter is.',
+    minRequired: 1,
+    page: 7,
+  },
+  batteryInverterLocation: {
+    label: 'Battery and inverter location options',
+    hint: 'Take a few photos of possible spots outside, next to the house. This can be front or rear. Ideally close to the electric meter box, but that is recommended rather than required.',
+    minRequired: 0,
+    page: 7,
+  },
+  shadingIssues: {
+    label: 'Possible roof shading',
+    hint: 'Photos of anything that might shade the roof — for example trees, the house next door, or a chimney stack.',
+    minRequired: 4,
+    page: 8,
   },
 };
 
 export const CUSTOMER_SURVEY_PAGE_TITLES: Record<number, string> = {
   4: 'Energy & bills',
   6: 'Property exterior',
+  7: 'Roofs and electrics',
+  8: 'Possible shading',
 };
 
-export const CUSTOMER_SURVEY_UPLOAD_EXAMPLES: Record<
-  CustomerSurveyUploadField,
-  { image: any; caption: string }
+const EXAMPLE_BILL = require('../../assets/survey-examples/energy-bill-example.jpg');
+const EXAMPLE_DOOR = require('../../assets/survey-examples/front-door-example.jpg');
+const EXAMPLE_FRONT = require('../../assets/survey-examples/front-property-example.jpg');
+const EXAMPLE_ROOF = require('../../assets/survey-examples/roof-panels-example.jpg');
+const EXAMPLE_SIDE = require('../../assets/survey-examples/side-property-example.jpg');
+
+export const CUSTOMER_SURVEY_UPLOAD_EXAMPLES: Partial<
+  Record<CustomerSurveyUploadField, { image: any; caption: string }>
 > = {
   energyBillFront: {
-    image: require('../../assets/survey-examples/energy-bill-example.jpg'),
+    image: EXAMPLE_BILL,
     caption: 'Whole front of the bill, including name and address.',
   },
   energyBillRear: {
-    image: require('../../assets/survey-examples/energy-bill-example.jpg'),
-    caption: 'The back of the bill.',
+    image: EXAMPLE_BILL,
+    caption: 'Whole back of the bill, including the rates and usage.',
   },
   frontDoor: {
-    image: require('../../assets/survey-examples/front-door-example.jpg'),
+    image: EXAMPLE_DOOR,
     caption: 'Stand close enough that the door and house number are both clear.',
   },
   frontProperty: {
-    image: require('../../assets/survey-examples/front-property-example.jpg'),
+    image: EXAMPLE_FRONT,
     caption: 'Step back so the full front of the house is in the photo, including the roof.',
   },
-  targetRoofs: {
-    image: require('../../assets/survey-examples/roof-panels-example.jpg'),
-    caption: 'Capture the roof slope where panels would go. Take extra photos if there is more than one roof.',
+  frontRoof: {
+    image: EXAMPLE_ROOF,
+    caption: 'Photograph the roof at the front of the house.',
   },
-  propertySides: {
-    image: require('../../assets/survey-examples/side-property-example.jpg'),
-    caption: 'Photograph the side of the house, including the passageway if there is one.',
+  sideRoof: {
+    image: EXAMPLE_ROOF,
+    caption: 'Photograph the roof on the side of the house.',
+  },
+  rearRoof: {
+    image: EXAMPLE_ROOF,
+    caption: 'Photograph the roof at the back of the house.',
+  },
+  otherBuildings: {
+    image: EXAMPLE_SIDE,
+    caption: 'Only if you have them — a flat roof, garage, or other building.',
+  },
+  roofTileCloseup: {
+    image: EXAMPLE_ROOF,
+    caption: 'Get close enough that the tile is easy to see.',
+  },
+  fuseBoard: {
+    image: EXAMPLE_FRONT,
+    caption: 'Show where the fuse board is, with the whole board in the photo if you can.',
+  },
+  electricMeter: {
+    image: EXAMPLE_FRONT,
+    caption: 'Show where the electric meter is.',
+  },
+  batteryInverterLocation: {
+    image: EXAMPLE_SIDE,
+    caption: 'Outside spots next to the house. Ideally near the electric meter box.',
+  },
+  shadingIssues: {
+    image: EXAMPLE_ROOF,
+    caption: 'Trees, the house next door, a chimney stack, or anything else that might shade the roof.',
   },
 };

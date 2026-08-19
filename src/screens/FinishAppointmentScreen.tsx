@@ -241,7 +241,7 @@ export default function FinishAppointmentScreen() {
                     Customer accepted the proposal
                   </Text>
                   <Text style={[styles.outcomeFolder, { color: theme.tertiaryText }]}>
-                    Files sync to Customer Orders 2026 (temp/) during the appointment and finalize in final/ when won
+                    Click this last, after signed docs and HP. Copies the Quotes pack into Customer Orders.
                   </Text>
                 </View>
                 {selectedOutcome === 'won' && (
@@ -287,7 +287,7 @@ export default function FinishAppointmentScreen() {
                     Customer declined the proposal
                   </Text>
                   <Text style={[styles.outcomeFolder, { color: theme.tertiaryText }]}>
-                    Files sync to Customer Orders 2026 (temp/) during the appointment and finalize in final/ when quoted
+                    Files stay in Customer Quotes so ops can review them without waiting for Won.
                   </Text>
                 </View>
                 {selectedOutcome === 'lost' && (
@@ -326,7 +326,7 @@ export default function FinishAppointmentScreen() {
               <Feather name="check-circle" size={20} color="#ffffff" />
             )}
             <Text style={[styles.confirmButtonText, { color: '#ffffff' }]}>
-              {isProcessing ? 'Processing...' : 'Confirm & Organize Files'}
+              {isProcessing ? 'Processing...' : 'Confirm outcome'}
             </Text>
           </TouchableOpacity>
 
@@ -359,7 +359,9 @@ export default function FinishAppointmentScreen() {
             </Text>
             
             <Text style={[styles.modalMessage, { color: theme.secondaryText }]}>
-              Files are in Customer Orders 2026 under temp/ and organized in final/ for this {selectedOutcome} outcome.
+              {selectedOutcome === 'won'
+                ? 'Copied the Quotes pack into Customer Orders, including survey, photos, calculators, contract, and signed docs. Quotes still has the live copies.'
+                : 'Files stay in Customer Quotes for ops to review.'}
             </Text>
             
             <View style={styles.modalButtonContainer}>

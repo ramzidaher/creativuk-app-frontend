@@ -105,7 +105,7 @@ export default function AppointmentVisitTypePanel({
 
       <Text style={styles.hint}>
         {remote
-          ? 'Customer photos go into this same survey — they are not a separate folder. Send the link during the call if you need extra sales photos, and always send it after the contract is signed.'
+          ? 'Customer photos go into this same survey. They are not a separate folder. Send the link during the call if you need extra sales photos, and always send it after the contract is signed.'
           : 'On a home visit the surveyor usually takes the photos. Keep the copy-link button available if ops later need extra pictures from the customer.'}
       </Text>
 

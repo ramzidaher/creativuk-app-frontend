@@ -1039,8 +1039,8 @@ export default function SolarWorkflowScreen() {
       Alert.alert(
         'Appointment Completed',
         outcome === 'won'
-          ? 'Files are in Customer Orders 2026 under temp/ and final/. CRM stage update may take up to a minute.'
-          : 'Files are in Customer Orders 2026 under temp/ and final/ for this quoted outcome.',
+          ? 'Copied the Quotes pack into Customer Orders. Quotes still has the live copies.'
+          : 'Files stay in Customer Quotes for this quoted outcome.',
         [{ text: 'OK' }],
       );
     } catch (error) {

@@ -3061,6 +3061,273 @@ export interface TrainingProgram {
   };
 }
 
+export type CalculatorFolderKey =
+  | 'epvs-opportunities'
+  | 'epvs-opportunities-pdfs'
+  | 'opportunities'
+  | 'opportunities-pdfs';
+
+export type CalculatorFolderInfo = {
+  key: CalculatorFolderKey;
+  label: string;
+  relativePath: string;
+  description: string;
+  absolutePath: string;
+  fileCount?: number;
+  exists?: boolean;
+};
+
+export type CalculatorFolderFile = {
+  fileName: string;
+  name?: string;
+  size: number;
+  modifiedAt: string;
+};
+
+function normalizeCalculatorFolder(raw: any): CalculatorFolderInfo | null {
+  const key = String(raw?.key || raw?.id || '').trim() as CalculatorFolderKey;
+  if (!key) return null;
+  return {
+    key,
+    label: String(raw?.label || raw?.name || key),
+    relativePath: String(raw?.relativePath || raw?.path || ''),
+    description: String(raw?.description || ''),
+    absolutePath: String(raw?.absolutePath || ''),
+    fileCount: typeof raw?.fileCount === 'number' ? raw.fileCount : undefined,
+    exists: typeof raw?.exists === 'boolean' ? raw.exists : undefined,
+  };
+}
+
+function normalizeCalculatorFile(raw: any): CalculatorFolderFile {
+  return {
+    ...raw,
+    fileName: String(raw?.fileName || raw?.name || '').trim(),
+    name: String(raw?.name || raw?.fileName || '').trim() || undefined,
+    size: Number(raw?.size || 0),
+    modifiedAt: String(raw?.modifiedAt || ''),
+  };
+}
+
+export const adminCalculatorFilesApi = {
+  async listFolders(): Promise<ApiResponse<CalculatorFolderInfo[]>> {
+    const response = await api.get<any>('/admin/calculator-files/folders');
+    if (!response.success) return response as ApiResponse<CalculatorFolderInfo[]>;
+    const payload = response.data?.data ?? response.data;
+    const rawFolders = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.folders)
+        ? payload.folders
+        : [];
+    return {
+      success: true,
+      data: rawFolders.map(normalizeCalculatorFolder).filter(Boolean) as CalculatorFolderInfo[],
+    };
+  },
+
+  async listFiles(
+    folder: CalculatorFolderKey,
+  ): Promise<
+    ApiResponse<{ folder: CalculatorFolderKey; label: string; files: CalculatorFolderFile[]; total?: number }>
+  > {
+    const response = await api.get<any>(
+      `/admin/calculator-files?folder=${encodeURIComponent(folder)}&limit=500`,
+    );
+    if (!response.success) {
+      return response as ApiResponse<{
+        folder: CalculatorFolderKey;
+        label: string;
+        files: CalculatorFolderFile[];
+        total?: number;
+      }>;
+    }
+    const payload = response.data?.data ?? response.data;
+    const normalizedFiles = Array.isArray(payload?.files)
+      ? payload.files.map(normalizeCalculatorFile)
+      : [];
+    return {
+      success: true,
+      data: {
+        folder: (payload?.folder?.id || payload?.folder || folder) as CalculatorFolderKey,
+        label: String(payload?.folder?.name || payload?.label || folder),
+        total: typeof payload?.total === 'number' ? payload.total : normalizedFiles.length,
+        files: normalizedFiles,
+      },
+    };
+  },
+
+  async download(folder: CalculatorFolderKey, fileName: string): Promise<void> {
+    const storage = getStorage();
+    const token = storage ? await storage.getItem('accessToken') : null;
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+
+    // Prefer legacy query route (works with current admin UI), fall back to nested route.
+    const urls = [
+      buildApiUrl(
+        `/admin/calculator-files/download?folder=${encodeURIComponent(folder)}&fileName=${encodeURIComponent(fileName)}`,
+      ),
+      buildApiUrl(
+        `/admin/calculator-files/folders/${encodeURIComponent(folder)}/files/${encodeURIComponent(fileName)}/download`,
+      ),
+    ];
+
+    let lastError = 'Download failed';
+    for (const url of urls) {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'ngrok-skip-browser-warning': 'true',
+          Accept: 'application/octet-stream, */*',
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        lastError = text || `Download failed (${response.status})`;
+        continue;
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      if (!arrayBuffer.byteLength) {
+        throw new Error('Downloaded file is empty');
+      }
+
+      if (typeof document !== 'undefined') {
+        const blob = new Blob([arrayBuffer], {
+          type: 'application/vnd.ms-excel.sheet.macroEnabled.12',
+        });
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(blobUrl);
+        }, 100);
+        return;
+      }
+
+      throw new Error('File download is supported on web. Use the browser admin tools screen.');
+    }
+
+    throw new Error(lastError);
+  },
+
+  async upload(
+    folder: CalculatorFolderKey,
+    file: { uri?: string; name: string; type?: string; file?: File },
+  ): Promise<
+    ApiResponse<{ folder: CalculatorFolderKey; fileName: string; size: number; overwritten?: boolean }>
+  > {
+    const storage = getStorage();
+    const token = storage ? await storage.getItem('accessToken') : null;
+    if (!token) {
+      return { success: false, error: 'Authentication required' };
+    }
+
+    // Prefer legacy query route used by admin UI, then nested route.
+    // Rebuild FormData per attempt — fetch can consume the body.
+    const urls = [
+      buildApiUrl(`/admin/calculator-files/upload?folder=${encodeURIComponent(folder)}`),
+      buildApiUrl(`/admin/calculator-files/folders/${encodeURIComponent(folder)}/upload`),
+    ];
+
+    let lastError = 'Upload failed';
+    for (const url of urls) {
+      const formData = new FormData();
+      if (typeof File !== 'undefined' && file.file instanceof File) {
+        formData.append('file', file.file, file.name);
+      } else if (file.uri) {
+        formData.append('file', {
+          uri: file.uri,
+          name: file.name,
+          type: file.type || 'application/vnd.ms-excel.sheet.macroEnabled.12',
+        } as any);
+      } else {
+        return { success: false, error: 'No file selected' };
+      }
+
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'ngrok-skip-browser-warning': 'true',
+          },
+          body: formData,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // Browser often reports IIS/Cloudflare 413 / connection reset as "Failed to fetch"
+        if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+          lastError =
+            `Network error uploading ${file.name} (${Math.round((file.file?.size || 0) / 1048576)}MB). ` +
+            'The API host likely rejected a large body (IIS default ~28MB). ' +
+            'Raise maxAllowedContentLength to 100MB on the server (see backend web.config), then retry.';
+          // Don't retry alternate URL for transport failures — same proxy limit
+          return { success: false, error: lastError };
+        }
+        lastError = msg || 'Upload failed';
+        continue;
+      }
+
+      const text = await response.text();
+      let parsed: any = null;
+      try {
+        parsed = text ? JSON.parse(text) : null;
+      } catch {
+        parsed = null;
+      }
+
+      if (!response.ok) {
+        if (response.status === 413) {
+          return {
+            success: false,
+            error:
+              'Upload rejected: file too large for the API host (413). ' +
+              'Raise IIS maxAllowedContentLength to 100MB (backend web.config) and retry.',
+          };
+        }
+        lastError =
+          parsed?.message ||
+          parsed?.error ||
+          (text && !text.trim().startsWith('<') ? text : null) ||
+          `Upload failed (${response.status})`;
+        // Try alternate route on 404 only
+        if (response.status === 404) continue;
+        return { success: false, error: lastError };
+      }
+
+      if (parsed?.success === false) {
+        return { success: false, error: parsed.error || parsed.message || 'Upload failed' };
+      }
+
+      const payload = parsed?.data ?? parsed ?? {};
+      return {
+        success: true,
+        data: {
+          folder: (payload.folderId || payload.folder || folder) as CalculatorFolderKey,
+          fileName: String(payload.fileName || payload.name || file.name),
+          size: Number(payload.size || file.file?.size || 0),
+          overwritten: Boolean(payload.overwritten),
+        },
+      };
+    }
+
+    return { success: false, error: lastError };
+  },
+
+  deleteFile: (folder: CalculatorFolderKey, fileName: string) =>
+    api.delete<{ success: boolean }>(
+      `/admin/calculator-files/folders/${encodeURIComponent(folder)}/files/${encodeURIComponent(fileName)}`,
+    ),
+};
+
 export const trainingApi = {
   getTemplates: () => api.get<{
     scenarios: unknown[];

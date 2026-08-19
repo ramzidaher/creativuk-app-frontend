@@ -538,6 +538,7 @@ export default function InstallationBookingScreen() {
     }
     
     setBooking(true);
+    let optimisticEventIds: string[] = [];
     
     try {
       // Create new event with proper date/time handling
@@ -596,6 +597,7 @@ export default function InstallationBookingScreen() {
           allDay: true
         }
       };
+      optimisticEventIds = [newEvent.id, nextDayEvent.id];
       
       // Add both events immediately for visual feedback
       setEvents(prev => {
@@ -677,36 +679,16 @@ export default function InstallationBookingScreen() {
       // Refresh calendar events to show the new booking
       await refreshCalendarEvents();
       
-      // Complete the installation booking workflow step
-      try {
-        const { workflowApi } = await import('../utils/api');
-        const stepData = {
-          appointmentId: result.appointment?.appointmentId,
-          installer: installerName,
-          customerName: customerDisplayName,
-          customerAddress: customerAddress,
-          bookingDate: moment(selectedDate).format('YYYY-MM-DD'),
-          timeSlot: selectedTimeSlot,
-          endTime: moment(endTime).format('HH:mm'),
-          surveyor: surveyorName,
-          surveyorEmail: surveyorEmail,
-          completedAt: new Date().toISOString()
-        };
-        
-        console.log('🔧 Completing installation booking workflow step with data:', stepData);
-        const workflowResult = await workflowApi.completeStep(opportunityId, 10, stepData); // Step 10 is INSTALLATION_BOOKING
-        console.log('✅ Installation booking workflow step completed:', workflowResult);
-      } catch (workflowError) {
-        console.error('❌ Failed to complete installation booking workflow step:', workflowError);
-        // Don't fail the entire booking if workflow completion fails
-      }
-      
       // Show success popup with navigation to next step
       console.log('🎉 Booking successful! Setting showSuccessModal to true');
       setShowSuccessModal(true);
       console.log('🎉 showSuccessModal state updated');
     } catch (error) {
       console.error('Booking error:', error);
+      setEvents(prev =>
+        prev.filter(event => !optimisticEventIds.includes(event.id))
+      );
+      setNewlyBookedEventId(null);
       Alert.alert(
         'Booking Failed', 
         'Failed to book installation. Please try again or contact support if the problem persists.',
