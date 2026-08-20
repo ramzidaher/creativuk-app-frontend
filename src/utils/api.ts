@@ -1634,7 +1634,7 @@ export const presentationApi = {
         throw new Error('Sheet not found');
       }
 
-      const calculatorType = selectedSheet.calculatorType || 'off-peak';
+      const calculatorType = selectedSheet.calculatorType || 'v44';
       
       // Use extractVariables with the calculator type
       return await this.extractVariables(opportunityId, calculatorType, fileName);

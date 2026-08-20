@@ -143,6 +143,23 @@ export default function AdminToolsScreen() {
 
         <View style={[styles.card, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
           <View style={styles.cardHeader}>
+            <Feather name="calendar" size={22} color={theme.primaryButton} />
+            <Text style={[styles.cardTitle, { color: theme.primaryText }]}>Installer calendars</Text>
+          </View>
+          <Text style={[styles.cardDescription, { color: theme.secondaryText }]}>
+            Choose which Microsoft 365 installer calendars each sales rep can book in the app.
+          </Text>
+          <TouchableOpacity
+            style={[styles.primaryButton, { backgroundColor: theme.primaryButton }]}
+            onPress={() => navigation.navigate('AdminCalendarSetup')}
+          >
+            <Feather name="users" size={18} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={styles.primaryButtonText}>Open calendar setup</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.card, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+          <View style={styles.cardHeader}>
             <Feather name="image" size={22} color={theme.primaryButton} />
             <Text style={[styles.cardTitle, { color: theme.primaryText }]}>Survey placeholder images</Text>
           </View>

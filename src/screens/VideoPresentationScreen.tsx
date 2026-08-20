@@ -564,17 +564,19 @@ export default function VideoPresentationScreen() {
         // Fallback: determine calculator type from filename if not set
         if (!calculatorType && selectedSheet?.fileName) {
           const fileName = selectedSheet.fileName.toLowerCase();
-          if (fileName.includes('epvs')) {
+          if (fileName.includes('v4.4') || fileName.includes('v44')) {
+            calculatorType = 'v44';
+          } else if (fileName.includes('epvs')) {
             calculatorType = 'epvs';
           } else if (fileName.includes('flux')) {
             calculatorType = 'flux';
           } else {
-            calculatorType = 'off-peak';
+            calculatorType = 'v44';
           }
         }
         
         // Final fallback
-        calculatorType = calculatorType || 'off-peak';
+        calculatorType = calculatorType || 'v44';
         
         console.log('🔍 Image data:', imageData);
         console.log('🔍 Selected sheet:', selectedSheet);

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import moment from 'moment';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -39,6 +39,29 @@ interface CalendarEvent {
   resource?: any;
 }
 
+interface InstallerCalendar {
+  id: string;
+  name: string;
+  color: string;
+  note?: string;
+  email?: string;
+}
+
+const INSTALLER_COLORS = ['#1976d2', '#388e3c', '#7b1fa2', '#f57c00', '#d32f2f', '#00897b', '#5d4037', '#455a64'];
+
+function colorForName(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash + name.charCodeAt(i) * (i + 1)) % INSTALLER_COLORS.length;
+  return INSTALLER_COLORS[hash];
+}
+
+function installerNote(displayName: string): string {
+  if (/philip|phil/i.test(displayName)) {
+    return 'Install can be completed in one day (but let the customer know it can take two days)';
+  }
+  return 'Install should be booked over two days';
+}
+
 export default function InstallationBookingScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
@@ -55,6 +78,9 @@ export default function InstallationBookingScreen() {
   const [booking, setBooking] = useState(false);
   const [newlyBookedEventId, setNewlyBookedEventId] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [calendars, setCalendars] = useState<InstallerCalendar[]>([]);
+  const [loadingCalendars, setLoadingCalendars] = useState(true);
+  const [loadingEvents, setLoadingEvents] = useState(false);
   
   // Debug modal state changes
   useEffect(() => {
@@ -64,90 +90,39 @@ export default function InstallationBookingScreen() {
     }
   }, [showSuccessModal]);
   const scrollViewRef = useRef<ScrollView>(null);
-  
-  // User to installer mapping (updated based on your requirements)
-  const userInstallerMapping = {
-    'Andrew': ['Phil', 'Darren'], // Removed Nick from Andrew's access
-    'Ion': ['Phil', 'Darren', 'Nick'], 
-    'Jordan': ['Phil', 'Darren'],
-    'Onur': ['Phil', 'Darren'],
-    'Kanji': ['Phil'], // Updated: only Phil
-    'Kenji': ['Darren', 'Nick'], // Updated: Darren and Nick
-    'Alex': ['Phil', 'Darren', 'Nick'],
-    'James': ['Owen', 'Richard'], // Updated: James now has Owen and Richard instead of Jon
-    'Hamzah': ['Phil', 'Darren', 'Nick', 'Owen', 'Richard', 'Antonio'],
-    'Haider': ['Phil', 'Darren', 'Nick', 'Owen', 'Richard', 'Antonio'],
-    'Rafee': ['Phil', 'Darren', 'Nick', 'Owen', 'Richard', 'Antonio']
-  };
+  const isSurveyor = user?.role === 'SURVEYOR' || user?.role === 'ADMIN';
 
-  // Installer notes for booking duration (updated)
-  const installerNotes = {
-    'Phil': 'Install can be completed in one day (but let the customer know it can take two days)',
-    'Darren': 'Install should be booked over two days',
-    'Nick': 'Install should be booked over two days',
-    'Owen': 'Install should be booked over two days', // New installer
-    'Richard': 'Install should be booked over two days', // New installer
-    'Antonio': 'Install should be booked over two days'
-  };
-
-  // Available installer calendars with notes
-  const allCalendars = [
-    { id: 'Phil', name: 'Philip Edmondson', color: '#1976d2', note: installerNotes['Phil'] },
-    { id: 'Darren', name: 'Darren Powell', color: '#388e3c', note: installerNotes['Darren'] },
-    { id: 'Nick', name: 'Nicholas Goldson', color: '#7b1fa2', note: installerNotes['Nick'] },
-    { id: 'Owen', name: 'Owen Shannon', color: '#f57c00', note: installerNotes['Owen'] },
-    { id: 'Richard', name: 'Richard Orchard', color: '#d32f2f', note: installerNotes['Richard'] },
-    { id: 'Antonio', name: 'Antonio Hadley', color: '#00897b', note: installerNotes['Antonio'] }
-  ];
-
-  // Check if user is a surveyor (has surveyor role or is in the surveyor list)
-  const isSurveyor = useMemo(() => {
-    if (!user?.name) return false;
-    const userFirstName = user.name.split(' ')[0];
-    const surveyorNames = ['Andrew', 'Ion', 'Jordan', 'Onur', 'James', 'Kenji', 'Alex', 'Hamzah', 'Haider', 'Rafee'];
-    return surveyorNames.includes(userFirstName);
-  }, [user?.name]);
-
-  // Filter calendars based on current user's assignment
-  const getAvailableCalendars = () => {
-    if (!user?.name) {
-      return allCalendars; // Fallback
-    }
-
-    // Admin accounts can see all installers
-    if (user.role === 'ADMIN') {
-      console.log(`Admin user ${user.name} can access all installers`);
-      return allCalendars;
-    }
-
-    // Find the user name (case-insensitive) - extract first name from full name
-    const userFirstName = user.name.split(' ')[0]; // Get first name from "Andrew Hughes"
-    const userName = Object.keys(userInstallerMapping).find(
-      name => name.toLowerCase() === userFirstName.toLowerCase()
-    );
-
-    if (!userName) {
-      // If user is not in the mapping, show all calendars (fallback)
-      console.warn(`User ${user.name} not found in user mapping, showing all calendars`);
-      return allCalendars;
-    }
-
-    // Get allowed installer IDs for this user
-    const allowedInstallerIds = userInstallerMapping[userName as keyof typeof userInstallerMapping];
-    
-    // Filter calendars to only show allowed installers
-    const filteredCalendars = allCalendars.filter(calendar => 
-      allowedInstallerIds.includes(calendar.id)
-    );
-
-    console.log(`User ${userName} can access installers:`, allowedInstallerIds);
-
-    return filteredCalendars;
-  };
-
-  const calendars = useMemo(() => getAvailableCalendars(), [user?.name, user?.role]);
-  
-  // Set default calendar when calendars are filtered
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingCalendars(true);
+        const token = await authApi.getAccessToken();
+        const apiBaseUrl = (process.env.EXPO_PUBLIC_API_BASE_URL || '/api').replace(/\/$/, '');
+        const response = await fetch(`${apiBaseUrl}/calendar/my-installers`, {
+          headers: { Authorization: `Bearer ${token || ''}` },
+        });
+        if (!response.ok) throw new Error('Could not load installer calendars');
+        const data = await response.json();
+        const mapped: InstallerCalendar[] = (data.calendars || []).map((row: any) => ({
+          id: row.id,
+          name: row.displayName,
+          email: row.email,
+          color: colorForName(row.displayName || row.id),
+          note: installerNote(row.displayName || ''),
+        }));
+        if (!cancelled) setCalendars(mapped);
+      } catch (error) {
+        console.error('Failed to load installer calendars', error);
+        if (!cancelled) setCalendars([]);
+      } finally {
+        if (!cancelled) setLoadingCalendars(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   useEffect(() => {
     if (calendars.length > 0 && !selectedCalendar) {
       // Use the defaultCalendar if it's available in the filtered list, otherwise use the first available
@@ -158,166 +133,68 @@ export default function InstallationBookingScreen() {
   
   // Function to refresh calendar events
   const refreshCalendarEvents = async () => {
-    if (calendars.length === 0) return;
-    
+    if (!selectedCalendar) {
+      setEvents([]);
+      return;
+    }
+
     try {
-      const allEvents: CalendarEvent[] = [];
-      const today = new Date();
-      const startDate = moment(today).format('YYYY-MM-DD');
-      const endDate = moment(today).add(60, 'days').format('YYYY-MM-DD');
-      
-      // Fetch events for each available calendar
-      for (const calendar of calendars) {
-        try {
-            const token = await authApi.getAccessToken();
-            const apiBaseUrl = (process.env.EXPO_PUBLIC_API_BASE_URL || '/api').replace(/\/$/, '');
-            const apiUrl = `${apiBaseUrl}/calendar/${calendar.id}/events?startDate=${startDate}&endDate=${endDate}`;
-            console.log('🔍 Fetching calendar events for:', calendar.id, 'from:', apiUrl);
-            
-            const response = await fetch(apiUrl, {
-                headers: {
-                  'Authorization': `Bearer ${token || ''}`
-                }
-              }
-            );
-          
-          console.log('🔍 Calendar API response status:', response.status, 'for calendar:', calendar.id);
-          
-          if (response.ok) {
-            const data = await response.json();
-            console.log('🔍 Calendar API response data for', calendar.id, ':', data);
-            
-            // Debug multi-day events
-            if (data.events && Array.isArray(data.events)) {
-              const multiDayEvents = data.events.filter((event: any) => event.isMultiDay);
-              if (multiDayEvents.length > 0) {
-                console.log('🔍 Multi-day events found for', calendar.id, ':', multiDayEvents);
-              }
-            }
-            
-            if (data.events && Array.isArray(data.events)) {
-              const calendarEvents = data.events.map((event: any) => {
-                // Handle all-day events properly
-                const isAllDay = event.isAllDay || (event.startTime === '00:00' && event.endTime === '00:00');
-                
-                let startDate, endDate;
-                if (isAllDay) {
-                  // For all-day events, set start to beginning of day and end to beginning of next day
-                  startDate = new Date(`${event.date}T00:00:00`);
-                  endDate = new Date(`${event.date}T23:59:59`);
-                } else {
-                  startDate = new Date(`${event.date}T${event.startTime}:00`);
-                  endDate = new Date(`${event.date}T${event.endTime}:00`);
-                }
-                
-                return {
-                  id: event.id || `event-${calendar.id}-${event.date}-${event.startTime}`,
-                  title: event.title || 'Appointment',
-                  start: startDate,
-                  end: endDate,
-                  resource: {
-                    installer: calendar.name,
-                    status: event.status || 'confirmed',
-                    type: event.title || 'appointment',
-                    location: event.location || '',
-                    isAllDay: isAllDay,
-                    isRecurring: event.isRecurring || false,
-                    isMultiDay: event.isMultiDay || false,
-                    startDate: event.startDate,
-                    endDate: event.endDate
-                  }
-                };
-              });
-              
-              allEvents.push(...calendarEvents);
-            }
-          } else {
-            console.error('🔍 Calendar API error response for', calendar.id, ':', response.status, response.statusText);
-            const errorText = await response.text();
-            console.error('🔍 Error response body:', errorText);
-          }
-        } catch (error) {
-          console.error(`🔍 Error refreshing events for ${calendar.id}:`, error);
-        }
+      setLoadingEvents(true);
+      const token = await authApi.getAccessToken();
+      const apiBaseUrl = (process.env.EXPO_PUBLIC_API_BASE_URL || '/api').replace(/\/$/, '');
+      const startDate = moment(date).startOf('week').format('YYYY-MM-DD');
+      const endDate = moment(date).add(21, 'days').format('YYYY-MM-DD');
+      const calendar = calendars.find((c) => c.id === selectedCalendar);
+      const apiUrl = `${apiBaseUrl}/calendar/${encodeURIComponent(selectedCalendar)}/events?startDate=${startDate}&endDate=${endDate}`;
+      const response = await fetch(apiUrl, {
+        headers: { Authorization: `Bearer ${token || ''}` },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Calendar API ${response.status}`);
       }
-      
-      setEvents(allEvents.sort((a, b) => a.start.getTime() - b.start.getTime()));
+
+      const data = await response.json();
+      const calendarEvents: CalendarEvent[] = Array.isArray(data.events)
+        ? data.events.map((event: any) => {
+            const isAllDay = event.isAllDay || (event.startTime === '00:00' && event.endTime === '00:00');
+            const startDateValue = isAllDay
+              ? new Date(`${event.date}T00:00:00`)
+              : new Date(`${event.date}T${event.startTime}:00`);
+            const endDateValue = isAllDay
+              ? new Date(`${event.date}T23:59:59`)
+              : new Date(`${event.date}T${event.endTime}:00`);
+            return {
+              id: event.id || `event-${selectedCalendar}-${event.date}-${event.startTime}`,
+              title: event.title || 'Appointment',
+              start: startDateValue,
+              end: endDateValue,
+              resource: {
+                installer: calendar?.name || data.displayName,
+                status: event.status || 'confirmed',
+                type: event.title || 'appointment',
+                location: event.location || '',
+                isAllDay,
+                isRecurring: event.isRecurring || false,
+                isMultiDay: event.isMultiDay || false,
+                startDate: event.startDate,
+                endDate: event.endDate,
+              },
+            };
+          })
+        : [];
+      setEvents(calendarEvents.sort((a, b) => a.start.getTime() - b.start.getTime()));
     } catch (error) {
       console.error('Error refreshing calendar events:', error);
+      setEvents([]);
+    } finally {
+      setLoadingEvents(false);
     }
   };
   
-  // Fetch real calendar events from backend
   useEffect(() => {
-    const fetchCalendarEvents = async () => {
-      if (calendars.length === 0) return;
-      
-      try {
-        await refreshCalendarEvents();
-      } catch (error) {
-        console.error('Error fetching calendar events:', error);
-        // Fallback to mock events if API fails
-        generateMockEvents();
-      }
-    };
-    
-    const generateMockEvents = () => {
-      const mockEvents: CalendarEvent[] = [];
-      const today = new Date();
-      
-      // Generate events for each calendar with different patterns
-      calendars.forEach((calendar, calendarIndex) => {
-        // Each calendar has different availability patterns
-        const baseAvailability = 0.4 + (calendarIndex * 0.1); // 40% to 70% availability
-        
-        for (let i = 0; i < 60; i++) { // Generate for next 60 days
-          const eventDate = new Date(today);
-          eventDate.setDate(today.getDate() + i);
-          
-          // Skip weekends for some calendars
-          const dayOfWeek = eventDate.getDay();
-          if (calendarIndex === 2 && (dayOfWeek === 0 || dayOfWeek === 6)) continue; // Some don't work weekends
-          
-          // Randomly add events based on calendar availability
-          if (Math.random() < baseAvailability) {
-            const startHour = 8 + Math.floor(Math.random() * 8); // 8 AM to 3 PM
-            const startTime = new Date(eventDate);
-            startTime.setHours(startHour, 0, 0, 0);
-            
-            const endTime = new Date(startTime);
-            endTime.setHours(startHour + 2, 0, 0, 0); // 2-hour appointments
-            
-            // Create different types of events
-            const eventTypes = [
-              'Solar Panel Installation',
-              'System Commissioning',
-              'Maintenance Visit',
-              'Site Survey',
-              'Customer Consultation'
-            ];
-            
-            const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
-            
-            mockEvents.push({
-              id: `event-${calendar.id}-${i}`,
-              title: `${eventType} - ${calendar.name}`,
-              start: startTime,
-              end: endTime,
-              resource: {
-                installer: calendar.name,
-                status: 'confirmed',
-                type: eventType
-              }
-            });
-          }
-        }
-      });
-      
-      return mockEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
-    };
-    
-    fetchCalendarEvents();
-  }, [calendars]);
+    refreshCalendarEvents();
+  }, [selectedCalendar, date]);
   
   // Ensure ScrollView starts at top on web
   useEffect(() => {
@@ -637,9 +514,6 @@ export default function InstallationBookingScreen() {
       const token = await authApi.getAccessToken();
       
       // Add surveyor info if user is a surveyor
-      const surveyorName = isSurveyor ? user?.name : null;
-      const surveyorEmail = isSurveyor ? user?.email : null;
-      
       const bookingData = {
         opportunityId: opportunityId,
         customerName: customerDisplayName,
@@ -648,8 +522,6 @@ export default function InstallationBookingScreen() {
         date: moment(selectedDate).format('YYYY-MM-DD'),
         timeSlot: selectedTimeSlot,
         installer: installerName,
-        surveyor: surveyorName, // Add surveyor as attendee if present
-        surveyorEmail: surveyorEmail // Add surveyor email for proper invitation
       };
 
       console.log('Booking appointment with data:', bookingData);
@@ -1431,7 +1303,9 @@ export default function InstallationBookingScreen() {
               </View>
             )}
           </View>
-          {calendars.length === 0 ? (
+          {loadingCalendars ? (
+            <ActivityIndicator color={theme.primaryButton} />
+          ) : calendars.length === 0 ? (
             <View style={styles.noInstallersContainer}>
               <Ionicons name="warning" size={24} color="#f59e0b" />
               <Text style={styles.noInstallersTitle}>No Installers Available</Text>
@@ -1488,7 +1362,7 @@ export default function InstallationBookingScreen() {
               </View>
               <Text style={styles.installerInfoSubtitle}>
                 {filteredEvents.length} upcoming appointments
-                {isSurveyor && ' • Smart availability checking enabled'}
+                {loadingEvents ? 'Loading availability…' : 'One all-day slot at 09:00. Busy days are blocked.'}
               </Text>
               {/* Installer Notes */}
               {calendars.find(c => c.id === selectedCalendar)?.note && (
@@ -1817,8 +1691,7 @@ export default function InstallationBookingScreen() {
             <ActivityIndicator color="#FFFFFF" />
           ) : (
             <Text style={styles.bookButtonText}>
-              {calendars.length === 0 ? 'No Installers Available' : 
-               isSurveyor ? 'Book Installation (Surveyor + Installer)' : 'Book Installation'}
+              {calendars.length === 0 ? 'No Installers Available' : 'Book Installation'}
             </Text>
           )}
         </TouchableOpacity>

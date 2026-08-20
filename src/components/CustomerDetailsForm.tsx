@@ -20,7 +20,7 @@ interface CustomerDetailsFormProps {
   visible: boolean;
   opportunityId: string;
   templateFileName?: string;
-  calculatorType?: 'flux' | 'off-peak';
+  calculatorType?: 'flux' | 'off-peak' | 'v44' | 'epvs';
   selectedOptions?: {
     solar: boolean;
     solarHybrid: boolean;
@@ -66,9 +66,8 @@ export default function CustomerDetailsForm({ visible, opportunityId, templateFi
       
       // Call the correct backend endpoint based on calculator type
       let result;
-      if (calculatorType === 'flux') {
-        // For Flux (EPVS) calculators, use the EPVS automation endpoint
-        console.log('🔍 Using EPVS automation endpoint for Flux calculator');
+      if (calculatorType === 'flux' || calculatorType === 'v44' || calculatorType === 'epvs' || !calculatorType) {
+        console.log('🔍 Using EPVS automation endpoint for v4.4 / Flux calculator');
         result = await api.post('/epvs-automation/save-dynamic-inputs', {
           opportunityId,
           inputs: {
@@ -79,17 +78,12 @@ export default function CustomerDetailsForm({ visible, opportunityId, templateFi
           templateFileName,
         });
       } else {
-        // For off-peak calculators, use the Excel automation endpoint
-        console.log('🔍 Using Excel automation endpoint for off-peak calculator');
-        result = await api.post('/excel-automation/create-opportunity-file', {
-          opportunityId,
-          customerDetails: {
-            customerName: customerName.trim(),
-            address: address.trim(),
-            postcode: postcode.trim(),
-          },
-          templateFileName,
-        });
+        console.log('🔍 Off Peak create-opportunity-file is blocked; use EPVS v4.4');
+        Alert.alert(
+          'Calculator unavailable',
+          'Off Peak is no longer used for new jobs. Please start the EPVS v4.4 calculator.',
+        );
+        return;
       }
 
       console.log('🔍 Backend response for customer details update:', result);

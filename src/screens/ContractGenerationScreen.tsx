@@ -703,7 +703,7 @@ export default function ContractGenerationScreen() {
       const workflowCalculatorType = progressResult?.steps?.find((s: any) => s.stepNumber === 3)?.data?.calculatorType;
       
       // Use captured calculator type as primary source, fallback to workflow data
-      const calculatorType = selectedSheetCalculatorType || workflowCalculatorType || 'off-peak';
+      const calculatorType = selectedSheetCalculatorType || workflowCalculatorType || 'v44';
       
       console.log('🔍 Contract Generation Debug:');
       console.log('  - Progress result:', progressResult);

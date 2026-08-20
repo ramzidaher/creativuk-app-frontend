@@ -17,6 +17,7 @@ import {
 import BottomNavigation from '../components/BottomNavigation';
 import { useTheme } from '../context/ThemeContext';
 import CalculatorProgressService from '../services/CalculatorProgressService';
+import { V44_TEMPLATE_FILE } from '../utils/v44Logic';
 
 const { width, height } = Dimensions.get('window');
 
@@ -37,6 +38,21 @@ export default function TemplateSelectionScreen() {
   const route = useRoute();
   const { opportunityId, calculatorType } = route.params as RouteParams;
   const { theme, isDark, toggleTheme } = useTheme();
+
+  useEffect(() => {
+    if (calculatorType === 'epvs') return;
+    (navigation as any).replace('CustomerDetails', {
+      opportunityId,
+      calculatorType: 'v44',
+      templateFileName: V44_TEMPLATE_FILE,
+      selectedOptions: {
+        solar: true,
+        battery: true,
+        solarHybrid: false,
+        batteryInverter: false,
+      },
+    });
+  }, [calculatorType, navigation, opportunityId]);
   const [selections, setSelections] = useState<TemplateSelection>({
     solar: false,
     battery: false,
@@ -375,7 +391,7 @@ export default function TemplateSelectionScreen() {
       templateFileName,
       selectedOptions: selections,
       opportunityId,
-      calculatorType: calculatorType || 'off-peak', // Default to off-peak if not specified
+      calculatorType: calculatorType || 'v44',
     });
   };
 
@@ -615,7 +631,7 @@ export default function TemplateSelectionScreen() {
                   
                   (navigation as any).navigate('CustomerDetails', {
                     opportunityId,
-                    calculatorType: calculatorType || 'off-peak',
+                    calculatorType: calculatorType || 'v44',
                     templateFileName,
                     selectedOptions: selections
                   });

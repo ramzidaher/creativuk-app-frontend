@@ -26,6 +26,7 @@ import {
 } from '../utils/deepLinkParams';
 import {
   V44_QUESTIONS_GROUP_IDS,
+  V44_TEMPLATE_FILE,
   V44RadioGroup,
   defaultRadios,
   isBatterySavingsOptionDisabled,
@@ -212,8 +213,7 @@ export default function V44CalculatorQuestionsScreen() {
             solarHybrid: false,
             batteryInverter: false,
           },
-          templateFileName:
-            'EPVS Member Calculator v4.4 - (Creativ) 15th June 2026 (1).xlsm',
+          templateFileName: V44_TEMPLATE_FILE,
         },
         completedSteps: {
           'template-selection': true,

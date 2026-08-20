@@ -21,6 +21,7 @@ import {
   type RouteCustomerDetails,
   type TemplateSelectedOptions,
 } from '../utils/deepLinkParams';
+import { V44_TEMPLATE_FILE } from '../utils/v44Logic';
 
 const { width } = Dimensions.get('window');
 
@@ -610,7 +611,7 @@ export default function CustomerDetailsScreen() {
       
       // Navigate directly to the appropriate calculator
       // If skipping template selection, provide default values
-      const defaultTemplateFileName = templateFileName || 'Off peak V2.1 Eon SEG - All Options.xlsm';
+      const defaultTemplateFileName = templateFileName || V44_TEMPLATE_FILE;
       const defaultSelectedOptions = selectedOptions || {
         solar: true,
         battery: false,
@@ -644,7 +645,7 @@ export default function CustomerDetailsScreen() {
     } else {
       // Navigate to Calculator Type Selection with all the data
       // If skipping template selection, provide default values
-      const defaultTemplateFileName = templateFileName || 'Off peak V2.1 Eon SEG - All Options.xlsm';
+      const defaultTemplateFileName = templateFileName || V44_TEMPLATE_FILE;
       const defaultSelectedOptions = selectedOptions || {
         solar: true,
         battery: false,
@@ -903,7 +904,7 @@ export default function CustomerDetailsScreen() {
                     const calculatorType = (route.params as any).calculatorType;
                     console.log('✅ Calculator type already selected:', calculatorType);
                     
-                    const defaultTemplateFileName = templateFileName || 'Off peak V2.1 Eon SEG - All Options.xlsm';
+                    const defaultTemplateFileName = templateFileName || V44_TEMPLATE_FILE;
                     const defaultSelectedOptions = selectedOptions || {
                       solar: true,
                       battery: false,
@@ -935,7 +936,7 @@ export default function CustomerDetailsScreen() {
                       });
                     }
                   } else {
-                    const defaultTemplateFileName = templateFileName || 'Off peak V2.1 Eon SEG - All Options.xlsm';
+                    const defaultTemplateFileName = templateFileName || V44_TEMPLATE_FILE;
                     const defaultSelectedOptions = selectedOptions || {
                       solar: true,
                       battery: false,

@@ -56,7 +56,12 @@ export function getSheetGroupKey(sheet: ExcelSheetInfo): SheetGroupKey {
   if (isV44Sheet(sheet)) return 'v44';
   const type = String(sheet.calculatorType || '').toLowerCase();
   if (type === 'flux' || type === 'epvs') return 'flux';
-  return 'off-peak';
+  const name = (sheet.fileName || '').toLowerCase();
+  if (type === 'off-peak' || name.includes('off peak') || name.includes('off-peak')) {
+    return 'off-peak';
+  }
+  if (name.includes('epvs') || name.includes('flux')) return 'flux';
+  return 'v44';
 }
 
 export function getSheetGroupTitle(key: SheetGroupKey): string {

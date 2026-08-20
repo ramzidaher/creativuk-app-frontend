@@ -23,6 +23,7 @@ import { api, opportunitiesApi, systemSettingsApi, workflowApi } from '../utils/
 import BottomNavigation from '../components/BottomNavigation';
 import CalculatorProgressService, { PricingOverrideOption } from '../services/CalculatorProgressService';
 import { normalizeRouteParams, resolveOpportunityIdFromRoute } from '../utils/deepLinkParams';
+import { V44_TEMPLATE_FILE } from '../utils/v44Logic';
 import AppointmentVisitTypePanel from '../components/AppointmentVisitTypePanel';
 
 const { width, height } = Dimensions.get('window');
@@ -1200,8 +1201,7 @@ export default function SolarWorkflowScreen() {
       navigation.navigate('CustomerDetails', {
         opportunityId,
         calculatorType: 'v44',
-        templateFileName:
-          'EPVS Member Calculator v4.4 - (Creativ) 15th June 2026 (1).xlsm',
+        templateFileName: V44_TEMPLATE_FILE,
         selectedOptions: {
           solar: true,
           battery: true,

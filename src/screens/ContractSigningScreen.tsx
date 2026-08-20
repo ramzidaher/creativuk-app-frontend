@@ -52,7 +52,7 @@ export default function ContractSigningScreen() {
   const [loadingContracts, setLoadingContracts] = useState(false);
   
   // Calculator type selection state
-  const [selectedCalculatorType, setSelectedCalculatorType] = useState<'flux' | 'off-peak' | 'v44' | null>(null);
+  const [selectedCalculatorType, setSelectedCalculatorType] = useState<'flux' | 'off-peak' | 'v44' | null>('v44');
   const [calculatorOffPeakEnabled, setCalculatorOffPeakEnabled] = useState(true);
   const [calculatorFluxEnabled, setCalculatorFluxEnabled] = useState(true);
   const [calculatorSettingsLoaded, setCalculatorSettingsLoaded] = useState(false);
@@ -651,7 +651,7 @@ export default function ContractSigningScreen() {
       
       // Find the calculator step to determine type (now step 3)
       const calculatorStep = progressResult?.steps?.find((s: any) => s.stepNumber === 3);
-      const calculatorType = calculatorStep?.data?.calculatorType || 'off-peak';
+      const calculatorType = calculatorStep?.data?.calculatorType || 'v44';
       const isV44 = calculatorType === 'v44';
       const isFluxFamily = calculatorType === 'flux' || calculatorType === 'epvs' || isV44;
       
@@ -1052,12 +1052,12 @@ export default function ContractSigningScreen() {
   // Digital signature handlers (kept for backward compatibility, but not used in new flow)
   const handleTestDigitalSignature = () => {
     console.log('🖊️ Contract Signing: Digital signature button clicked');
-    // Redirect to calculator type selection if not already selected
+    // Redirect to setup step if not already selected
     if (!selectedCalculatorType) {
       setStep('selecting');
     } else {
-      // If calculator type is selected, show alert to use the proper button
-      Alert.alert('Info', 'Please use the "Send Contract for Signing" button after selecting calculator type and entering email.');
+      // If setup is complete, show alert to use the proper button
+      Alert.alert('Info', 'Please use the "Send Contract for Signing" button after entering email.');
     }
   };
 
@@ -1984,11 +1984,11 @@ export default function ContractSigningScreen() {
 
       {/* Streamlined Contract Signing Interface */}
       <View style={styles.signingContainer}>
-        {/* Calculator Type Selection */}
+        {/* Continue setup (single calculator flow) */}
         {!selectedCalculatorType && calculatorSettingsLoaded && (
           <View style={[styles.contractInfo, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
             <Text style={[styles.inputLabel, { color: theme.secondaryText, marginBottom: 16 }]}>
-              SELECT CALCULATOR TYPE:
+              CONTINUE:
             </Text>
             {!calculatorOffPeakEnabled && !calculatorFluxEnabled ? (
               <Text style={[styles.inputLabel, { color: theme.secondaryText }]}>
@@ -1996,30 +1996,16 @@ export default function ContractSigningScreen() {
               </Text>
             ) : (
               <View style={styles.calculatorTypeButtons}>
-                {calculatorFluxEnabled && (
-                  <TouchableOpacity
-                    style={[styles.calculatorTypeButton, {
-                      backgroundColor: theme.primaryButton,
-                      borderColor: theme.primaryButton
-                    }]}
-                    onPress={() => setSelectedCalculatorType('flux')}
-                  >
-                    <Ionicons name="flash-outline" size={24} color="white" />
-                    <Text style={styles.calculatorTypeButtonText}>Flux</Text>
-                  </TouchableOpacity>
-                )}
-                {calculatorOffPeakEnabled && (
-                  <TouchableOpacity
-                    style={[styles.calculatorTypeButton, {
-                      backgroundColor: theme.secondaryButton || theme.primaryButton,
-                      borderColor: theme.secondaryButton || theme.primaryButton
-                    }]}
-                    onPress={() => setSelectedCalculatorType('off-peak')}
-                  >
-                    <Ionicons name="time-outline" size={24} color="white" />
-                    <Text style={styles.calculatorTypeButtonText}>Off Peak</Text>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity
+                  style={[styles.calculatorTypeButton, {
+                    backgroundColor: theme.primaryButton,
+                    borderColor: theme.primaryButton
+                  }]}
+                  onPress={() => setSelectedCalculatorType('v44')}
+                >
+                  <Ionicons name="arrow-forward-outline" size={24} color="white" />
+                  <Text style={styles.calculatorTypeButtonText}>Continue</Text>
+                </TouchableOpacity>
               </View>
             )}
           </View>

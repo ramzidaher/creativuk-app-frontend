@@ -18,11 +18,10 @@ import {
   getCustomerDetailsFromRouteParams,
   normalizeRouteParams,
 } from '../utils/deepLinkParams';
+import { V44_TEMPLATE_FILE } from '../utils/v44Logic';
 
 const { width, height } = Dimensions.get('window');
 
-const V44_TEMPLATE_FILE =
-  'EPVS Member Calculator v4.4 - (Creativ) 15th June 2026 (1).xlsm';
 const V44_SELECTED_OPTIONS = {
   solar: true,
   battery: true,
@@ -84,9 +83,9 @@ export default function CalculatorTypeSelectionScreen() {
               <Feather name="arrow-left" size={20} color={theme.secondaryText} />
             </TouchableOpacity>
             <View style={styles.headerTextContainer}>
-              <Text style={[styles.headerTitle, { color: theme.primaryText }]}>Choose Calculator Type</Text>
+              <Text style={[styles.headerTitle, { color: theme.primaryText }]}>Continue</Text>
               <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
-                v4.4 calculator (Off Peak and Flux are no longer available for new jobs)
+                Continue to the calculator
               </Text>
             </View>
           </View>
@@ -164,9 +163,9 @@ export default function CalculatorTypeSelectionScreen() {
                 <Feather name="sun" size={36} color="#2563EB" />
               </View>
             </View>
-            <Text style={[styles.calculatorTitle, { color: theme.primaryText }]}>v4.4 Calculator</Text>
+            <Text style={[styles.calculatorTitle, { color: theme.primaryText }]}>Continue</Text>
             <Text style={[styles.calculatorSubtitle, { color: theme.secondaryText }]}>
-              Current Creativ EPVS calculator with NewSavings and updated defaults
+              Open the current calculator flow
             </Text>
             <View style={styles.calculatorHoverEffect}>
               <Feather name="arrow-right" size={28} color="#2563EB" />
@@ -176,7 +175,7 @@ export default function CalculatorTypeSelectionScreen() {
 
         <View style={[styles.footer, { backgroundColor: theme.cardBackground, borderTopColor: theme.cardBorder }]}>
           <Text style={[styles.footerText, { color: theme.secondaryText }]}>
-            Existing Off Peak / Flux jobs stay in your progress list; ask an admin to regenerate proposals or contracts on those.
+            Existing legacy jobs stay in your progress list; ask an admin to regenerate proposals or contracts when needed.
           </Text>
         </View>
       </ScrollView>

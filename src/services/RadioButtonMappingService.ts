@@ -214,16 +214,17 @@ export class RadioButtonMappingService {
   /**
    * Detect calculator type from template filename
    */
-  static detectCalculatorTypeFromFilename(templateFileName: string): 'flux' | 'off-peak' {
-    const epvsIndicators = ['epvs', 'flux', 'creativ'];
+  static detectCalculatorTypeFromFilename(templateFileName: string): 'flux' | 'off-peak' | 'v44' {
     const lowerFileName = templateFileName.toLowerCase();
-    
+    if (lowerFileName.includes('v4.4') || lowerFileName.includes('v44')) {
+      return 'v44';
+    }
+    const epvsIndicators = ['epvs', 'flux', 'creativ'];
     for (const indicator of epvsIndicators) {
       if (lowerFileName.includes(indicator)) {
         return 'flux';
       }
     }
-    
     return 'off-peak';
   }
 
