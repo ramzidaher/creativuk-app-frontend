@@ -43,6 +43,7 @@ export default function AdminCalendarSetupScreen() {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [assigned, setAssigned] = useState<InstallerRow[]>([]);
   const [query, setQuery] = useState('');
+  const [repQuery, setRepQuery] = useState('');
   const [people, setPeople] = useState<InstallerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
@@ -183,74 +184,89 @@ export default function AdminCalendarSetupScreen() {
           <Feather name="arrow-left" size={20} color={theme.secondaryText} />
         </TouchableOpacity>
         <View>
-          <Text style={[styles.headerTitle, { color: theme.primaryText }]}>Calendar setup</Text>
-          <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
-            Choose which installer calendars each sales rep can book
-          </Text>
+        <Text style={[styles.headerTitle, { color: theme.primaryText }]}>Installer calendars</Text>
+        <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
+          Pick a rep, add the calendars they can book
+        </Text>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={[styles.label, { color: theme.primaryText }]}>Sales rep</Text>
+        <TextInput
+          value={repQuery}
+          onChangeText={setRepQuery}
+          placeholder="Find a rep"
+          placeholderTextColor={theme.secondaryText}
+          style={[
+            styles.search,
+            { backgroundColor: theme.inputBackground, borderColor: theme.cardBorder, color: theme.primaryText },
+          ]}
+        />
         {loading ? (
           <ActivityIndicator color={theme.primaryButton} />
         ) : (
           <View style={styles.userList}>
-            {users.map((row) => (
-              <TouchableOpacity
-                key={row.id}
-                style={[
-                  styles.userChip,
-                  {
-                    borderColor: selectedUserId === row.id ? theme.primaryButton : theme.cardBorder,
-                    backgroundColor: selectedUserId === row.id ? theme.primaryButton + '18' : theme.cardBackground,
-                  },
-                ]}
-                onPress={() => setSelectedUserId(row.id)}
-              >
-                <Text style={{ color: theme.primaryText, fontWeight: '600' }}>{row.name || row.username}</Text>
-                <Text style={{ color: theme.secondaryText, fontSize: 12 }}>
-                  {row.calendars.length} installer{row.calendars.length === 1 ? '' : 's'}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {users
+              .filter((row) => {
+                const haystack = `${row.name || ''} ${row.username}`.toLowerCase();
+                return haystack.includes(repQuery.trim().toLowerCase());
+              })
+              .map((row) => (
+                <TouchableOpacity
+                  key={row.id}
+                  style={[
+                    styles.userChip,
+                    {
+                      borderColor: selectedUserId === row.id ? theme.primaryButton : theme.cardBorder,
+                      backgroundColor: selectedUserId === row.id ? theme.primaryButton : theme.cardBackground,
+                    },
+                  ]}
+                  onPress={() => setSelectedUserId(row.id)}
+                >
+                  <Text
+                    style={{
+                      color: selectedUserId === row.id ? '#fff' : theme.primaryText,
+                      fontWeight: '600',
+                    }}
+                  >
+                    {(row.name || row.username).split(/\s+/)[0]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
           </View>
         )}
 
         {selectedUser ? (
           <>
             <Text style={[styles.label, { color: theme.primaryText }]}>
-              Assigned to {selectedUser.name || selectedUser.username}
+              {selectedUser.name || selectedUser.username}
             </Text>
             {assigned.length === 0 ? (
-              <Text style={{ color: theme.secondaryText, marginBottom: 12 }}>None yet. Search below to add.</Text>
+              <Text style={{ color: theme.secondaryText, marginBottom: 12 }}>None yet. Search below.</Text>
             ) : (
-              assigned.map((row) => (
-                <View
-                  key={row.graphUserId}
-                  style={[styles.assignedRow, { borderColor: theme.cardBorder, backgroundColor: theme.cardBackground }]}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: theme.primaryText, fontWeight: '600' }}>{row.displayName}</Text>
-                    <Text style={{ color: theme.secondaryText, fontSize: 12 }}>{row.email}</Text>
-                    {row.sharedCalendarName ? (
-                      <Text style={{ color: theme.secondaryText, fontSize: 12 }}>
-                        Calendar: {row.sharedCalendarName}
-                      </Text>
-                    ) : null}
+              <View style={styles.userList}>
+                {assigned.map((row) => (
+                  <View
+                    key={row.graphUserId}
+                    style={[styles.assignedChip, { borderColor: theme.cardBorder, backgroundColor: theme.cardBackground }]}
+                  >
+                    <Text style={{ color: theme.primaryText, fontWeight: '600' }}>
+                      {row.displayName.split(/\s+/)[0]}
+                    </Text>
+                    <TouchableOpacity onPress={() => removePerson(row.graphUserId)}>
+                      <Feather name="x" size={16} color="#dc2626" />
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity onPress={() => removePerson(row.graphUserId)}>
-                    <Feather name="x" size={20} color="#dc2626" />
-                  </TouchableOpacity>
-                </View>
-              ))
+                ))}
+              </View>
             )}
 
-            <Text style={[styles.label, { color: theme.primaryText }]}>Search installer calendars</Text>
+            <Text style={[styles.label, { color: theme.primaryText }]}>Add installer</Text>
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Type a name, e.g. Philip"
+              placeholder="Philip, Darren…"
               placeholderTextColor={theme.secondaryText}
               style={[
                 styles.search,
@@ -267,16 +283,8 @@ export default function AdminCalendarSetupScreen() {
                   style={[styles.personRow, { borderColor: theme.cardBorder, backgroundColor: theme.cardBackground }]}
                   onPress={() => addPerson({ ...person, graphUserId: id, email: mail })}
                 >
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: theme.primaryText, fontWeight: '600' }}>{person.displayName}</Text>
-                    <Text style={{ color: theme.secondaryText, fontSize: 12 }}>{mail}</Text>
-                    <Text style={{ color: person.canAssign ? '#166534' : '#b45309', fontSize: 12 }}>
-                      {person.canAssign
-                        ? `Shared calendar: ${person.sharedCalendarName}`
-                        : 'No matching shared mailbox calendar'}
-                    </Text>
-                  </View>
-                  <Feather name="plus" size={18} color={theme.primaryButton} />
+                  <Text style={{ color: theme.primaryText, fontWeight: '600', flex: 1 }}>{person.displayName}</Text>
+                  <Feather name={person.canAssign ? 'plus' : 'slash'} size={18} color={theme.primaryButton} />
                 </TouchableOpacity>
               );
             })}
@@ -289,12 +297,12 @@ export default function AdminCalendarSetupScreen() {
               {saving ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.saveButtonText}>Save calendars for this rep</Text>
+                <Text style={styles.saveButtonText}>Save</Text>
               )}
             </TouchableOpacity>
           </>
         ) : (
-          <Text style={{ color: theme.secondaryText, marginTop: 16 }}>Select a sales rep to assign installer calendars.</Text>
+          <Text style={{ color: theme.secondaryText, marginTop: 16 }}>Select a sales rep.</Text>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -317,14 +325,14 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 48 },
   label: { fontSize: 15, fontWeight: '600', marginBottom: 8, marginTop: 8 },
   userList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  userChip: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, minWidth: 140 },
-  assignedRow: {
+  userChip: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8 },
+  assignedChip: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     gap: 8,
   },
   search: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8 },

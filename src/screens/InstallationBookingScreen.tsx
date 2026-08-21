@@ -142,8 +142,8 @@ export default function InstallationBookingScreen() {
       setLoadingEvents(true);
       const token = await authApi.getAccessToken();
       const apiBaseUrl = (process.env.EXPO_PUBLIC_API_BASE_URL || '/api').replace(/\/$/, '');
-      const startDate = moment(date).startOf('week').format('YYYY-MM-DD');
-      const endDate = moment(date).add(21, 'days').format('YYYY-MM-DD');
+      const startDate = moment(date).startOf('month').startOf('week').format('YYYY-MM-DD');
+      const endDate = moment(date).endOf('month').endOf('week').format('YYYY-MM-DD');
       const calendar = calendars.find((c) => c.id === selectedCalendar);
       const apiUrl = `${apiBaseUrl}/calendar/${encodeURIComponent(selectedCalendar)}/events?startDate=${startDate}&endDate=${endDate}`;
       const response = await fetch(apiUrl, {
@@ -205,9 +205,10 @@ export default function InstallationBookingScreen() {
     }
   }, []);
   
-  const handleDateSelect = (selectedDate: Date) => {
-    setSelectedDate(selectedDate);
-    setSelectedTimeSlot('');
+  const handleDateSelect = (nextDate: Date, options?: { busy?: boolean; past?: boolean }) => {
+    if (options?.busy || options?.past) return;
+    setSelectedDate(nextDate);
+    setSelectedTimeSlot('09:00');
   };
   
   const handleEventPress = (event: CalendarEvent) => {
@@ -309,21 +310,9 @@ export default function InstallationBookingScreen() {
   
   const timeSlots = generateTimeSlots();
   
-  // Generate calendar days based on current view (limited to 3 weeks for installers)
   const generateCalendarDays = () => {
-    let startDate, endDate;
-    
-    if (view === 'month') {
-      // Limit to 3 weeks instead of full month
-      startDate = moment(date).startOf('week');
-      endDate = moment(date).startOf('week').add(2, 'weeks').endOf('week'); // 3 weeks total
-    } else if (view === 'week') {
-      startDate = moment(date).startOf('week');
-      endDate = moment(date).endOf('week');
-    } else { // day view
-      startDate = moment(date).startOf('day');
-      endDate = moment(date).endOf('day');
-    }
+    const startDate = moment(date).startOf('month').startOf('week');
+    const endDate = moment(date).endOf('month').endOf('week');
     
     const days = [];
     const current = startDate.clone();
@@ -341,25 +330,16 @@ export default function InstallationBookingScreen() {
         return eventStart.isBefore(currentEndOfDay) && eventEnd.isAfter(currentStartOfDay);
       });
       
-      // Check if the day has any blocking events (all-day or unavailable)
-      const hasBlockingEvents = dayEvents.some(event => {
-        const isAllDayEvent = event.resource?.isAllDay || 
-          (event.start.getHours() === 0 && event.start.getMinutes() === 0 && 
-           event.end.getHours() === 0 && event.end.getMinutes() === 0);
-        
-        const isUnavailableEvent = event.title && 
-          event.title.match(/Not available|Unavailable|Blocked|Holiday|Leave/i);
-        
-        return isAllDayEvent || isUnavailableEvent;
-      });
-      
+      const hasBlockingEvents = dayEvents.length > 0;
+
       days.push({
         date: current.toDate(),
         isCurrentMonth: current.isSame(date, 'month'),
         isToday: current.isSame(moment(), 'day'),
+        isPast: current.isBefore(moment(), 'day'),
         isSelected: selectedDate ? current.isSame(moment(selectedDate), 'day') : false,
         events: dayEvents,
-        hasBlockingEvents: hasBlockingEvents
+        hasBlockingEvents,
       });
       
       current.add(1, 'day');
@@ -725,19 +705,10 @@ export default function InstallationBookingScreen() {
     },
     calendarContainer: {
       backgroundColor: theme.cardBackground,
-      borderRadius: width < 768 ? 12 : 16,
-      padding: width < 768 ? 12 : 16,
-      marginBottom: width < 768 ? 16 : 20,
-      shadowColor: 'rgba(0, 0, 0, 0.08)',
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.1,
-      shadowRadius: 12,
-      elevation: 4,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 16,
       borderWidth: 1,
-      ...(Platform.OS === 'web' && {
-        marginBottom: 24,
-        minHeight: 400,
-      }),
     },
     calendarToolbar: {
       flexDirection: 'row',
@@ -780,18 +751,15 @@ export default function InstallationBookingScreen() {
     installerGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: width < 768 ? 8 : 12,
+      gap: 8,
     },
     installerButton: {
-      paddingHorizontal: width < 768 ? 12 : 16,
-      paddingVertical: width < 768 ? 10 : 12,
-      borderRadius: 8,
-      borderWidth: 2,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
+      borderWidth: 1,
       borderColor: theme.cardBorder,
       backgroundColor: theme.cardBackground,
-      minWidth: width < 768 ? 120 : 140,
-      flex: width < 768 ? 1 : undefined,
-      maxWidth: width < 768 ? '48%' : undefined,
     },
     installerButtonSelected: {
       borderColor: theme.primaryButton,
@@ -1008,16 +976,39 @@ export default function InstallationBookingScreen() {
     },
     dayCell: {
       width: '14.28%',
-      aspectRatio: 1,
-      padding: width < 768 ? 2 : 4,
-      borderRightWidth: 1,
-      borderBottomWidth: 1,
-      borderRightColor: theme.cardBorder,
-      borderBottomColor: theme.cardBorder,
-      backgroundColor: theme.cardBackground,
-      justifyContent: 'flex-start',
-      alignItems: 'flex-start',
-      minHeight: width < 768 ? 50 : 60,
+      paddingVertical: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 42,
+    },
+    dayCellBusy: {
+      backgroundColor: '#e2e8f0',
+    },
+    quietHint: {
+      marginTop: 8,
+      fontSize: 13,
+      color: theme.secondaryText,
+      lineHeight: 18,
+    },
+    legendRow: {
+      flexDirection: 'row',
+      gap: 16,
+      marginBottom: 8,
+      paddingHorizontal: 4,
+    },
+    legendItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    legendDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    legendText: {
+      fontSize: 12,
+      color: theme.secondaryText,
     },
     dayCellInactive: {
       backgroundColor: theme.tertiaryBackground,
@@ -1222,8 +1213,13 @@ export default function InstallationBookingScreen() {
       fontWeight: '600',
     },
   });
-  
-  
+
+  const selectedInstaller = calendars.find((c) => c.id === selectedCalendar);
+  const installerLabel = (selectedInstaller?.name || '').trim();
+  const installerFirstName = installerLabel.split(/\s+/)[0] || 'installer';
+  const customerLine = [customerName, customerAddress].filter(Boolean).join(' · ');
+  const canBook = Boolean(selectedDate && selectedTimeSlot && selectedCalendar && !booking && calendars.length);
+
   return (
     <View style={[
       styles.container,
@@ -1247,10 +1243,10 @@ export default function InstallationBookingScreen() {
             
             <View style={styles.headerText}>
               <Text style={[styles.headerTitle, { color: theme.primaryText }]}>
-                Installation Booking
+                Book installation
               </Text>
-              <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
-                Select installer and book appointment
+              <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]} numberOfLines={1}>
+                {customerLine || 'Select an installer, then a free day'}
               </Text>
             </View>
           </View>
@@ -1286,415 +1282,141 @@ export default function InstallationBookingScreen() {
         ]}
       >
         <View style={styles.content}>
-          {/* Select Installer */}
           <View style={styles.section}>
-            <View style={styles.sectionTitleContainer}>
-            <Text style={styles.sectionTitle}>Select Installer</Text>
-            {user?.role === 'ADMIN' && (
-              <View style={styles.adminBadge}>
-                <Ionicons name="shield-checkmark" size={14} color="#ffffff" />
-                <Text style={styles.adminBadgeText}>Admin</Text>
-              </View>
-            )}
-            {isSurveyor && (
-              <View style={[styles.adminBadge, { backgroundColor: '#8b5cf6' }]}>
-                <Ionicons name="search" size={14} color="#ffffff" />
-                <Text style={styles.adminBadgeText}>Surveyor</Text>
-              </View>
-            )}
-          </View>
-          {loadingCalendars ? (
-            <ActivityIndicator color={theme.primaryButton} />
-          ) : calendars.length === 0 ? (
-            <View style={styles.noInstallersContainer}>
-              <Ionicons name="warning" size={24} color="#f59e0b" />
-              <Text style={styles.noInstallersTitle}>No Installers Available</Text>
-              <Text style={styles.noInstallersText}>
-                No installers are assigned to your area. Please contact your manager to set up installer assignments.
+            <Text style={styles.sectionTitle}>Installer</Text>
+            {loadingCalendars ? (
+              <ActivityIndicator color={theme.primaryButton} />
+            ) : calendars.length === 0 ? (
+              <Text style={styles.quietHint}>
+                No installer calendars are assigned to you yet. An admin can add them in Calendar setup.
               </Text>
-            </View>
-          ) : (
-            <View style={styles.installerGrid}>
-              {calendars.map((calendar) => (
-                <TouchableOpacity
-                  key={calendar.id}
-                  style={[
-                    styles.installerButton,
-                    selectedCalendar === calendar.id && styles.installerButtonSelected
-                  ]}
-                  onPress={() => {
-                    setSelectedCalendar(calendar.id);
-                    setSelectedDate(null);
-                    setSelectedTimeSlot('');
-                    setNewlyBookedEventId(null);
-                  }}
-                >
-                  <View style={styles.installerButtonContent}>
-                    <View style={[
-                      styles.installerColorIndicator,
-                      { backgroundColor: calendar.color }
-                    ]} />
+            ) : (
+              <View style={styles.installerGrid}>
+                {calendars.map((calendar) => (
+                  <TouchableOpacity
+                    key={calendar.id}
+                    style={[
+                      styles.installerButton,
+                      selectedCalendar === calendar.id && styles.installerButtonSelected,
+                    ]}
+                    onPress={() => {
+                      setSelectedCalendar(calendar.id);
+                      setSelectedDate(null);
+                      setSelectedTimeSlot('');
+                      setNewlyBookedEventId(null);
+                    }}
+                  >
                     <Text
                       style={[
                         styles.installerText,
-                        selectedCalendar === calendar.id && styles.installerTextSelected
+                        selectedCalendar === calendar.id && styles.installerTextSelected,
                       ]}
                     >
-                      {calendar.name}
+                      {calendar.name.split(/\s+/)[0]}
                     </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-          
-          {/* Current Installer Info */}
-          {selectedCalendar && (
-            <View style={styles.currentInstallerInfo}>
-              <View style={styles.installerInfoHeader}>
-                <View style={[
-                  styles.installerInfoColor,
-                  { backgroundColor: calendars.find(c => c.id === selectedCalendar)?.color }
-                ]} />
-                <Text style={styles.installerInfoTitle}>
-                  Viewing {calendars.find(c => c.id === selectedCalendar)?.name}'s Calendar
-                </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-              <Text style={styles.installerInfoSubtitle}>
-                {filteredEvents.length} upcoming appointments
-                {loadingEvents ? 'Loading availability…' : 'One all-day slot at 09:00. Busy days are blocked.'}
-              </Text>
-              {/* Installer Notes */}
-              {calendars.find(c => c.id === selectedCalendar)?.note && (
-                <View style={styles.installerNoteContainer}>
-                  <View style={styles.installerNoteHeader}>
-                    <Ionicons name="information-circle" size={16} color={theme.primaryButton} />
-                    <Text style={styles.installerNoteTitle}>Installation Note:</Text>
-                  </View>
-                  <Text style={styles.installerNoteText}>
-                    {calendars.find(c => c.id === selectedCalendar)?.note}
-                  </Text>
+            )}
+            {selectedInstaller ? (
+              <Text style={styles.quietHint}>{selectedInstaller.note}</Text>
+            ) : null}
+          </View>
+
+          {calendars.length > 0 ? (
+            <View style={styles.section}>
+              <View style={styles.calendarToolbar}>
+                <TouchableOpacity
+                  style={styles.toolbarButton}
+                  onPress={() => setDate(moment(date).subtract(1, 'month').toDate())}
+                >
+                  <Ionicons name="chevron-back" size={20} color={theme.primaryButton} />
+                </TouchableOpacity>
+                <Text style={styles.toolbarTitle}>{moment(date).format('MMMM YYYY')}</Text>
+                <TouchableOpacity
+                  style={styles.toolbarButton}
+                  onPress={() => setDate(moment(date).add(1, 'month').toDate())}
+                >
+                  <Ionicons name="chevron-forward" size={20} color={theme.primaryButton} />
+                </TouchableOpacity>
+              </View>
+
+              {loadingEvents ? (
+                <ActivityIndicator color={theme.primaryButton} style={{ marginVertical: 12 }} />
+              ) : null}
+
+              <View style={styles.legendRow}>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: theme.primaryButton }]} />
+                  <Text style={styles.legendText}>Selected</Text>
                 </View>
-              )}
-              {isSurveyor && (
-                <View style={styles.installerNoteContainer}>
-                  <View style={styles.installerNoteHeader}>
-                    <Ionicons name="sync" size={16} color="#8b5cf6" />
-                    <Text style={[styles.installerNoteTitle, { color: '#8b5cf6' }]}>Surveyor Mode:</Text>
-                  </View>
-                  <Text style={styles.installerNoteText}>
-                    Available times shown are when both you and the installer are free. Booking will automatically schedule both calendars.
-                  </Text>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: '#cbd5e1' }]} />
+                  <Text style={styles.legendText}>Busy</Text>
                 </View>
-              )}
-            </View>
-          )}
-        </View>
-        
-        {/* Professional Calendar */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Select Date & Time</Text>
-          <View style={[
-            styles.calendarContainer,
-            { 
-              backgroundColor: theme.cardBackground,
-              borderColor: theme.cardBorder,
-              shadowColor: theme.shadowColor,
-            }
-          ]}>
-            {/* Calendar Toolbar */}
-            <View style={styles.calendarToolbar}>
-              <TouchableOpacity
-                style={styles.toolbarButton}
-                onPress={() => setDate(moment(date).subtract(1, view === 'month' ? 'month' : 'week').toDate())}
-              >
-                <Ionicons name="chevron-back" size={20} color={theme.primaryButton} />
-              </TouchableOpacity>
-              
-              <Text style={styles.toolbarTitle}>
-                {moment(date).format(view === 'month' ? 'MMMM YYYY' : 'MMM D, YYYY')}
-              </Text>
-              
-              <TouchableOpacity
-                style={styles.toolbarButton}
-                onPress={() => setDate(moment(date).add(1, view === 'month' ? 'month' : 'week').toDate())}
-              >
-                <Ionicons name="chevron-forward" size={20} color={theme.primaryButton} />
-              </TouchableOpacity>
-            </View>
-            
-            {/* View Buttons */}
-            <View style={styles.viewButtons}>
-              <TouchableOpacity
-                style={[styles.viewButton, view === 'month' && styles.viewButtonActive]}
-                onPress={() => setView('month')}
-              >
-                <Text style={[styles.viewButtonText, view === 'month' && styles.viewButtonTextActive]}>
-                  Month
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.viewButton, view === 'week' && styles.viewButtonActive]}
-                onPress={() => setView('week')}
-              >
-                <Text style={[styles.viewButtonText, view === 'week' && styles.viewButtonTextActive]}>
-                  Week
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.viewButton, view === 'day' && styles.viewButtonActive]}
-                onPress={() => setView('day')}
-              >
-                <Text style={[styles.viewButtonText, view === 'day' && styles.viewButtonTextActive]}>
-                  Day
-                </Text>
-              </TouchableOpacity>
-            </View>
-            
-            {/* Custom Calendar */}
-            <View style={styles.calendarGrid}>
-              {/* Calendar Header - Only show for month and week views */}
-              {(view === 'month' || view === 'week') && (
+              </View>
+
+              <View style={styles.calendarGrid}>
                 <View style={styles.calendarHeader}>
-                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                    <View key={day} style={styles.dayHeader}>
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                    <View key={`${day}-${index}`} style={styles.dayHeader}>
                       <Text style={styles.dayHeaderText}>{day}</Text>
                     </View>
                   ))}
                 </View>
-              )}
-              
-              {/* Calendar Days with ScrollView */}
-              <ScrollView 
-                style={[
-                  styles.calendarScrollView,
-                  view === 'day' && styles.dayViewBody
-                ]}
-                showsVerticalScrollIndicator={true}
-                nestedScrollEnabled={true}
-                scrollEnabled={true}
-                bounces={true}
-                alwaysBounceVertical={false}
-                contentContainerStyle={styles.calendarScrollContent}
-              >
-                <View style={[
-                  styles.calendarBody,
-                  view === 'day' && styles.dayViewBody
-                ]}>
-                {view === 'day' ? (
-                  // Day View - Show hourly slots
-                  <View style={styles.dayViewContainer}>
-                    <View style={styles.dayViewHeader}>
-                      <Text style={styles.dayViewTitle}>
-                        {moment(date).format('dddd, MMMM Do YYYY')}
-                      </Text>
-                    </View>
-                    <ScrollView style={styles.hourlySlots}>
-                      {Array.from({ length: 12 }, (_, i) => {
-                        const hour = 8 + i; // 8 AM to 7 PM
-                        const hourStart = moment(date).hour(hour).minute(0);
-                        const hourEnd = moment(date).hour(hour + 1).minute(0);
-                        
-                        const hourEvents = filteredEvents.filter(event => {
-                          const eventStart = moment(event.start);
-                          return eventStart.isSame(hourStart, 'hour');
-                        });
-                        
-                        return (
-                          <View key={hour} style={styles.hourSlot}>
-                            <Text style={styles.hourLabel}>
-                              {hourStart.format('h:mm A')}
-                            </Text>
-                            <View style={styles.hourEvents}>
-                              {hourEvents.map((event, eventIndex) => (
-                                <TouchableOpacity
-                                  key={eventIndex}
-                                  style={[
-                                    styles.hourEvent,
-                                    {
-                                      backgroundColor: calendars.find(c => c.name === event.resource?.installer)?.color || theme.primaryButton
-                                    },
-                                    newlyBookedEventId === event.id && {
-                                      borderWidth: 2,
-                                      borderColor: '#10b981',
-                                      shadowColor: '#10b981',
-                                      shadowOffset: { width: 0, height: 2 },
-                                      shadowOpacity: 0.3,
-                                      shadowRadius: 4,
-                                      elevation: 6,
-                                    }
-                                  ]}
-                                  onPress={() => handleEventPress(event)}
-                                >
-                                  <Text style={styles.hourEventText} numberOfLines={1}>
-                                    {event.title}
-                                  </Text>
-                                  {newlyBookedEventId === event.id && (
-                                    <Text style={[styles.hourEventText, { fontSize: 10, marginTop: 2 }]}>
-                                      ✨ NEW
-                                    </Text>
-                                  )}
-                                </TouchableOpacity>
-                              ))}
-                              {hourEvents.length === 0 && (
-                                <TouchableOpacity
-                                  style={[
-                                    styles.availableSlot,
-                                    selectedDate && moment(selectedDate).isSame(date, 'day') && 
-                                    selectedTimeSlot === hourStart.format('HH:mm') && {
-                                      backgroundColor: theme.primaryButton,
-                                      borderColor: theme.primaryButton,
-                                    }
-                                  ]}
-                                  onPress={() => {
-                                    setSelectedDate(date);
-                                    setSelectedTimeSlot(hourStart.format('HH:mm'));
-                                  }}
-                                >
-                                  <Text style={[
-                                    styles.availableSlotText,
-                                    selectedDate && moment(selectedDate).isSame(date, 'day') && 
-                                    selectedTimeSlot === hourStart.format('HH:mm') && {
-                                      color: '#FFFFFF',
-                                    }
-                                  ]}>
-                                    {selectedDate && moment(selectedDate).isSame(date, 'day') && 
-                                     selectedTimeSlot === hourStart.format('HH:mm') ? 'Selected' : 'Available'}
-                                  </Text>
-                                </TouchableOpacity>
-                              )}
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
-                ) : (
-                  // Month and Week Views
-                  calendarDays.map((day, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={[
-                        styles.dayCell,
-                        view === 'week' && styles.weekDayCell,
-                        !day.isCurrentMonth && styles.dayCellInactive,
-                        day.isToday && styles.dayCellToday,
-                        day.isSelected && styles.dayCellSelected
-                      ]}
-                      onPress={() => handleDateSelect(day.date)}
-                    >
-                      <Text style={[
-                        styles.dayText,
-                        !day.isCurrentMonth && styles.dayTextInactive,
-                        day.isToday && styles.dayTextToday,
-                        day.isSelected && styles.dayTextSelected
-                      ]}>
-                        {moment(day.date).format('D')}
-                      </Text>
-                      
-                      {/* Events for this day */}
-                      <View style={styles.eventsContainer}>
-                        {day.events.slice(0, view === 'week' ? 3 : 2).map((event, eventIndex) => (
-                          <TouchableOpacity
-                            key={eventIndex}
-                            style={[
-                              styles.eventBadge,
-                              view === 'week' && styles.weekEventBadge,
-                              {
-                                backgroundColor: calendars.find(c => c.name === event.resource?.installer)?.color || theme.primaryButton
-                              },
-                              newlyBookedEventId === event.id && {
-                                borderWidth: 2,
-                                borderColor: '#10b981',
-                                shadowColor: '#10b981',
-                                shadowOffset: { width: 0, height: 2 },
-                                shadowOpacity: 0.3,
-                                shadowRadius: 4,
-                                elevation: 6,
-                              }
-                            ]}
-                            onPress={() => handleEventPress(event)}
-                          >
-                            <Text style={[
-                              styles.eventText,
-                              view === 'week' && styles.weekEventText
-                            ]} numberOfLines={1}>
-                              {view === 'week' ? event.title : moment(event.start).format('HH:mm')}
-                            </Text>
-                            {newlyBookedEventId === event.id && (
-                              <Text style={[styles.eventText, { fontSize: 8, marginTop: 1 }]}>
-                                ✨ NEW
-                              </Text>
-                            )}
-                          </TouchableOpacity>
-                        ))}
-                        {day.events.length > (view === 'week' ? 3 : 2) && (
-                          <View style={styles.moreEventsBadge}>
-                            <Text style={styles.moreEventsText}>
-                              +{day.events.length - (view === 'week' ? 3 : 2)}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  ))
-                )}
+                <View style={styles.calendarBody}>
+                  {calendarDays.map((day, index) => {
+                    const disabled = !day.isCurrentMonth || day.isPast || day.hasBlockingEvents;
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        disabled={disabled && !day.isSelected}
+                        style={[
+                          styles.dayCell,
+                          !day.isCurrentMonth && styles.dayCellInactive,
+                          day.hasBlockingEvents && day.isCurrentMonth && styles.dayCellBusy,
+                          day.isToday && styles.dayCellToday,
+                          day.isSelected && styles.dayCellSelected,
+                        ]}
+                        onPress={() =>
+                          handleDateSelect(day.date, { busy: day.hasBlockingEvents, past: day.isPast })
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.dayText,
+                            (!day.isCurrentMonth || day.isPast) && styles.dayTextInactive,
+                            day.isToday && styles.dayTextToday,
+                            day.isSelected && styles.dayTextSelected,
+                          ]}
+                        >
+                          {moment(day.date).format('D')}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
-              </ScrollView>
+              </View>
             </View>
-          </View>
-        </View>
-        
-        {/* Time Slots for Selected Date */}
-        {selectedDate && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              Available Times for {moment(selectedDate).format('MMMM Do YYYY')}
-            </Text>
-            <View style={styles.timeSlotsGrid}>
-              {timeSlots.map((slot) => (
-                <TouchableOpacity
-                  key={slot.time}
-                  style={[
-                    styles.timeSlotButton,
-                    selectedTimeSlot === slot.time && styles.timeSlotButtonSelected,
-                    !slot.available && styles.timeSlotButtonUnavailable
-                  ]}
-                  onPress={() => slot.available && handleTimeSlotSelect(slot.time)}
-                  disabled={!slot.available}
-                >
-                  <Text
-                    style={[
-                      styles.timeSlotText,
-                      selectedTimeSlot === slot.time && styles.timeSlotTextSelected,
-                      !slot.available && styles.timeSlotTextUnavailable
-                    ]}
-                  >
-                    {slot.time}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-        
-        {/* Book Button */}
-        <TouchableOpacity
-          style={[
-            styles.bookButton,
-            (!selectedDate || !selectedTimeSlot || !selectedCalendar || booking || calendars.length === 0) && styles.bookButtonDisabled
-          ]}
-          onPress={handleBookInstallation}
-          disabled={!selectedDate || !selectedTimeSlot || !selectedCalendar || booking || calendars.length === 0}
-        >
-          {booking ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.bookButtonText}>
-              {calendars.length === 0 ? 'No Installers Available' : 'Book Installation'}
-            </Text>
-          )}
-        </TouchableOpacity>
+          ) : null}
+
+          <TouchableOpacity
+            style={[styles.bookButton, !canBook && styles.bookButtonDisabled]}
+            onPress={handleBookInstallation}
+            disabled={!canBook}
+          >
+            {booking ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.bookButtonText}>
+                {!selectedInstaller
+                  ? 'Choose an installer'
+                  : !selectedDate
+                    ? 'Choose a free day'
+                    : `Book ${installerFirstName} · ${moment(selectedDate).format('ddd D MMM')}`}
+              </Text>
+            )}
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
