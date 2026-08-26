@@ -562,7 +562,19 @@ class CalculatorProgressService {
     opportunityId: string,
     calculatorType: 'off-peak' | 'flux' | 'epvs' | 'v44',
     price: number
-  ): Promise<{ success: boolean; message: string; warning?: string }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    warning?: string;
+    hometreeTermFallback?: {
+      termYearsRequested: number;
+      termYearsMatched: number;
+      depositRequested?: number;
+      depositMatched?: number;
+      message: string;
+      monthlyYear1?: number;
+    };
+  }> {
     try {
       const userId = await this.getUserId();
       const response = await api.put('/calculator-progress/tools/pricing-overrides', {
@@ -577,6 +589,7 @@ class CalculatorProgressService {
           success: !!responseData.success,
           message: responseData.message || 'Request processed',
           warning: responseData.warning,
+          hometreeTermFallback: responseData.hometreeTermFallback,
         };
       }
       return {

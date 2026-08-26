@@ -73,7 +73,12 @@ export const useEnhancedImageHandler = ({
           if (image.base64Data && !image.isAutoSaved) {
             try {
               // Compress image with optimized settings
-              const compressedImage = await compressImageAuto(image.base64Data);
+              const compressedImage = await compressImageAuto(
+                image.base64Data,
+                image.mimeType,
+                image.size,
+                fieldName,
+              );
 
               // Save compressed image
               const saveResult = await pageAutoSave.saveImage(fieldName, {

@@ -2326,7 +2326,12 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
     try {
       // Compress image immediately to prevent performance issues
       console.log('🖼️ Compressing image immediately...');
-      const compressedResult = await compressImageAuto(base64Data);
+      const compressedResult = await compressImageAuto(
+        base64Data,
+        undefined,
+        undefined,
+        webCameraFieldName || undefined,
+      );
       
       console.log('✅ Image compressed successfully:', {
         originalSize: (base64Data.length / 1024 / 1024).toFixed(2) + 'MB',
@@ -2666,7 +2671,7 @@ export default function SurveyScreen(props?: SurveyScreenProps) {
         for (const file of validFiles) {
           let compressedFile: (typeof validFiles)[0];
           try {
-            const [compressed] = await compressSurveyUploadFiles([file]);
+            const [compressed] = await compressSurveyUploadFiles([file], fieldName);
             compressedFile = compressed;
           } catch (error) {
             const message =

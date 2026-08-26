@@ -710,6 +710,9 @@ export default function SolarWorkflowScreen() {
       }
 
       console.log('🔍 SolarWorkflowScreen: loadData completed successfully');
+      void api.post(`/opensolar/ensure-hardware/${opportunityId}`, {}).catch((hardwareError) => {
+        console.warn('OpenSolar hardware ensure on appointment open failed:', hardwareError);
+      });
     } catch (error) {
       console.error('🔍 SolarWorkflowScreen: Error in loadData:', error);
       Alert.alert('Error', 'Failed to load progress data');
@@ -994,6 +997,8 @@ export default function SolarWorkflowScreen() {
       }
       if (result.warning) {
         Alert.alert('Updated with warning', `${result.message}\n\n${result.warning}`);
+      } else if (result.hometreeTermFallback?.message) {
+        Alert.alert('Price updated', `${result.message}\n\n${result.hometreeTermFallback.message}`);
       } else {
         Alert.alert('Success', result.message || 'Price overridden successfully.');
       }
@@ -2031,7 +2036,7 @@ export default function SolarWorkflowScreen() {
             </View>
             <View style={styles.modalBody}>
               <Text style={[styles.modalDescription, { color: theme.secondaryText }]}>
-                Override a Price
+                Override the sold price on this appointment. v4.4 is used first. HomeTree quotes are checked again after a price change.
               </Text>
               {loadingPricingOverrides ? (
                 <ActivityIndicator size="small" color={theme.primaryButton} />
@@ -2055,7 +2060,7 @@ export default function SolarWorkflowScreen() {
                       }}
                     >
                       <Text style={[styles.secondaryButtonText, { color: theme.primaryText }]}>
-                        {opt.calculatorType} - current: {opt.currentPrice ?? 'N/A'}
+                        {opt.calculatorType === 'v44' ? 'v4.4 calculator' : `${opt.calculatorType} (legacy)`} — current: {opt.currentPrice ?? 'N/A'}
                       </Text>
                     </TouchableOpacity>
                   ))}

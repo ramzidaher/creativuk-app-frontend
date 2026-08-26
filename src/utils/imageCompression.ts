@@ -221,10 +221,34 @@ const compressImageNative = async (
   };
 };
 
+/** Energy bill photos (front/rear) — text must stay readable. */
+export function isDocumentPhotoField(fieldName?: string): boolean {
+  return /energybill/i.test(String(fieldName || ''));
+}
+
+/** Keep a long edge around A4-scan quality instead of crushing to 800×600. */
+export const DOCUMENT_PHOTO_COMPRESSION: CompressionOptions = {
+  maxWidth: 2560,
+  maxHeight: 2560,
+  quality: 0.88,
+  format: 'jpeg',
+};
+
+const DOCUMENT_PHOTO_FALLBACKS: CompressionOptions[] = [
+  { maxWidth: 2200, maxHeight: 2200, quality: 0.82, format: 'jpeg' },
+  { maxWidth: 1920, maxHeight: 1920, quality: 0.75, format: 'jpeg' },
+];
+
 /**
  * Get optimal compression settings based on image size - ULTRA AGGRESSIVE FOR BACKEND LIMITS
  */
-export const getOptimalCompressionSettings = (originalSize: number): CompressionOptions => {
+export const getOptimalCompressionSettings = (
+  originalSize: number,
+  fieldName?: string,
+): CompressionOptions => {
+  if (isDocumentPhotoField(fieldName)) {
+    return { ...DOCUMENT_PHOTO_COMPRESSION };
+  }
   if (originalSize > 2 * 1024 * 1024) { // > 2MB - Ultra aggressive compression
     return { maxWidth: 800, maxHeight: 600, quality: 0.4, format: 'jpeg' };
   } else if (originalSize > 1 * 1024 * 1024) { // > 1MB - Very aggressive compression
@@ -243,23 +267,34 @@ export const compressImageAuto = async (
   base64Data: string,
   mimeType?: string,
   byteSize?: number,
+  fieldName?: string,
 ): Promise<CompressedImageResult> => {
   const originalSize = byteSize ?? base64Data.length;
-  const settings = getOptimalCompressionSettings(originalSize);
+  const settings = getOptimalCompressionSettings(originalSize, fieldName);
 
   console.log(
-    `🖼️ Compressing image: ${(originalSize / 1024 / 1024).toFixed(2)}MB -> target: ${settings.maxWidth}x${settings.maxHeight}, quality: ${settings.quality}`,
+    `🖼️ Compressing image${fieldName ? ` (${fieldName})` : ''}: ${(originalSize / 1024 / 1024).toFixed(2)}MB -> target: ${settings.maxWidth}x${settings.maxHeight}, quality: ${settings.quality}`,
   );
 
   let result = await compressImage(base64Data, { ...settings, sourceMimeType: mimeType }, false);
 
   if (base64PayloadLength(result.base64) > MAX_SURVEY_UPLOAD_BASE64_LENGTH) {
-    console.log('🖼️ Still too large, applying ultra compression...');
-    result = await compressImage(
-      base64Data,
-      { maxWidth: 640, maxHeight: 480, quality: 0.35, format: 'jpeg', sourceMimeType: mimeType },
-      false,
-    );
+    const fallbacks = isDocumentPhotoField(fieldName)
+      ? DOCUMENT_PHOTO_FALLBACKS
+      : [{ maxWidth: 640, maxHeight: 480, quality: 0.35, format: 'jpeg' as const }];
+    for (const fallback of fallbacks) {
+      console.log(
+        `🖼️ Still too large, retrying at ${fallback.maxWidth}x${fallback.maxHeight} q=${fallback.quality}...`,
+      );
+      result = await compressImage(
+        base64Data,
+        { ...fallback, sourceMimeType: mimeType },
+        false,
+      );
+      if (base64PayloadLength(result.base64) <= MAX_SURVEY_UPLOAD_BASE64_LENGTH) {
+        break;
+      }
+    }
   }
 
   const compressionRatio = ((originalSize - result.size) / originalSize * 100).toFixed(1);
@@ -300,7 +335,10 @@ function isPdfUpload(file: Pick<SurveyUploadFile, 'mimeType' | 'name'>): boolean
 /**
  * Compress a survey upload file before sending to the API (skips PDFs and already-compressed files).
  */
-export async function compressSurveyUploadFile<T extends SurveyUploadFile>(file: T): Promise<T> {
+export async function compressSurveyUploadFile<T extends SurveyUploadFile>(
+  file: T,
+  fieldName?: string,
+): Promise<T> {
   if (file.isCompressed || isPdfUpload(file)) {
     if (isPdfUpload(file) && (file.size ?? 0) > 8 * 1024 * 1024) {
       throw new SurveyUploadTooLargeError(file.name || 'PDF');
@@ -322,18 +360,29 @@ export async function compressSurveyUploadFile<T extends SurveyUploadFile>(file:
 
   try {
     if (Platform.OS === 'web' && file.uri?.startsWith('blob:')) {
-      const settings = getOptimalCompressionSettings(file.size ?? originalBase64.length);
+      const settings = getOptimalCompressionSettings(
+        file.size ?? originalBase64.length,
+        fieldName,
+      );
       compressedResult = await compressImageFromBlobUrl(file.uri, settings);
       if (base64PayloadLength(compressedResult.base64) > MAX_SURVEY_UPLOAD_BASE64_LENGTH) {
-        compressedResult = await compressImageFromBlobUrl(file.uri, {
-          maxWidth: 640,
-          maxHeight: 480,
-          quality: 0.35,
-          format: 'jpeg',
-        });
+        const fallbacks = isDocumentPhotoField(fieldName)
+          ? DOCUMENT_PHOTO_FALLBACKS
+          : [{ maxWidth: 640, maxHeight: 480, quality: 0.35, format: 'jpeg' as const }];
+        for (const fallback of fallbacks) {
+          compressedResult = await compressImageFromBlobUrl(file.uri, fallback);
+          if (base64PayloadLength(compressedResult.base64) <= MAX_SURVEY_UPLOAD_BASE64_LENGTH) {
+            break;
+          }
+        }
       }
     } else {
-      compressedResult = await compressImageAuto(originalBase64, file.mimeType, file.size);
+      compressedResult = await compressImageAuto(
+        originalBase64,
+        file.mimeType,
+        file.size,
+        fieldName,
+      );
     }
   } catch (error) {
     console.warn('Survey upload compression failed:', file.name, error);
@@ -366,8 +415,9 @@ export async function compressSurveyUploadFile<T extends SurveyUploadFile>(file:
 
 export async function compressSurveyUploadFiles<T extends SurveyUploadFile>(
   files: T[],
+  fieldName?: string,
 ): Promise<T[]> {
-  return Promise.all(files.map(compressSurveyUploadFile));
+  return Promise.all(files.map((file) => compressSurveyUploadFile(file, fieldName)));
 }
 
 export const compressImagesBatch = async (
@@ -381,7 +431,7 @@ export const compressImagesBatch = async (
   
   const compressionPromises = images.map(async (image, index) => {
     try {
-      const result = await compressImageAuto(image.base64);
+      const result = await compressImageAuto(image.base64, undefined, undefined, image.fieldName);
       completedImages++;
       
       if (onProgress) {

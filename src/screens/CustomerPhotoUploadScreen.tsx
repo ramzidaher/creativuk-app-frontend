@@ -141,7 +141,7 @@ export default function CustomerPhotoUploadScreen({ token: tokenProp }: { token?
     if (!password || !token || !webFiles.length) return;
     try {
       setUploadingField(field.field);
-      const compressed = await compressSurveyUploadFiles(webFiles);
+      const compressed = await compressSurveyUploadFiles(webFiles, field.field);
       const images = compressed.map((file) => ({
         name: file.name,
         mimeType: file.mimeType,

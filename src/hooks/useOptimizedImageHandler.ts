@@ -44,7 +44,12 @@ export const useOptimizedImageHandler = ({ onImageSaved, onImageError }: Optimiz
             }
 
             // Compress image
-            const compressedImage = await compressImageAuto(image.base64Data);
+            const compressedImage = await compressImageAuto(
+              image.base64Data,
+              image.mimeType,
+              image.size,
+              fieldName,
+            );
             
             // Here you would typically save to your backend
             // For now, we'll just mark as processed
