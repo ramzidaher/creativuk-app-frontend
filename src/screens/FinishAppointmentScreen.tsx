@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { opportunitiesApi } from '../utils/api';
+import { opportunitiesApi, workflowApi } from '../utils/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -49,14 +49,7 @@ export default function FinishAppointmentScreen() {
     try {
       setIsProcessing(true);
 
-      const { workflowApi } = await import('../utils/api');
-      const finishStep = await workflowApi.getWorkflowSteps();
-      const welcomeStepNumber =
-        finishStep.success && finishStep.data
-          ? finishStep.data.find((s: any) => s.stepType === 'WELCOME_EMAIL')?.stepNumber ?? 13
-          : 13;
-
-      const completeResult = await workflowApi.completeStep(opportunityId, welcomeStepNumber, {
+      const completeResult = await workflowApi.completeStepByType(opportunityId, 'WELCOME_EMAIL', {
         outcome: selectedOutcome,
         organizedAt: new Date().toISOString(),
       });

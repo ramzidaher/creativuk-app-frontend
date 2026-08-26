@@ -36,18 +36,6 @@ type SheetInfo = ExcelSheetInfo & {
   lastModified: string;
 };
 
-interface ExtractedData {
-  customerName: string;
-  date: string;
-  postcode: string;
-  p_w: string;
-  p_q: number;
-  i_s: string;
-  b_s: string;
-  t_y_s_o: string;
-  t_y_s_g: string;
-}
-
 type Step = 'sheets' | 'extracting' | 'generating';
 
 export default function PresentationScreen() {
@@ -62,7 +50,6 @@ export default function PresentationScreen() {
   const [generating, setGenerating] = useState(false);
   const [availableSheets, setAvailableSheets] = useState<SheetInfo[]>([]);
   const [selectedSheet, setSelectedSheet] = useState<SheetInfo | null>(null);
-  const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
   const [extractionError, setExtractionError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
@@ -114,56 +101,20 @@ export default function PresentationScreen() {
   const handleSheetSelect = async (sheet: SheetInfo) => {
     setSelectedSheet(sheet);
     setExtractionError(null);
-    
-    // Auto-extract variables and generate presentation
-    try {
-      setStep('extracting');
-      setExtractionError(null);
 
-      // Determine calculator type from the selected sheet
-      const calculatorType = sheet.calculatorType;
-      console.log(`🔍 Selected sheet details:`, {
-        fileName: sheet.fileName,
-        calculatorType: sheet.calculatorType,
-        version: sheet.version,
-        size: sheet.size,
-        lastModified: sheet.lastModified
-      });
-      console.log(`🔍 Auto-extracting variables from ${sheet.fileName} (${calculatorType})`);
-      
-      const result = await presentationApi.extractVariables(opportunityId, calculatorType, sheet.fileName);
-      
-      if (result.success) {
-        setExtractedData(result.data);
-        console.log('✅ Variables extracted successfully:', result.data);
-        
-        // Auto-generate proposal after extraction - no preview step
-        console.log('🎯 About to call generatePresentationWithData with:', result.data);
-        setStep('generating');
-        try {
-          await generatePresentationWithData(result.data, sheet);
-          console.log('🎯 generatePresentationWithData completed');
-        } catch (genError) {
-          console.error('🎯 Error in generatePresentationWithData:', genError);
-          setGenerating(false);
-          setStep('sheets');
-          Alert.alert('Error', 'Failed to generate proposal. Please try again.');
-        }
-      } else {
-        throw new Error(result.error || 'Failed to extract variables');
-      }
+    try {
+      setStep('generating');
+      await generatePresentationWithData(sheet);
     } catch (error) {
       console.error('Auto-generation error:', error);
-      setExtractionError('Failed to extract data from Excel file');
+      setExtractionError('Failed to generate proposal from Excel file');
+      setGenerating(false);
       setStep('sheets');
     }
   };
 
 
-  const generatePresentationWithData = async (data: ExtractedData, sheet?: SheetInfo) => {
-    console.log('🎯 generatePresentationWithData called with data:', data);
-    console.log('🎯 generatePresentationWithData called with sheet:', sheet);
-    
+  const generatePresentationWithData = async (sheet?: SheetInfo) => {
     const currentSheet = sheet || selectedSheet;
     
     if (!currentSheet) {
@@ -172,79 +123,41 @@ export default function PresentationScreen() {
       return;
     }
 
-    if (!data) {
-      console.log('❌ No data provided');
-      Alert.alert('Error', 'No data extracted from Excel file');
-      return;
-    }
-
     try {
       console.log('🎯 Starting proposal generation...');
       setStep('generating');
       setGenerating(true);
-
-      console.log('🎯 Starting proposal generation with data:', {
-        opportunityId,
-        calculatorType: currentSheet.calculatorType,
-        customerName: data.customerName,
-        date: data.date,
-        postcode: data.postcode,
-        solarData: {
-          p_w: data.p_w,
-          p_q: data.p_q,
-          i_s: data.i_s,
-          b_s: data.b_s,
-          t_y_s_o: data.t_y_s_o,
-          t_y_s_g: data.t_y_s_g
-        }
-      });
 
       console.log('🎯 Calling presentationApi.generateVideoPresentation...');
       const result = await presentationApi.generateVideoPresentation({
         opportunityId,
         calculatorType: currentSheet.calculatorType,
         fileName: currentSheet.fileName,
-        customerName: data.customerName,
-        date: data.date,
-        postcode: data.postcode,
-        extractedVariables: data,
-        solarData: {
-          p_w: data.p_w,
-          p_q: data.p_q,
-          i_s: data.i_s,
-          b_s: data.b_s,
-          t_y_s_o: data.t_y_s_o,
-          t_y_s_g: data.t_y_s_g
-        }
       });
       console.log('🎯 presentationApi.generateVideoPresentation result:', result);
-      console.log('🎯 Result success:', result.success);
-      console.log('🎯 Result data:', result.data);
 
       if (result.success && result.data) {
-        console.log('🎯 Video presentation generated successfully:', result.data);
-        
-        // Stop generating state
+        const variables = (result.data as any).variables || {};
+
         setGenerating(false);
         
-        // Navigate directly to video viewer, including postcode from extracted data
         navigation.navigate('VideoPresentation', {
           opportunityId,
           videoData: {
             ...result.data,
-            postcode: data.postcode // Include postcode for approval code
+            postcode: (result.data as any).postcode || variables.postcode,
           }
         });
       } else {
         console.log('🎯 Video presentation generation failed:', result.error);
         setGenerating(false);
-        setStep('sheets'); // Go back to sheets step
+        setStep('sheets');
         Alert.alert('Error', result.error || 'Failed to generate video presentation');
       }
     } catch (error) {
       console.error('Video presentation generation error:', error);
       setGenerating(false);
-      setStep('sheets'); // Go back to sheets step
+      setStep('sheets');
       Alert.alert('Error', 'Failed to generate video presentation. Please try again.');
     }
   };
@@ -428,7 +341,6 @@ export default function PresentationScreen() {
   const goBackToSheets = () => {
     setStep('sheets');
     setSelectedSheet(null);
-    setExtractedData(null);
     setExtractionError(null);
   };
 

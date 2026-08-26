@@ -492,7 +492,7 @@ class CalculatorProgressService {
         requestBody.existingFileName = existingFileName;
       }
       
-      const response = await api.post('/calculator-progress/submit', requestBody);
+      const response = await api.post('/calculator-progress/submit', requestBody, 1);
 
       // The API service wraps the backend response
       // Backend returns: { success: true, message: "...", filePath: "..." }

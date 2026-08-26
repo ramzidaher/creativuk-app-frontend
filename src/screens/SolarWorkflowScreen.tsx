@@ -1015,32 +1015,22 @@ export default function SolarWorkflowScreen() {
   const handleOutcomeSelect = async (outcome: 'won' | 'lost') => {
     try {
       setIsProcessingOutcome(true);
+      setJobStatus(outcome.toUpperCase() as 'WON' | 'LOST');
+      setShowOutcomeSelection(false);
 
-      const finishStep = await workflowApi.getWorkflowSteps();
-      const welcomeStepNumber =
-        finishStep.success && finishStep.data
-          ? finishStep.data.find((s: any) => s.stepType === 'WELCOME_EMAIL')?.stepNumber ?? 13
-          : 13;
-
-      const completeResult = await workflowApi.completeStep(opportunityId, welcomeStepNumber, {
+      const completeResult = await workflowApi.completeStepByType(opportunityId, 'WELCOME_EMAIL', {
         outcome,
         organizedAt: new Date().toISOString(),
       });
 
       if (!completeResult.success) {
+        setJobStatus('IN_PROGRESS');
         throw new Error(completeResult.error || 'Failed to complete workflow outcome step');
       }
 
-      // Keep CRM status in sync without blocking OneDrive finalization on duplicate outcome writes
       void opportunitiesApi.updateStatus(opportunityId, outcome).catch((error) => {
         console.warn('Opportunity status update failed:', error);
       });
-
-      setJobStatus(outcome.toUpperCase() as 'WON' | 'LOST');
-      setShowOutcomeSelection(false);
-
-      await loadData();
-      await loadJobStatus();
 
       Alert.alert(
         'Appointment Completed',

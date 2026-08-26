@@ -959,6 +959,14 @@ export const workflowApi = {
     });
   },
 
+  async completeStepByType(ghlOpportunityId: string, stepType: string, data?: any): Promise<ApiResponse<any>> {
+    return api.post<any>(
+      `/opportunity-workflow/progress/${ghlOpportunityId}/complete-step`,
+      { stepType, data },
+      1,
+    );
+  },
+
   async syncDisclaimerCompletion(ghlOpportunityId: string): Promise<ApiResponse<any>> {
     return api.post<any>(
       `/opportunity-workflow/progress/${ghlOpportunityId}/sync-disclaimer`,
