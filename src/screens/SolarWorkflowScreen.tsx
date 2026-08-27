@@ -933,9 +933,9 @@ export default function SolarWorkflowScreen() {
       });
       
       if (resetResponse.success) {
-        // Backend has successfully reset the workflow progress
-        // Refresh data to get the fresh workflow state from backend
+        setJobStatus('IN_PROGRESS');
         await loadData();
+        await loadJobStatus();
         
         Alert.alert(
           '✅ Progress Reset', 
@@ -1018,14 +1018,11 @@ export default function SolarWorkflowScreen() {
       setJobStatus(outcome.toUpperCase() as 'WON' | 'LOST');
       setShowOutcomeSelection(false);
 
-      const completeResult = await workflowApi.completeStepByType(opportunityId, 'WELCOME_EMAIL', {
-        outcome,
-        organizedAt: new Date().toISOString(),
-      });
+      const completeResult = await workflowApi.finalizeAppointmentOutcome(opportunityId, outcome);
 
       if (!completeResult.success) {
         setJobStatus('IN_PROGRESS');
-        throw new Error(completeResult.error || 'Failed to complete workflow outcome step');
+        throw new Error(completeResult.error || 'Failed to record appointment outcome');
       }
 
       void opportunitiesApi.updateStatus(opportunityId, outcome).catch((error) => {

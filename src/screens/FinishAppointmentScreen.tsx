@@ -49,13 +49,10 @@ export default function FinishAppointmentScreen() {
     try {
       setIsProcessing(true);
 
-      const completeResult = await workflowApi.completeStepByType(opportunityId, 'WELCOME_EMAIL', {
-        outcome: selectedOutcome,
-        organizedAt: new Date().toISOString(),
-      });
+      const completeResult = await workflowApi.finalizeAppointmentOutcome(opportunityId, selectedOutcome);
 
       if (!completeResult.success) {
-        throw new Error(completeResult.error || 'Failed to complete workflow outcome step');
+        throw new Error(completeResult.error || 'Failed to record appointment outcome');
       }
 
       void opportunitiesApi.updateStatus(opportunityId, selectedOutcome).catch((error) => {

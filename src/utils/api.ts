@@ -967,6 +967,18 @@ export const workflowApi = {
     );
   },
 
+  async finalizeAppointmentOutcome(
+    ghlOpportunityId: string,
+    outcome: 'won' | 'lost',
+    data?: Record<string, unknown>,
+  ): Promise<ApiResponse<any>> {
+    return api.post<any>(
+      `/opportunity-workflow/progress/${ghlOpportunityId}/outcome`,
+      { outcome, organizedAt: new Date().toISOString(), ...(data || {}) },
+      1,
+    );
+  },
+
   async syncDisclaimerCompletion(ghlOpportunityId: string): Promise<ApiResponse<any>> {
     return api.post<any>(
       `/opportunity-workflow/progress/${ghlOpportunityId}/sync-disclaimer`,
