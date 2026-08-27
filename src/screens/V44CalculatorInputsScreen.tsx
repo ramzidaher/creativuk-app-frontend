@@ -28,6 +28,7 @@ import {
   applyCascadeClear,
   applyDefaultPanelInputs,
   applyNewTariffDefaults,
+  dualRateSplitKwhPopulated,
   fieldsClearedByRadioChange,
   inverterDisplayName,
   isApprovedV44RepFieldVisible,
@@ -37,10 +38,12 @@ import {
   isSupportedBatteryModel,
   isSupportedInverter,
   isSupportedInverterManufacturer,
+  isV44DualSplitMode,
   normalizeV44Radios,
   radiosFromProgress,
   radiosToProgress,
   resolveFieldLabel,
+  resolveV44UsageKnown,
   sortSectionsByExcelOrder,
   v44Radio,
 } from '../utils/v44Logic';
@@ -111,6 +114,7 @@ export default function V44CalculatorInputsScreen() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [calculatingSplit, setCalculatingSplit] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sections, setSections] = useState<V44Section[]>([]);
   const [groups, setGroups] = useState<V44RadioGroup[]>([]);
@@ -183,6 +187,15 @@ export default function V44CalculatorInputsScreen() {
       setRadios(restoredRadios);
 
       const restoredInputs = { ...(progress?.dynamicInputs || {}) };
+      if (isV44DualSplitMode(restoredRadios)) {
+        const usage = resolveV44UsageKnown(restoredRadios);
+        const source =
+          usage === 4 ? restoredInputs.consumption_1 : restoredInputs.spend_1;
+        if (!String(source || '').trim()) {
+          delete restoredInputs.consumption_2;
+          delete restoredInputs.consumption_3;
+        }
+      }
       const effectiveCustomer = progress?.customerDetails ?? routeCustomerRef.current;
       if (effectiveCustomer) {
         setCustomerDetails(effectiveCustomer);
@@ -443,6 +456,13 @@ export default function V44CalculatorInputsScreen() {
       let next = { ...prev, [fieldId]: value };
       next = applyCascadeClear(fieldId, next);
       next[fieldId] = value;
+      if (
+        isV44DualSplitMode(radios) &&
+        (fieldId === 'spend_1' || fieldId === 'consumption_1')
+      ) {
+        delete next.consumption_2;
+        delete next.consumption_3;
+      }
       return next;
     });
   };
@@ -628,6 +648,9 @@ export default function V44CalculatorInputsScreen() {
     (field: V44Field) => {
       const label = resolveFieldLabel(field, radios, true);
       const value = inputs[field.id] || '';
+      const readOnly =
+        isV44DualSplitMode(radios) &&
+        (field.id === 'consumption_2' || field.id === 'consumption_3');
       if (field.type === 'dropdown') {
         return (
           <View key={field.id} style={styles.field}>
@@ -675,12 +698,16 @@ export default function V44CalculatorInputsScreen() {
             style={[
               styles.input,
               {
-                backgroundColor: theme.inputBackground,
+                backgroundColor: readOnly
+                  ? theme.cardBackground
+                  : theme.inputBackground,
                 borderColor: theme.cardBorder,
                 color: theme.primaryText,
+                opacity: readOnly ? 0.85 : 1,
               },
             ]}
             value={value}
+            editable={!readOnly}
             onChangeText={(t) =>
               setInput(
                 field.id,
@@ -745,6 +772,11 @@ export default function V44CalculatorInputsScreen() {
         }
       }
     }
+    if (isV44DualSplitMode(radios) && !dualRateSplitKwhPopulated(inputs)) {
+      problems.push(
+        'Calculate the dual-rate split to fill peak and off-peak kWh',
+      );
+    }
     return problems;
   };
 
@@ -773,6 +805,55 @@ export default function V44CalculatorInputsScreen() {
     });
   };
 
+  const onCalculateSplit = async () => {
+    if (!isV44DualSplitMode(radios)) return;
+    const usage = resolveV44UsageKnown(radios);
+    const sourceId = usage === 4 ? 'consumption_1' : 'spend_1';
+    const sourceLabel = usage === 4 ? 'Estimated annual usage (kWh)' : 'Estimated annual spend (£)';
+    const sourceRaw = (inputs[sourceId] || '').trim();
+    if (!sourceRaw || Number(sourceRaw) <= 0) {
+      showAlert('Required', `Enter ${sourceLabel} before calculating the split.`);
+      return;
+    }
+    for (const id of ['current_rate_1', 'current_rate_2', 'current_rate_3'] as const) {
+      if (!String(inputs[id] || '').trim()) {
+        showAlert('Required', 'Enter the current dual-rate values before calculating the split.');
+        return;
+      }
+    }
+    try {
+      setCalculatingSplit(true);
+      const result = await CalculatorProgressService.calculateV44DualSplit(
+        opportunityId,
+        {
+          ...radios,
+          current_tariff: 2,
+          usage_known: usage,
+        },
+        inputs,
+      );
+      if (!result.success || !dualRateSplitKwhPopulated({
+        consumption_2: String(result.peakKwh ?? ''),
+        consumption_3: String(result.offPeakKwh ?? ''),
+      })) {
+        showAlert(
+          'Split failed',
+          result.message || 'Excel did not return peak and off-peak kWh.',
+        );
+        return;
+      }
+      setInputs((prev) => ({
+        ...prev,
+        consumption_2: String(result.peakKwh),
+        consumption_3: String(result.offPeakKwh),
+      }));
+    } catch (e) {
+      showAlert('Error', e instanceof Error ? e.message : 'Failed to calculate split');
+    } finally {
+      setCalculatingSplit(false);
+    }
+  };
+
   const onContinue = async () => {
     const problems = validationErrors();
     if (problems.length) {
@@ -790,7 +871,7 @@ export default function V44CalculatorInputsScreen() {
         existing_solar: 2,
         installing_new_solar: 1,
         inverter_new: 1,
-        usage_known: 1,
+        usage_known: resolveV44UsageKnown(radios),
       };
       const inputsToSave = applyDefaultPanelInputs(
         toSaveRadios,
@@ -1022,6 +1103,69 @@ export default function V44CalculatorInputsScreen() {
                 </Text>
                 {rateFields.map(renderField)}
 
+                {isV44DualSplitMode(radios) ? (
+                  <>
+                    <View
+                      style={[styles.subsectionDivider, { borderColor: theme.cardBorder }]}
+                    />
+                    <Text style={[styles.subsectionTitle, { color: theme.primaryText }]}>
+                      Calculate dual-rate split using
+                    </Text>
+                    {(
+                      [
+                        { value: 3, label: '£ Spend' },
+                        { value: 4, label: 'Usage (kWh)' },
+                      ] as const
+                    ).map((opt) => {
+                      const active = resolveV44UsageKnown(radios) === opt.value;
+                      return (
+                        <TouchableOpacity
+                          key={opt.value}
+                          style={[
+                            styles.option,
+                            {
+                              borderColor: active
+                                ? theme.primaryButton
+                                : theme.cardBorder,
+                              backgroundColor: active
+                                ? theme.primaryButton + '18'
+                                : theme.inputBackground,
+                            },
+                          ]}
+                          onPress={() => setRadio('usage_known', opt.value)}
+                        >
+                          <Text style={{ color: theme.primaryText }}>{opt.label}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    {consumptionFields
+                      .filter((f) => f.id === 'spend_1' || f.id === 'consumption_1')
+                      .map(renderField)}
+                    <TouchableOpacity
+                      style={[
+                        styles.splitButton,
+                        {
+                          backgroundColor: theme.primaryButton,
+                          opacity: calculatingSplit ? 0.6 : 1,
+                        },
+                      ]}
+                      onPress={onCalculateSplit}
+                      disabled={calculatingSplit}
+                    >
+                      {calculatingSplit ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text style={styles.continueText}>Calculate Split</Text>
+                      )}
+                    </TouchableOpacity>
+                    {consumptionFields
+                      .filter(
+                        (f) => f.id === 'consumption_2' || f.id === 'consumption_3',
+                      )
+                      .map(renderField)}
+                  </>
+                ) : null}
+
                 {cosyUsageGroup ? (
                   <>
                     <View
@@ -1059,7 +1203,7 @@ export default function V44CalculatorInputsScreen() {
                   </>
                 ) : null}
 
-                {consumptionFields.length ? (
+                {!isV44DualSplitMode(radios) && consumptionFields.length ? (
                   <>
                     <View
                       style={[styles.subsectionDivider, { borderColor: theme.cardBorder }]}
@@ -1368,10 +1512,13 @@ export default function V44CalculatorInputsScreen() {
         <TouchableOpacity
           style={[
             styles.continue,
-            { backgroundColor: theme.primaryButton, opacity: saving ? 0.6 : 1 },
+            {
+              backgroundColor: theme.primaryButton,
+              opacity: saving || calculatingSplit ? 0.6 : 1,
+            },
           ]}
           onPress={onContinue}
-          disabled={saving}
+          disabled={saving || calculatingSplit}
         >
           {saving ? (
             <ActivityIndicator color="#fff" />
@@ -1663,6 +1810,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: 12,
     paddingVertical: 16,
+    alignItems: 'center',
+  },
+  splitButton: {
+    marginTop: 4,
+    marginBottom: 12,
+    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: 'center',
   },
   continueText: { color: '#fff', fontSize: 16, fontWeight: '700' },

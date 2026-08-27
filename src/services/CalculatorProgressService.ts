@@ -139,6 +139,59 @@ class CalculatorProgressService {
     }
   }
 
+  async calculateV44DualSplit(
+    opportunityId: string,
+    radios: Record<string, number>,
+    inputs: Record<string, string>,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    peakKwh?: number;
+    offPeakKwh?: number;
+  }> {
+    try {
+      const userId = await this.getUserId();
+      const response = await api.post(
+        '/calculator-progress/v44-calculate-split',
+        { userId, opportunityId, radios, inputs },
+        1,
+      );
+      const responseData = response.data as {
+        success?: boolean;
+        message?: string;
+        peakKwh?: number;
+        offPeakKwh?: number;
+        error?: string;
+      };
+      if (!response.success) {
+        return {
+          success: false,
+          message: response.error || 'Failed to calculate dual-rate split',
+        };
+      }
+      if (responseData?.success) {
+        return {
+          success: true,
+          message: responseData.message || 'Dual-rate split calculated',
+          peakKwh: responseData.peakKwh,
+          offPeakKwh: responseData.offPeakKwh,
+        };
+      }
+      return {
+        success: false,
+        message:
+          responseData?.message ||
+          responseData?.error ||
+          'Failed to calculate dual-rate split',
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error?.message || 'Failed to calculate dual-rate split',
+      };
+    }
+  }
+
   /**
    * Get calculator progress data
    */

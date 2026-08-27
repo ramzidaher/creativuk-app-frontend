@@ -173,7 +173,7 @@ export function inverterDisplayName(model: string): string {
 }
 
 export const V44_TEMPLATE_FILE =
-  'EPVS Member Calculator v4.4.1 - (Creativ) 15th July 2026 Main.xlsm';
+  'EPVS Member Calculator v4.4.1 - (Creativ) 27th July 2026.xlsm';
 
 /** Default export tariff (pence) — pre-filled, user may override */
 export const V44_EXPORT_TARIFF_DEFAULT = '12';
@@ -300,8 +300,31 @@ export function normalizeV44Radios(
     }
   }
 
-  base.usage_known = 1;
+  base.usage_known = resolveV44UsageKnown(base);
   return base;
+}
+
+export function isV44DualRate(radios: Record<string, number>): boolean {
+  return v44Radio(radios, 'current_tariff', 1) === 2;
+}
+
+/** Dual Rate with Excel CalcSplit (£) or CalcSplitkWh — not occupancy. */
+export function isV44DualSplitMode(radios: Record<string, number>): boolean {
+  const usage = v44Radio(radios, 'usage_known', 1);
+  return isV44DualRate(radios) && (usage === 3 || usage === 4);
+}
+
+export function resolveV44UsageKnown(radios: Record<string, number>): number {
+  const tariff = v44Radio(radios, 'current_tariff', 1);
+  const usage = v44Radio(radios, 'usage_known', 1);
+  if (tariff === 2 && (usage === 3 || usage === 4)) return usage;
+  return 1;
+}
+
+export function dualRateSplitKwhPopulated(
+  inputs: Record<string, string>,
+): boolean {
+  return Number(inputs.consumption_2) > 0 && Number(inputs.consumption_3) > 0;
 }
 
 export function rulesPass(
@@ -318,6 +341,15 @@ export function resolveFieldLabel(
   repView = true,
 ): string {
   if (repView && field.repLabel) return field.repLabel;
+  if (
+    repView &&
+    isV44DualSplitMode(radios) &&
+    (field.id === 'consumption_2' || field.id === 'consumption_3')
+  ) {
+    return field.id === 'consumption_2'
+      ? 'Peak usage (kWh)'
+      : 'Off-peak usage (kWh)';
+  }
   if (field.labelByState) {
     const tariff = v44Radio(radios, 'current_tariff', 1);
     const usage = v44Radio(radios, 'usage_known', 1);
@@ -374,10 +406,8 @@ export function isFieldVisible(
 /**
  * Authoritative rep-facing gate for the four supported combinations.
  *
- * Annual usage is always "Yes", so Single Rate uses annual usage and Dual
- * Rate uses peak/off-peak usage. New Overnight fields appear only for
- * Overnight Charging; export appears for both supported savings methods.
- * This deliberately overrides stale backend schema visibility.
+ * Dual Rate: bill/actual kWh (usage_known 1) or Excel split (3 = £, 4 = kWh).
+ * Occupancy estimate (2) stays hidden. Single Rate always uses annual usage.
  */
 export function isApprovedV44RepFieldVisible(
   field: V44Field,
@@ -401,12 +431,16 @@ export function isApprovedV44RepFieldVisible(
     case 'standing_charge':
       return isSingleRate || isDualRate;
     case 'occupancy_archetype':
-    case 'spend_1':
     case 'spend_2':
     case 'spend_3':
       return false;
+    case 'spend_1':
+      return isDualRate && v44Radio(radios, 'usage_known', 1) === 3;
     case 'consumption_1':
-      return isSingleRate;
+      return (
+        isSingleRate ||
+        (isDualRate && v44Radio(radios, 'usage_known', 1) === 4)
+      );
     case 'consumption_2':
     case 'consumption_3':
       return isDualRate;
@@ -581,8 +615,8 @@ export function questionGroupOptions(
       );
   }
   if (group.id === 'usage_known') {
-    // Split by Spend / Usage are not in use — Yes / No only.
-    return group.options.filter((o) => o.value === 1 || o.value === 2);
+    // Occupancy (2) hidden. Split 3/4 are driven by the Dual Rate UI, not this list.
+    return group.options.filter((o) => o.value === 1 || o.value === 3 || o.value === 4);
   }
   if (group.id === 'current_tariff') {
     // Octopus Cosy (3) hidden for now — Single / Dual only.

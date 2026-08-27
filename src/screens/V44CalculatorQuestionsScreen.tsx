@@ -30,9 +30,11 @@ import {
   V44RadioGroup,
   defaultRadios,
   isBatterySavingsOptionDisabled,
+  isV44DualRate,
   questionGroupOptions,
   radiosFromProgress,
   radiosToProgress,
+  resolveV44UsageKnown,
 } from '../utils/v44Logic';
 
 type RouteParams = {
@@ -119,8 +121,7 @@ export default function V44CalculatorQuestionsScreen() {
       if (restored.current_tariff === 3) {
         restored.current_tariff = 1;
       }
-      // Approved flow always uses known annual usage. It is not a rep question.
-      restored.usage_known = 1;
+      restored.usage_known = resolveV44UsageKnown(restored);
       setRadios(restored);
 
       const hasSavedQuestions =
@@ -162,7 +163,13 @@ export default function V44CalculatorQuestionsScreen() {
   );
 
   const setRadio = (groupId: string, value: number) => {
-    setRadios((prev) => ({ ...prev, [groupId]: value }));
+    setRadios((prev) => {
+      const next = { ...prev, [groupId]: value };
+      if (groupId === 'current_tariff' && value !== 2) {
+        next.usage_known = 1;
+      }
+      return next;
+    });
   };
 
   const hasChanges = () => {
@@ -200,7 +207,7 @@ export default function V44CalculatorQuestionsScreen() {
         existing_solar: 2,
         installing_new_solar: 1,
         inverter_new: 1,
-        usage_known: 1,
+        usage_known: resolveV44UsageKnown(radios),
       };
       await CalculatorProgressService.saveProgress(opportunityId, 'v44', {
         currentStep: 'radio-buttons',
@@ -441,6 +448,50 @@ export default function V44CalculatorQuestionsScreen() {
               </View>
             );
           })}
+
+          {isV44DualRate(radios) ? (
+            <View
+              style={[
+                styles.card,
+                { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder },
+              ]}
+            >
+              <Text style={[styles.question, { color: theme.primaryText }]}>
+                Do you have the customer&apos;s bill / actual usage?
+              </Text>
+              {(
+                [
+                  { value: 1, label: 'Yes — enter peak and off-peak kWh' },
+                  { value: 3, label: 'No — calculate the dual-rate split' },
+                ] as const
+              ).map((opt) => {
+                const selectedUsage = resolveV44UsageKnown(radios);
+                const active =
+                  opt.value === 1
+                    ? selectedUsage === 1
+                    : selectedUsage === 3 || selectedUsage === 4;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[
+                      styles.option,
+                      {
+                        borderColor: active ? theme.primaryButton : theme.cardBorder,
+                        backgroundColor: active
+                          ? theme.primaryButton + '18'
+                          : theme.inputBackground,
+                      },
+                    ]}
+                    onPress={() => setRadio('usage_known', opt.value)}
+                  >
+                    <Text style={[styles.optionLabel, { color: theme.primaryText }]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
 
           {radios.battery_savings &&
           radios.current_tariff &&
