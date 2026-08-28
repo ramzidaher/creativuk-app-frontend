@@ -147,7 +147,7 @@ export default function AdminToolsScreen() {
             <Text style={[styles.cardTitle, { color: theme.primaryText }]}>Installer calendars</Text>
           </View>
           <Text style={[styles.cardDescription, { color: theme.secondaryText }]}>
-            Choose which Microsoft 365 installer calendars each sales rep can book in the app.
+            Choose which installers each sales rep can book. Bookings go on that installer's Outlook calendar.
           </Text>
           <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: theme.primaryButton }]}

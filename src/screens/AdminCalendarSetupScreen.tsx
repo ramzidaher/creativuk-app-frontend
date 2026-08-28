@@ -109,10 +109,10 @@ export default function AdminCalendarSetupScreen() {
   }, [apiBase, query, selectedUserId]);
 
   const addPerson = (person: InstallerRow) => {
-    if (!person.canAssign && !person.sharedCalendarId) {
+    if (!person.canAssign && !person.email) {
       Alert.alert(
-        'No shared calendar',
-        `There is no matching calendar folder for ${person.displayName} under calendars@creativuk.co.uk.`,
+        'No Microsoft 365 email',
+        `${person.displayName} does not have a mailbox we can book. Pick someone with a creativuk.co.uk email.`,
       );
       return;
     }
@@ -155,7 +155,7 @@ export default function AdminCalendarSetupScreen() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || data.error || 'Save failed');
       setAssigned(data.calendars || assigned);
-      Alert.alert('Saved', 'Installer calendars updated for this sales rep.');
+      Alert.alert('Saved', 'Installers updated for this sales rep.');
       await loadUsers();
     } catch (error) {
       Alert.alert('Could not save', error instanceof Error ? error.message : 'Try again');
@@ -186,7 +186,7 @@ export default function AdminCalendarSetupScreen() {
         <View>
         <Text style={[styles.headerTitle, { color: theme.primaryText }]}>Installer calendars</Text>
         <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>
-          Pick a rep, add the calendars they can book
+          Pick a rep, add the installers they can book
         </Text>
         </View>
       </View>
